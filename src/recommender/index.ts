@@ -24,9 +24,9 @@ export interface RecommendResult {
   anchor: Anchor;
   constraints: Constraints;
   options: RecommendOption[];
-  rejectedCounts: Partial<Record<RejectReason | "fully_booked", number>>;
+  rejectedCounts: Partial<Record<RejectReason | "fully_booked" | "unchecked", number>>;
   /** A few place names per reason, for explaining an empty result. */
-  rejectedExamples: Partial<Record<RejectReason | "fully_booked", string[]>>;
+  rejectedExamples: Partial<Record<RejectReason | "fully_booked" | "unchecked", string[]>>;
   /** Booking channels of the places rejected as not bookable. */
   notBookableChannels: Record<string, number>;
   /** Limits loosened automatically because too few places passed. */
@@ -150,6 +150,12 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
       } else if (r.status === "unavailable") {
         rejectedCounts.fully_booked = (rejectedCounts.fully_booked ?? 0) + 1;
         (rejectedExamples.fully_booked ??= []).push(s.place.name);
+      } else {
+        // The check itself failed (site down, rate-limited…): say so rather than calling it "no table".
+        rejectedCounts.unchecked = (rejectedCounts.unchecked ?? 0) + 1;
+        const ex = (rejectedExamples.unchecked ??= []);
+        if (ex.length < 3) ex.push(s.place.name);
+        console.warn(`availability ${s.place.name}: ${r.detail ?? r.status}`);
       }
     });
   }
@@ -206,6 +212,7 @@ const REASON_LABEL: Record<string, string> = {
   cuisine: "didn't match the cuisine",
   excluded: "ruled out",
   fully_booked: "fully booked",
+  unchecked: "couldn't check availability",
 };
 
 const CHANNEL_LABEL: Record<string, string> = {

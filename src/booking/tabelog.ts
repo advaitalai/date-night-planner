@@ -21,18 +21,30 @@ const RST_URL = /https:\/\/tabelog\.com\/[a-z]+\/A\d{4}\/A\d{6}\/\d+\/?/;
 /** First restaurant URL in a Tabelog keyword search, plus whether it takes online bookings. */
 export async function tabelogLookup(name: string, area = "東京"): Promise<{ url: string; netBooking: boolean; score: number | null } | null> {
   const q = new URLSearchParams({ sw: name, sa: area });
-  const res = await fetch(`https://tabelog.com/rstLst/?${q}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ja" } });
-  if (!res.ok) return null;
-  const html = await res.text();
+  const html = await fetchTabelog(`https://tabelog.com/rstLst/?${q}`);
   const url = html.match(RST_URL)?.[0];
   if (!url) return null;
   return { url: url.endsWith("/") ? url : url + "/", ...(await tabelogPageInfo(url)) };
 }
 
 export async function tabelogPageInfo(url: string): Promise<{ netBooking: boolean; score: number | null }> {
-  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ja" } });
-  const html = res.ok ? await res.text() : "";
-  return parseTabelogPage(html);
+  return parseTabelogPage(await fetchTabelog(url));
+}
+
+/**
+ * Fetch a Tabelog page. Throws when Tabelog refuses (e.g. a Cloudflare
+ * "Just a moment..." 403 from datacenter IPs) so callers can say the check
+ * didn't happen rather than treating it as "no online booking".
+ */
+async function fetchTabelog(url: string): Promise<string> {
+  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ja" }, signal: AbortSignal.timeout(15_000) });
+  const html = await res.text();
+  if (!res.ok) throw new Error(`Tabelog ${res.status}${isBotChallenge(html) ? " (Cloudflare bot check)" : ""}`);
+  return html;
+}
+
+export function isBotChallenge(html: string): boolean {
+  return /<title>Just a moment\.\.\.<\/title>|challenges\.cloudflare\.com/.test(html);
 }
 
 export function parseTabelogPage(html: string): { netBooking: boolean; score: number | null } {

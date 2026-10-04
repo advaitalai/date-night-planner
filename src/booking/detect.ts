@@ -39,8 +39,12 @@ export interface WebsiteLinks {
 /** Find booking links in a restaurant's own website HTML. */
 export function scanWebsite(html: string): WebsiteLinks {
   const out: WebsiteLinks = {};
-  const tc = html.match(/tablecheck\.com\/(?:[a-z]{2}\/)?(?:shops\/)?([a-z0-9-]+)(?:\/reserve)?/i);
-  if (tc && !["en", "ja", "shops", "images", "assets"].includes(tc[1].toLowerCase())) out.tablecheckSlug = tc[1];
+  // Prefer a dining page over takeout/delivery ones (e.g. "peterluger-pickup" listed before "peterluger").
+  const slugs = [...html.matchAll(/tablecheck\.com\/(?:[a-z]{2}\/)?(?:shops\/)?([a-z0-9-]+)(?:\/reserve)?/gi)]
+    .map((m) => m[1])
+    .filter((slug) => !["en", "ja", "shops", "images", "assets"].includes(slug.toLowerCase()));
+  const tc = slugs.find((slug) => !/-(pickup|takeout|take-out|delivery|gift)$/i.test(slug)) ?? slugs[0];
+  if (tc) out.tablecheckSlug = tc;
   const tl = html.match(/https?:\/\/tabelog\.com\/[a-z]+\/A\d{4}\/A\d{6}\/\d+\/?/);
   if (tl) out.tabelogUrl = tl[0];
   const other = html.match(/https?:\/\/[^"'\s]*(?:ebica\.jp|toreta\.in|omakase\.in|yoyaku\.hotpepper\.jp|resty\.jp|ikyu\.com\/restaurant|autoreserve\.com)[^"'\s]*/i);
@@ -90,7 +94,7 @@ export async function detectChannel(place: Place): Promise<Detection> {
   if (links.tablecheckSlug) return { channel: "tablecheck", patch: { tablecheck_slug: links.tablecheckSlug }, evidence: "TableCheck link on website" };
 
   try {
-    const hit = (await tcAutocomplete(place.name)).find((s) => sameName(s.name, place.name));
+    const hit = (await tcAutocomplete(place.name)).find((s) => s.names.some((n) => sameName(n, place.name)));
     if (hit) return { channel: "tablecheck", patch: { tablecheck_slug: hit.slug }, evidence: `TableCheck search: ${hit.name}` };
   } catch {
     // TableCheck unreachable; fall through
@@ -98,21 +102,24 @@ export async function detectChannel(place: Place): Promise<Detection> {
 
   // Tabelog details (URL, score) are worth keeping even when it isn't the booking channel.
   let tabelogPatch: Partial<Place> = {};
+  let tabelogNote = "";
   try {
     const tl = links.tabelogUrl ? { url: links.tabelogUrl, ...(await tabelogPageInfo(links.tabelogUrl)) } : await tabelogLookup(place.name);
     if (tl) {
       tabelogPatch = { tabelog_url: tl.url, tabelog_score: tl.score };
       if (tl.netBooking) return { channel: "tabelog", patch: tabelogPatch, evidence: "Tabelog online booking" };
     }
-  } catch {
-    // Tabelog unreachable; fall through
+  } catch (err) {
+    // Tabelog unreachable or blocked; fall through but say so, since the place may still be bookable there
+    tabelogNote = ` (Tabelog not checked: ${(err as Error).message})`;
+    if (links.tabelogUrl) tabelogPatch = { tabelog_url: links.tabelogUrl };
   }
 
-  if (links.otherOnline) return { channel: "other_online", patch: { ...tabelogPatch, booking_url: links.otherOnline }, evidence: links.otherOnline };
-  if (links.email) return { channel: "email", patch: { ...tabelogPatch, booking_email: links.email }, evidence: "email on website" };
+  if (links.otherOnline) return { channel: "other_online", patch: { ...tabelogPatch, booking_url: links.otherOnline }, evidence: links.otherOnline + tabelogNote };
+  if (links.email) return { channel: "email", patch: { ...tabelogPatch, booking_email: links.email }, evidence: "email on website" + tabelogNote };
   if (place.reservable === false || (place.primary_type && CASUAL_TYPES.has(place.primary_type))) {
-    return { channel: "walkin", patch: tabelogPatch, evidence: "Google: not reservable / casual" };
+    return { channel: "walkin", patch: tabelogPatch, evidence: "Google: not reservable / casual" + tabelogNote };
   }
-  if (place.phone) return { channel: "phone", patch: tabelogPatch, evidence: "phone number only" };
-  return { channel: "unknown", patch: tabelogPatch, evidence: "no booking info found" };
+  if (place.phone) return { channel: "phone", patch: tabelogPatch, evidence: "phone number only" + tabelogNote };
+  return { channel: "unknown", patch: tabelogPatch, evidence: "no booking info found" + tabelogNote };
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { isNonDining, sameName, scanWebsite } from "../src/booking/detect";
 import { jaDate, requestEmail } from "../src/booking/email";
-import { parseTabelogPage } from "../src/booking/tabelog";
-import { parseShop, readCalendar } from "../src/booking/tablecheck";
+import { isBotChallenge, parseTabelogPage } from "../src/booking/tabelog";
+import { autocompleteNames, parseShop, readCalendar } from "../src/booking/tablecheck";
 import { domesticPhone, intlPhone } from "../src/config";
 import { buildRaw } from "../src/google/gmail";
 import { place } from "./helpers";
@@ -59,6 +59,7 @@ describe("booking channel detection", () => {
       <a href="mailto:info@example.jp?subject=予約">mail</a> <a href="https://tabelog.com/tokyo/A1303/A130302/13001234/">食べログ</a>`;
     expect(scanWebsite(html)).toEqual({ tablecheckSlug: "monnalisa-ebisu", tabelogUrl: "https://tabelog.com/tokyo/A1303/A130302/13001234/", email: "info@example.jp" });
     expect(scanWebsite('<a href="https://www.ebica.jp/pages/shop/1234">book</a>').otherOnline).toContain("ebica.jp");
+    expect(scanWebsite('<a href="https://www.tablecheck.com/shops/peterluger-pickup/reserve">To go</a> <a href="https://www.tablecheck.com/shops/peterluger/reserve">Reserve</a>').tablecheckSlug).toBe("peterluger");
   });
 
   it("separates dinner places from spas and galleries", () => {
@@ -76,6 +77,24 @@ describe("booking channel detection", () => {
     const html = `<b class="c-rating__val rdheader-rating__score-val-dtl">3.62</b> <a>空席確認・予約する</a>`;
     expect(parseTabelogPage(html)).toEqual({ netBooking: true, score: 3.62 });
     expect(parseTabelogPage("<p>電話のみ</p>")).toEqual({ netBooking: false, score: null });
+  });
+
+  it("spots Tabelog's Cloudflare bot check", () => {
+    expect(isBotChallenge('<html lang="en-US"><head><title>Just a moment...</title>')).toBe(true);
+    expect(isBotChallenge("<title>Monna Lisa 恵比寿 - 食べログ</title>")).toBe(false);
+  });
+
+  it("reads TableCheck autocomplete names from text_translations", () => {
+    const shop = {
+      text_translations: [
+        { locale: "en", translation: "bills Omotesando" },
+        { locale: "ja", translation: "bills 表参道" },
+        { locale: "ko", translation: "bills Omotesando" },
+      ],
+      payload: { shop_slug: "bills-omotesando" },
+    };
+    expect(autocompleteNames(shop)).toEqual({ name: "bills Omotesando", names: ["bills Omotesando", "bills 表参道"] });
+    expect(autocompleteNames({ text: "Old Shop", payload: { shop_slug: "old-shop" } })).toEqual({ name: "Old Shop", names: ["Old Shop"] });
   });
 });
 

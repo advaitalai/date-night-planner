@@ -15,8 +15,12 @@ import type { Constraints } from "./parseRequest";
 
 const REDETECT_DAYS = 30;
 
-/** Fill in Google details, booking channel and profile where missing. Cached in the DB. */
-export async function enrich(place: Place): Promise<Place> {
+/**
+ * Fill in Google details, booking channel and profile where missing. Cached in the DB.
+ * The audit turns off detection (it runs its own) and profiles (they need the LLM).
+ */
+export async function enrich(place: Place, opts: { detect?: boolean; profile?: boolean } = {}): Promise<Place> {
+  const { detect = true, profile = true } = opts;
   let p = place;
   if (!config.google.mapsKey) return p;
   try {
@@ -27,12 +31,12 @@ export async function enrich(place: Place): Promise<Place> {
     }
     const detectedAt = kvGet<string | null>(`detect:${p.id}`, null);
     const stale = !detectedAt || DateTime.fromISO(detectedAt).plus({ days: REDETECT_DAYS }) < DateTime.now();
-    if (p.booking_channel === "unknown" && stale) {
+    if (detect && p.booking_channel === "unknown" && stale) {
       const d = await detectChannel(p);
       p = updatePlace(p.id, { booking_channel: d.channel, ...d.patch });
       kvSet(`detect:${p.id}`, new Date().toISOString());
     }
-    if (!p.profile && p.google_place_id && p.booking_channel !== "not_restaurant") p = await buildProfile(p);
+    if (profile && !p.profile && p.google_place_id && p.booking_channel !== "not_restaurant") p = await buildProfile(p);
   } catch (err) {
     console.warn(`enrich ${p.name}:`, (err as Error).message);
   }

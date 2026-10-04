@@ -122,7 +122,7 @@ export async function bookPlace(place: Place, slot: Slot, opts: { planId?: numbe
   const message =
     result.status === "confirmed"
       ? `✅ Booked ${place.name} — ${when}.${result.externalRef ? ` Ref ${result.externalRef}.` : ""}\n${policyLine(withPolicy)}`
-      : `📨 Reservation requested at ${place.name} — ${when}. ${result.detail ?? ""} I'll post here when they confirm.`;
+      : `📨 Reservation requested at ${place.name} — ${when}. ${result.detail ? `${result.detail.replace(/\.?$/, ".")} ` : ""}I'll post here when they confirm.`;
   return { ok: true, reservation: withPolicy, message };
 }
 

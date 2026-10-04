@@ -25,7 +25,7 @@ if (!config.google.mapsKey) console.warn("GOOGLE_MAPS_API_KEY not set: places ca
 const home = getPrefs().anchors.home;
 const rows: { name: string; channel: BookingChannel; evidence: string; minutes: number | null }[] = [];
 for (const place of listPlaces("source != 'discovered'")) {
-  const enriched = await enrich({ ...place, booking_channel: "unknown" });
+  const enriched = await enrich(place, { detect: false, profile: false });
   const d = await detectChannel(enriched);
   updatePlace(place.id, { booking_channel: d.channel, ...d.patch });
   kvSet(`detect:${place.id}`, new Date().toISOString());
