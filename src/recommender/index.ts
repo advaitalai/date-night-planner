@@ -25,6 +25,12 @@ export interface RecommendResult {
   constraints: Constraints;
   options: RecommendOption[];
   rejectedCounts: Partial<Record<RejectReason | "fully_booked", number>>;
+  /** A few place names per reason, for explaining an empty result. */
+  rejectedExamples: Partial<Record<RejectReason | "fully_booked", string[]>>;
+  /** Booking channels of the places rejected as not bookable. */
+  notBookableChannels: Record<string, number>;
+  /** Limits loosened automatically because too few places passed. */
+  relaxed: string[];
   /** Well-rated saved places skipped only because the bot can't book them itself. */
   skippedFavourites: Place[];
 }
@@ -82,9 +88,35 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   // 2. Hard filters.
   const cands = (await mapLimit(enriched, 4, (p) => toCandidate(p, anchor, slot))).filter((c): c is Candidate => c !== null);
   const settings = { maxTravelMin: maxTravel, revisitCooldownWeeks: prefs.revisitCooldownWeeks, budgetPerPersonMaxJpy: prefs.budgetPerPersonMaxJpy };
-  const { kept, rejected } = applyFilters(cands, k, settings);
+  let { kept, rejected } = applyFilters(cands, k, settings);
+
+  // Too few left: loosen the standing limits (not ones the request asked for) once, and say so.
+  const relaxed: string[] = [];
+  if (kept.length < n) {
+    const loose = { ...settings };
+    if (k.maxTravelMin == null) {
+      loose.maxTravelMin = maxTravel + 10;
+      relaxed.push(`travel up to ${loose.maxTravelMin} min`);
+    }
+    if (k.budgetPerPersonMaxJpy == null && settings.budgetPerPersonMaxJpy != null) {
+      loose.budgetPerPersonMaxJpy = Math.round(settings.budgetPerPersonMaxJpy * 1.5);
+      relaxed.push(`budget up to ¥${loose.budgetPerPersonMaxJpy.toLocaleString()}/person`);
+    }
+    if (relaxed.length) ({ kept, rejected } = applyFilters(cands, k, loose));
+  }
+
   const rejectedCounts: RecommendResult["rejectedCounts"] = {};
-  for (const r of rejected) rejectedCounts[r.reason] = (rejectedCounts[r.reason] ?? 0) + 1;
+  const rejectedExamples: RecommendResult["rejectedExamples"] = {};
+  const notBookableChannels: Record<string, number> = {};
+  for (const r of rejected) {
+    rejectedCounts[r.reason] = (rejectedCounts[r.reason] ?? 0) + 1;
+    const ex = (rejectedExamples[r.reason] ??= []);
+    if (ex.length < 3 && r.candidate.place.saved_by.length) ex.push(r.candidate.place.name);
+    if (r.reason === "not_bookable") {
+      const ch = r.candidate.place.booking_channel;
+      notBookableChannels[ch] = (notBookableChannels[ch] ?? 0) + 1;
+    }
+  }
   const skippedFavourites = rejected
     .filter((r) => r.reason === "not_bookable" && r.candidate.place.saved_by.length > 0 && ["phone", "other_online"].includes(r.candidate.place.booking_channel))
     .map((r) => r.candidate.place)
@@ -117,22 +149,20 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
         unconfirmed++;
       } else if (r.status === "unavailable") {
         rejectedCounts.fully_booked = (rejectedCounts.fully_booked ?? 0) + 1;
+        (rejectedExamples.fully_booked ??= []).push(s.place.name);
       }
     });
   }
 
   const options = pickDiverse(verified, n).map((scored) => ({ scored, availability: availability.get(scored.place.id)! }));
-  return { slot, anchor, constraints: k, options, rejectedCounts, skippedFavourites };
+  return { slot, anchor, constraints: k, options, rejectedCounts, rejectedExamples, notBookableChannels, relaxed, skippedFavourites };
 }
 
 /** Run the recommender, post the options + poll, and record the plan. */
 export async function proposePlan(text: string, opts: { date?: string } = {}): Promise<{ plan?: Plan; message: string }> {
   const r = await recommend(text, opts);
   if (r.options.length === 0) {
-    const why = Object.entries(r.rejectedCounts)
-      .map(([k, v]) => `${v} ${k.replace(/_/g, " ")}`)
-      .join(", ");
-    const message = `I couldn't find a bookable table for ${fmtDate(r.slot.date)} ${r.slot.time}${why ? ` (filtered out: ${why})` : ""}. Want me to widen the area, change the time, or try another day?`;
+    const message = `I couldn't find a bookable table for ${fmtDate(r.slot.date)} ${r.slot.time}${r.relaxed.length ? ` (even after allowing ${r.relaxed.join(" and ")})` : ""}.\n${explainRejections(r)}\nWant me to widen the area, raise the budget, change the time, or try another day?`;
     await say(message);
     return { message };
   }
@@ -154,7 +184,8 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
   const skipped = r.skippedFavourites.length
     ? `\n\n(Skipped ${r.skippedFavourites.map((p) => p.name).join(", ")}: phone/other booking only for now.)`
     : "";
-  const message = `🍷 Options for ${fmtDate(r.slot.date)}, ${r.slot.time} (${r.slot.partySize} people, from ${r.anchor.label}). All checked for availability:\n\n${lines.join("\n\n")}${skipped}\n\nVote below 👇 I'll book as soon as you both pick the same one.`;
+  const relaxedNote = r.relaxed.length ? `\n(Few places fit your usual limits, so I allowed ${r.relaxed.join(" and ")}.)` : "";
+  const message = `🍷 Options for ${fmtDate(r.slot.date)}, ${r.slot.time} (${r.slot.partySize} people, from ${r.anchor.label}). All checked for availability:\n\n${lines.join("\n\n")}${skipped}\n\nVote below 👇 I'll book as soon as you both pick the same one.${relaxedNote}`;
   await say(message);
   const pollId = await poll(`Date night ${fmtDate(r.slot.date)} ${r.slot.time}`, options.map((o, i) => `${i + 1}. ${o.name}`.slice(0, 100)));
   const saved = updatePlan(plan.id, { poll_msg_id: pollId ?? null });
@@ -164,4 +195,40 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
 function mapsLink(placeId: number): string {
   const p = getPlace(placeId);
   return p?.maps_url ? `\n${p.maps_url}` : "";
+}
+
+const REASON_LABEL: Record<string, string> = {
+  too_far: "too far",
+  closed: "closed then",
+  not_bookable: "I can't book them myself",
+  over_budget: "over budget",
+  visited_recently: "visited recently",
+  cuisine: "didn't match the cuisine",
+  excluded: "ruled out",
+  fully_booked: "fully booked",
+};
+
+const CHANNEL_LABEL: Record<string, string> = {
+  phone: "phone-only",
+  walkin: "walk-in only",
+  other_online: "other booking sites",
+  unknown: "no booking info found",
+  not_restaurant: "not restaurants",
+};
+
+/** "20 too far (e.g. A, B), 12 I can't book them myself — 6 phone-only, 4 no booking info found …" */
+export function explainRejections(r: Pick<RecommendResult, "rejectedCounts" | "rejectedExamples" | "notBookableChannels">): string {
+  return Object.entries(r.rejectedCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, count]) => {
+      const ex = r.rejectedExamples[reason as keyof typeof r.rejectedExamples];
+      const channels =
+        reason === "not_bookable"
+          ? ` — ${Object.entries(r.notBookableChannels)
+              .map(([c, n]) => `${n} ${CHANNEL_LABEL[c] ?? c}`)
+              .join(", ")}`
+          : "";
+      return `• ${count} ${REASON_LABEL[reason] ?? reason}${channels}${ex?.length ? ` (e.g. ${ex.join(", ")})` : ""}`;
+    })
+    .join("\n");
 }

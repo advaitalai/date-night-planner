@@ -104,3 +104,16 @@ describe("similarity", () => {
     expect(mostSimilarSaved(cand, [bistro, ramen])?.place.name).toBe("Bistro");
   });
 });
+
+describe("explainRejections", () => {
+  it("names places and splits 'not bookable' by channel", async () => {
+    const { explainRejections } = await import("../src/recommender");
+    const text = explainRejections({
+      rejectedCounts: { too_far: 20, not_bookable: 12 },
+      rejectedExamples: { too_far: ["Canal Cafe"], not_bookable: ["Ghungroo"] },
+      notBookableChannels: { phone: 8, unknown: 4 },
+    });
+    expect(text.split("\n")[0]).toBe("• 20 too far (e.g. Canal Cafe)");
+    expect(text).toContain("12 I can't book them myself — 8 phone-only, 4 no booking info found (e.g. Ghungroo)");
+  });
+});
