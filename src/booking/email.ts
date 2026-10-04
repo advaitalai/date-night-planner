@@ -1,12 +1,12 @@
 import { DateTime } from "luxon";
-import { config, type Contact } from "../config";
+import { config, domesticPhone, intlPhone, type Contact } from "../config";
 import { sendEmail } from "../google/gmail";
 import type { Place, Reservation } from "../types";
 import { ZONE } from "../util/time";
 import type { AvailabilityResult, BookingAdapter, BookResult, ChangeResult, Slot } from "./types";
 
 /**
- * Email bookings. Messages are fixed, polite Japanese templates (no LLM
+ * Email bookings. Messages are fixed, polite templates, Japanese then English (no LLM
  * writing, so nothing gets invented). Replies are read and classified by the
  * Gmail watcher job. In DRY_RUN they go to the booking email instead of the
  * restaurant.
@@ -19,61 +19,91 @@ export function jaDate(date: string, time: string): string {
   return `${d.year}年${d.month}月${d.day}日（${WEEKDAYS_JA[d.weekday - 1]}）${time}`;
 }
 
+export function enDate(date: string, time: string): string {
+  return `${DateTime.fromISO(date, { zone: ZONE }).setLocale("en").toFormat("cccc d LLLL yyyy")}, ${time}`;
+}
+
+/** Japanese name first, e.g. "アドヴァイト（Advait）". */
+function jaName(c: Contact): string {
+  return c.nameKana ? `${c.nameKana}（${c.name}）` : c.name;
+}
+
 function signature(c: Contact): string {
-  return [c.name, [c.phone, c.email].filter(Boolean).join(" / ")].filter(Boolean).join("\n");
+  return [jaName(c), domesticPhone(c.phone), c.email].filter(Boolean).join("\n");
+}
+
+/** Every email is Japanese first, then the same message in English. */
+function bilingual(ja: string, en: string, c: Contact): string {
+  return `${ja}\n\n${signature(c)}\n\n――――― English ―――――\n\n${en}\n\n${c.name}\n${intlPhone(c.phone)}\n${c.email}`;
 }
 
 export function requestEmail(place: Place, slot: Slot, c: Contact, notes?: string) {
-  return {
-    subject: `【ご予約のお願い】${jaDate(slot.date, slot.time)} ${slot.partySize}名 ${c.name}`,
-    body: `${place.name} ご担当者様
+  const ja = `${place.name} ご担当者様
 
-突然のご連絡失礼いたします。${c.name}と申します。
+突然のご連絡失礼いたします。${jaName(c)}と申します。
 下記の内容で予約をお願いできますでしょうか。
 
 ・日時：${jaDate(slot.date, slot.time)}〜
 ・人数：${slot.partySize}名
-・お名前：${c.name}${c.nameKana ? `（${c.nameKana}）` : ""}
-・電話番号：${c.phone}${notes ? `\n・備考：${notes}` : ""}
+・お名前：${jaName(c)}
+・電話番号：${domesticPhone(c.phone)}${notes ? `\n・備考：${notes}` : ""}
 
 ご都合が悪い場合は、前後で空いているお時間をお知らせいただけますと幸いです。
 あわせて、キャンセルポリシー（キャンセル料が発生する期限）についてもお教えいただけますでしょうか。
 
-何卒よろしくお願いいたします。
+何卒よろしくお願いいたします。`;
+  const en = `Dear ${place.name} team,
 
-${signature(c)}`,
+I would like to request a reservation:
+
+- Date & time: ${enDate(slot.date, slot.time)}
+- Party size: ${slot.partySize}
+- Name: ${c.name}
+- Phone: ${intlPhone(c.phone)}${notes ? `\n- Notes: ${notes}` : ""}
+
+If that time isn't available, could you let me know nearby times that are free?
+Could you also tell me your cancellation policy (when cancellation fees apply)?
+
+Thank you very much.`;
+  return {
+    subject: `【ご予約のお願い / Reservation request】${jaDate(slot.date, slot.time)} ${slot.partySize}名 ${c.name}`,
+    body: bilingual(ja, en, c),
   };
 }
 
 export function changeEmail(place: Place, r: Reservation, slot: Slot, c: Contact) {
-  return {
-    subject: `【予約変更のお願い】${c.name}`,
-    body: `${place.name} ご担当者様
+  const ja = `${place.name} ご担当者様
 
-いつもお世話になっております。${c.name}です。
+いつもお世話になっております。${jaName(c)}です。
 ${jaDate(r.date, r.time)}・${r.party_size}名で予約しておりますが、下記に変更をお願いできますでしょうか。
 
 ・変更後の日時：${jaDate(slot.date, slot.time)}〜
 ・変更後の人数：${slot.partySize}名
 
-難しい場合はお知らせください。何卒よろしくお願いいたします。
+難しい場合はお知らせください。何卒よろしくお願いいたします。`;
+  const en = `Dear ${place.name} team,
 
-${signature(c)}`,
-  };
+I have a reservation for ${r.party_size} on ${enDate(r.date, r.time)}. Could you change it to:
+
+- Date & time: ${enDate(slot.date, slot.time)}
+- Party size: ${slot.partySize}
+
+Please let me know if that isn't possible. Thank you.`;
+  return { subject: `【予約変更のお願い / Change request】${c.name}`, body: bilingual(ja, en, c) };
 }
 
 export function cancelEmail(place: Place, r: Reservation, c: Contact) {
-  return {
-    subject: `【予約キャンセルのご連絡】${jaDate(r.date, r.time)} ${c.name}`,
-    body: `${place.name} ご担当者様
+  const ja = `${place.name} ご担当者様
 
-いつもお世話になっております。${c.name}です。
+いつもお世話になっております。${jaName(c)}です。
 大変申し訳ございませんが、${jaDate(r.date, r.time)}・${r.party_size}名の予約をキャンセルさせていただけますでしょうか。
 
-ご迷惑をおかけし申し訳ございません。お手数ですが、ご確認のご返信をいただけますと幸いです。
+ご迷惑をおかけし申し訳ございません。お手数ですが、ご確認のご返信をいただけますと幸いです。`;
+  const en = `Dear ${place.name} team,
 
-${signature(c)}`,
-  };
+I'm very sorry, but I need to cancel my reservation for ${r.party_size} on ${enDate(r.date, r.time)}.
+Apologies for the inconvenience — could you reply to confirm the cancellation?`;
+  return { subject: `【予約キャンセルのご連絡 / Cancellation】${jaDate(r.date, r.time)} ${c.name}`, body: bilingual(ja, en, c) };
 }
 
 function recipient(place: Place, c: Contact): { to: string; prefix: string } {

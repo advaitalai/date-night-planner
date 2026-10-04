@@ -1,5 +1,5 @@
 import type { Page } from "playwright-core";
-import { config, type Contact } from "../config";
+import { config, domesticPhone, type Contact } from "../config";
 import type { Place, Reservation } from "../types";
 import { withPage } from "./browser";
 import type { AvailabilityResult, BookingAdapter, BookResult, ChangeResult, Slot } from "./types";
@@ -105,7 +105,7 @@ export const tabelog: BookingAdapter = {
       for (const [label, value] of [
         [/氏名|お名前/, contact.name],
         [/フリガナ|カナ/, contact.nameKana],
-        [/電話/, contact.phone],
+        [/電話/, domesticPhone(contact.phone)],
         [/メール/, contact.email],
       ] as const) {
         const field = page.getByLabel(label).first();

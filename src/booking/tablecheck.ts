@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import type { Page } from "playwright-core";
-import { config, type Contact } from "../config";
+import { config, intlPhone, type Contact } from "../config";
 import type { Place, Reservation } from "../types";
 import { jst, ZONE } from "../util/time";
 import { withPage } from "./browser";
@@ -11,8 +11,9 @@ import type { AvailabilityResult, BookingAdapter, BookResult, ChangeResult, Slot
  *
  * Availability and search use TableCheck's public diner-facing endpoints (the
  * same ones the open-source nbw/tc-mcp server uses). Booking, changes and
- * cancellations drive the diner web flow in a headless browser logged into
- * the TableCheck account, because the Booking API is only offered to venues.
+ * cancellations drive the diner web flow in a headless browser (as a guest,
+ * or logged in if credentials are set), because the Booking API is only
+ * offered to venues.
  *
  * The browser steps use text/role locators rather than CSS classes so small
  * redesigns don't break them, but they still need checking against the live
@@ -107,11 +108,15 @@ export function readCalendar(cal: Calendar, slot: Slot): AvailabilityResult {
   return { status: exact ? "available" : "unavailable", alternatives };
 }
 
+/**
+ * TableCheck takes guest bookings (name, phone, email) and emails a manage
+ * link, so an account is optional. Without credentials we book as a guest.
+ */
 async function ensureLoggedIn(page: Page): Promise<void> {
+  const { email, password } = config.booking.tablecheck;
+  if (!email || !password) return;
   await page.goto("https://www.tablecheck.com/en/login");
   if (!page.url().includes("login")) return; // already signed in
-  const { email, password } = config.booking.tablecheck;
-  if (!email || !password) throw new Error("TABLECHECK_EMAIL/TABLECHECK_PASSWORD not set");
   await page.getByLabel(/email/i).fill(email);
   await page.getByLabel(/password/i).fill(password);
   await page.getByRole("button", { name: /log ?in|sign ?in/i }).click();
@@ -150,7 +155,7 @@ export const tablecheck: BookingAdapter = {
       for (const [label, value] of [
         [/first name/i, contact.name.split(" ")[0]],
         [/last name/i, contact.name.split(" ").slice(1).join(" ") || contact.name],
-        [/phone/i, contact.phone],
+        [/phone/i, intlPhone(contact.phone)],
         [/email/i, contact.email],
       ] as const) {
         const field = page.getByLabel(label).first();

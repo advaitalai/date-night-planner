@@ -7,7 +7,7 @@ const contexts = new Map<string, Promise<BrowserContext>>();
 
 /**
  * A persistent Chromium profile per platform, so logins survive restarts
- * (stored on the Fly volume next to the database).
+ * (stored in DATA_DIR next to the database).
  */
 export function browserFor(platform: string): Promise<BrowserContext> {
   let ctx = contexts.get(platform);

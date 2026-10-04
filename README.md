@@ -23,37 +23,25 @@ Scheduler (SQLite jobs) ──┘                                               
 
 | Area | Where | Notes |
 |---|---|---|
-| Chat | `src/wa/whatsapp.ts` | Runs on a spare number added to the group. It replies when @-mentioned, called "planner" or replied to. Votes are counted by decrypting the poll responses. |
+| Chat | `src/wa/whatsapp.ts` | A linked device on your own WhatsApp (messages start with 🤖) or on a separate number. It replies when called "planner" or replied to. Votes are counted by decrypting the poll responses. |
 | Agent | `src/agent/` | A Claude tool loop with tools to recommend, book, check, change, cancel, set preferences and add places. |
 | Recommender | `src/recommender/` | Turns a free-text request into constraints, then: saved-list and discovered candidates → filters → scoring (cuisine rotation, both-saved boost, similarity) → availability check → 3 varied options → pitches. |
-| Booking | `src/booking/` | A shared adapter interface. TableCheck availability comes from its public diner API. TableCheck and Tabelog bookings run through a headless browser logged into your accounts. Email uses fixed, polite Japanese templates. |
+| Booking | `src/booking/` | A shared adapter interface. TableCheck availability comes from its public diner API, and bookings are made as a guest in a headless browser. Tabelog bookings use a saved login in the same browser. Email uses fixed, polite templates: Japanese first, then English. |
 | Policies | `src/booking/service.ts` | The cancellation policy is read with an LLM and turned into a free-cancel deadline. The bot asks "still on?" 48h and 24h before it. |
 | Saved lists | `src/places/takeout.ts`, `src/jobs/takeoutWatch.ts` | Takeout CSV/zip import. Each place is matched to Google Places by its Maps ID. Recurring Takeout exports are picked up from Drive automatically. |
 | Schedule | `src/jobs/` | Sat 10:00 kickoff, Sun 10:00 nudge, Sun 20:00 book the top-voted option, reminders, Gmail reply watcher. All times can be changed from the chat. |
 
 ## Setup
 
-1. **Install:** `npm install`, then `cp .env.example .env` and fill it in. You need:
-   - an Anthropic API key;
-   - a Google Cloud project with the **Places API (New)**, **Routes API**, **Gmail API** and **Drive API** enabled, plus an API key and an OAuth web client. Set the redirect URI to `<PUBLIC_BASE_URL>/oauth/callback` and set the OAuth app to **In production** so refresh tokens don't expire after 7 days;
-   - the name, phone and email to put on bookings, and your TableCheck and Tabelog logins.
-2. **Seed the saved places:**
-   ```
-   npm run import-csv -- fixtures/Tokyo_food.csv Advait "Tokyo food"
-   ```
-3. **Check how each place can be booked:** `npm run audit` writes `audit-report.md`, which shows how many places the bot can book itself and how many are phone-only.
-4. **Run:** `npm start`.
-   - Scan the QR code with the bot's phone (WhatsApp → Linked devices).
-   - Add the bot to your group. The log prints each group's id: put it in `WA_GROUP_JID` and restart.
-   - In the group, say `@planner setup` to get each person's onboarding link (connect Google, then the one-time Takeout export).
-5. **Deploy to Fly.io** (Tokyo region, always on):
-   ```
-   fly launch --no-deploy
-   fly volumes create planner_data --region nrt --size 1
-   fly secrets set ANTHROPIC_API_KEY=... GOOGLE_MAPS_API_KEY=... (everything else in .env)
-   fly deploy
-   fly logs   # scan the WhatsApp QR from here on first boot
-   ```
+The full step-by-step guide is in [`docs/SETUP.md`](docs/SETUP.md). In short:
+
+1. **Anthropic API key** (console.anthropic.com, prepaid credits). This is the only paid part, about a few dollars a month.
+2. **Google Cloud project:** Places, Routes, Gmail and Drive APIs; a Maps API key; an OAuth client with an "In production" consent screen.
+3. **Free e2-micro VM** (us-west1), set up with `deploy/setup-vm.sh`. It runs the bot 24/7 as a systemd service.
+4. **WhatsApp:** link the bot to your own WhatsApp (no spare SIM needed; its messages start with 🤖), or to a separate number.
+5. **Connect Google** for both of you through an SSH tunnel, then do the one-time Takeout export.
+6. **Booking sites:** TableCheck works as a guest. For Tabelog, log in once with `npm run browser-login -- tabelog`.
+7. **Check, then go live:** `npm run audit`, a dry run in the group, then `DRY_RUN=0`.
 
 Keep `DRY_RUN=1` until each booking flow has been checked live. In dry-run mode the browser stops before the final confirm click, and emails go to `BOOKING_EMAIL` instead of the restaurant.
 

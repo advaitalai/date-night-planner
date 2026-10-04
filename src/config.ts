@@ -12,6 +12,12 @@ export const config = {
 
   wa: {
     groupJid: env("WA_GROUP_JID"),
+    /**
+     * Run on Advait's own WhatsApp as a linked device instead of a separate
+     * number. Bot messages then come from Advait, prefixed with 🤖.
+     */
+    selfMode: env("WA_SELF_MODE", "1") === "1",
+    selfName: "Advait",
     phones: { Advait: env("ADVAIT_PHONE"), Emily: env("EMILY_PHONE") } as Record<string, string>,
   },
 
@@ -38,6 +44,20 @@ export const config = {
 };
 
 export type Contact = typeof config.booking.contact;
+
+/** "070-1568-0178" → "+81 70-1568-0178" for English text and international forms. */
+export function intlPhone(phone: string): string {
+  const p = phone.trim();
+  if (p.startsWith("+")) return p;
+  return p.startsWith("0") ? `+81 ${p.slice(1)}` : p;
+}
+
+/** "070-1568-0178" / "+81 70 1568 0178" → domestic "070-1568-0178" for Japanese text. */
+export function domesticPhone(phone: string): string {
+  const p = phone.trim();
+  const m = p.match(/^\+81[\s-]*0?(.*)$/);
+  return m ? `0${m[1]}`.replace(/\s+/g, "-") : p;
+}
 
 /** People in the group. Names are used as identifiers everywhere (saved_by, votes). */
 export const PEOPLE = ["Advait", "Emily"] as const;

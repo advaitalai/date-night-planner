@@ -5,7 +5,7 @@ import type { Slot } from "../booking/types";
 import { config } from "../config";
 import { kvGet, kvSet } from "../db";
 import { listPlaces, recentVisits, updatePlace, upsertPlace } from "../db/repo";
-import { cidFromMapsUri, placeDetails, textSearch, toPlaceFields, travelMinutes } from "../places/google";
+import { cidFromMapsUri, textSearch, toPlaceFields, travelMinutes } from "../places/google";
 import { buildProfile } from "../places/profile";
 import type { Place } from "../types";
 import type { LatLng } from "../util/geo";
@@ -23,7 +23,7 @@ export async function enrich(place: Place): Promise<Place> {
     if (!p.google_place_id) {
       const results = await textSearch(`${p.name} Tokyo`, { lat: p.lat ?? 35.65, lng: p.lng ?? 139.72 }, 20000, 5);
       const hit = (p.cid && results.find((r) => cidFromMapsUri(r.googleMapsUri) === p.cid)) || results[0];
-      if (hit) p = updatePlace(p.id, { ...toPlaceFields(hit.reviews ? hit : await placeDetails(hit.id)), name: p.name });
+      if (hit) p = updatePlace(p.id, { ...toPlaceFields(hit), name: p.name });
     }
     const detectedAt = kvGet<string | null>(`detect:${p.id}`, null);
     const stale = !detectedAt || DateTime.fromISO(detectedAt).plus({ days: REDETECT_DAYS }) < DateTime.now();

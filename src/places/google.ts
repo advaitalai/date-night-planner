@@ -5,6 +5,27 @@ import { estimateTravelMin, type LatLng } from "../util/geo";
 const PLACES = "https://places.googleapis.com/v1";
 const ROUTES = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
+/**
+ * Searches skip reviews/editorial summary so they bill at the cheaper search
+ * tier; place details (used once per place for its profile) include them.
+ */
+const SEARCH_FIELDS = [
+  "id",
+  "displayName",
+  "formattedAddress",
+  "location",
+  "types",
+  "primaryType",
+  "priceLevel",
+  "rating",
+  "userRatingCount",
+  "regularOpeningHours",
+  "websiteUri",
+  "nationalPhoneNumber",
+  "reservable",
+  "googleMapsUri",
+];
+
 const DETAIL_FIELDS = [
   "id",
   "displayName",
@@ -72,7 +93,7 @@ export async function textSearch(query: string, near: LatLng, radiusM = 5000, ma
       pageSize: max,
       locationBias: { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: radiusM } },
     },
-    DETAIL_FIELDS,
+    SEARCH_FIELDS,
   );
   return data.places ?? [];
 }
@@ -87,7 +108,7 @@ export async function nearbyRestaurants(near: LatLng, radiusM: number, types = [
       rankPreference: "POPULARITY",
       locationRestriction: { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: radiusM } },
     },
-    DETAIL_FIELDS,
+    SEARCH_FIELDS,
   );
   return data.places ?? [];
 }

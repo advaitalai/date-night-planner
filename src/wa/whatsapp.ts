@@ -19,9 +19,17 @@ import { say, setSender } from "../notify";
 import { onVotes } from "../plans/decide";
 
 /**
- * WhatsApp via Baileys on the bot's own number, added to the couple's group.
+ * WhatsApp via Baileys, linked as a device (WhatsApp → Linked devices).
+ *
+ * Two modes:
+ * - self mode (default, no extra SIM): linked to Advait's own WhatsApp. The
+ *   bot's messages appear as Advait with a 🤖 prefix; Advait's own messages
+ *   (typed on his phone) are treated as his, and the bot ignores what it sent.
+ * - bot-number mode (WA_SELF_MODE=0): linked to a separate number that's a
+ *   member of the group.
+ *
  * Only messages from WA_GROUP_JID are handled. The bot answers when it's
- * @-mentioned, called "planner", or replied to.
+ * called "planner", replied to, or (bot-number mode) @-mentioned.
  */
 
 const logger = pino({ level: process.env.WA_LOG_LEVEL ?? "warn" });
@@ -33,6 +41,16 @@ interface StoredPoll {
 }
 
 let sock: WASocket | undefined;
+
+const BOT_PREFIX = "🤖 ";
+/** Ids of messages the bot itself sent, so self mode doesn't answer itself. */
+const sentByBot = new Set<string>();
+
+function rememberSent(id: string | null | undefined): void {
+  if (!id) return;
+  sentByBot.add(id);
+  if (sentByBot.size > 500) sentByBot.delete(sentByBot.values().next().value!);
+}
 
 function botJids(): string[] {
   const me = sock?.user;
@@ -59,9 +77,13 @@ function textOf(m: WAMessage): string {
 
 function isAddressed(m: WAMessage, text: string): boolean {
   const ctx = m.message?.extendedTextMessage?.contextInfo;
-  const mine = botJids();
-  if (ctx?.mentionedJid?.some((j) => mine.includes(jidNormalizedUser(j)))) return true;
-  if (ctx?.participant && mine.includes(jidNormalizedUser(ctx.participant))) return true;
+  if (ctx?.stanzaId && sentByBot.has(ctx.stanzaId)) return true;
+  if (!config.wa.selfMode) {
+    // In self mode a mention of the bot is a mention of Advait, so only the keyword counts.
+    const mine = botJids();
+    if (ctx?.mentionedJid?.some((j) => mine.includes(jidNormalizedUser(j)))) return true;
+    if (ctx?.participant && mine.includes(jidNormalizedUser(ctx.participant))) return true;
+  }
   return /\bplanner\b/i.test(text);
 }
 
@@ -97,7 +119,7 @@ async function handlePollVote(m: WAMessage): Promise<void> {
     logger.warn({ pollId }, "couldn't decrypt poll vote");
     return;
   }
-  const person = identify(voterJid, m.pushName);
+  const person = m.key.fromMe && config.wa.selfMode ? config.wa.selfName : identify(voterJid, m.pushName);
   if (!person) return;
   const picks = poll.options.map((o, i) => ({ i, h: sha256(o) })).filter(({ h }) => selected!.some((s) => Buffer.from(s).equals(h))).map(({ i }) => i);
   await onVotes(plan.id, { ...plan.votes, [person]: picks });
@@ -106,11 +128,10 @@ async function handlePollVote(m: WAMessage): Promise<void> {
 async function onMessage(m: WAMessage): Promise<void> {
   if (m.key.remoteJid !== config.wa.groupJid) return;
   if (m.message?.pollUpdateMessage) return handlePollVote(m);
-  if (m.key.fromMe) return;
+  if (m.key.fromMe && (!config.wa.selfMode || sentByBot.has(m.key.id ?? ""))) return;
   const text = textOf(m).trim();
-  if (!text) return;
-  const sender = getKeyAuthor(m.key);
-  const person = identify(sender, m.pushName, text) ?? m.pushName ?? "someone";
+  if (!text || text.startsWith(BOT_PREFIX.trim())) return;
+  const person = m.key.fromMe ? config.wa.selfName : (identify(getKeyAuthor(m.key), m.pushName, text) ?? m.pushName ?? "someone");
   logMessage(person, text, m.key.id ?? undefined);
   if (!isAddressed(m, text)) return;
 
@@ -136,7 +157,7 @@ export async function startWhatsApp(): Promise<void> {
 
   sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      console.log("Scan this QR with the bot's WhatsApp (Linked devices → Link a device):");
+      console.log(`Scan this QR with ${config.wa.selfMode ? "your" : "the bot's"} WhatsApp (Settings → Linked devices → Link a device):`);
       qrcode.generate(qr, { small: true });
     }
     if (connection === "open") {
@@ -163,12 +184,15 @@ export async function startWhatsApp(): Promise<void> {
   setSender({
     async text(text) {
       if (!sock || !config.wa.groupJid) return console.log(`[group] ${text}`), undefined;
-      const sent = await sock.sendMessage(config.wa.groupJid, { text });
+      const sent = await sock.sendMessage(config.wa.groupJid, { text: config.wa.selfMode ? BOT_PREFIX + text : text });
+      rememberSent(sent?.key.id);
       return sent?.key.id ?? undefined;
     },
     async poll(question, options) {
       if (!sock || !config.wa.groupJid) return undefined;
-      const sent = await sock.sendMessage(config.wa.groupJid, { poll: { name: question, values: options, selectableCount: 1 } });
+      const name = config.wa.selfMode ? BOT_PREFIX + question : question;
+      const sent = await sock.sendMessage(config.wa.groupJid, { poll: { name, values: options, selectableCount: 1 } });
+      rememberSent(sent?.key.id);
       const secret = sent?.message?.messageContextInfo?.messageSecret;
       if (sent?.key.id && secret) {
         const stored: StoredPoll = { secret: Buffer.from(secret).toString("base64"), options, creatorJids: botJids() };

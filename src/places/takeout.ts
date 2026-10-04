@@ -2,7 +2,7 @@ import { parse } from "csv-parse/sync";
 import JSZip from "jszip";
 import { upsertPlace } from "../db/repo";
 import type { Place } from "../types";
-import { placeDetails, textSearch, toPlaceFields, cidFromMapsUri } from "./google";
+import { cidFromMapsUri, textSearch, toPlaceFields } from "./google";
 
 export interface SavedRow {
   title: string;
@@ -53,7 +53,7 @@ export async function resolveSavedRow(row: SavedRow): Promise<Partial<Place> | n
   const exact = row.cid ? results.find((r) => cidFromMapsUri(r.googleMapsUri) === row.cid) : undefined;
   const hit = exact ?? results[0];
   if (!hit) return null;
-  return toPlaceFields(exact ? hit : await placeDetails(hit.id));
+  return toPlaceFields(hit);
 }
 
 export interface ImportResult {

@@ -3,6 +3,7 @@ import { isNonDining, sameName, scanWebsite } from "../src/booking/detect";
 import { jaDate, requestEmail } from "../src/booking/email";
 import { parseTabelogPage } from "../src/booking/tabelog";
 import { parseShop, readCalendar } from "../src/booking/tablecheck";
+import { domesticPhone, intlPhone } from "../src/config";
 import { buildRaw } from "../src/google/gmail";
 import { place } from "./helpers";
 
@@ -79,7 +80,7 @@ describe("booking channel detection", () => {
 });
 
 describe("reservation emails", () => {
-  const contact = { name: "Advait L", nameKana: "アドヴァイト", phone: "090-0000-0000", email: "a@example.com" };
+  const contact = { name: "Advait", nameKana: "アドヴァイト", phone: "090-0000-0000", email: "a@example.com" };
 
   it("formats Japanese dates with the weekday", () => {
     expect(jaDate("2026-10-07", "18:30")).toBe("2026年10月7日（水）18:30");
@@ -92,6 +93,17 @@ describe("reservation emails", () => {
     expect(body).toContain("・人数：2名");
     expect(body).toContain("キャンセルポリシー");
     expect(body).toContain("備考：anniversary");
+    expect(body).toContain("・お名前：アドヴァイト（Advait）");
+    // Japanese first, then English
+    expect(body.indexOf("ご担当者様")).toBeLessThan(body.indexOf("Dear Chez Lui team"));
+    expect(body).toContain("Wednesday 7 October 2026, 18:30");
+    expect(body).toContain("+81 90-0000-0000");
+  });
+
+  it("formats phone numbers for Japanese and English text", () => {
+    expect(intlPhone("070-1568-0178")).toBe("+81 70-1568-0178");
+    expect(domesticPhone("+81 070 1568 0178")).toBe("070-1568-0178");
+    expect(domesticPhone("+81 70-1568-0178")).toBe("070-1568-0178");
   });
 
   it("encodes UTF-8 subjects and bodies for Gmail", () => {
