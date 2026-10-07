@@ -1,7 +1,7 @@
 # Date Night Planner: requirements
 
 Owner: Advait. Users: Advait and Emily (a couple in Tokyo).
-Status: MVP built on branch `claude/festive-volta-e3nm17` (PR #1). No real booking has been made yet.
+Status: MVP built on branch `claude/festive-volta-e3nm17` (PR #1). **First real booking made on 7 Oct 2026:** h:armonia, Fri 9 Oct 18:00, 2 people, seats only, via TableCheck. Kept (they're going). The next milestone is the WhatsApp beta (phase 3).
 
 ## 1. Problem
 
@@ -93,6 +93,9 @@ See `docs/BACKLOG.md`. Highlights:
 ## 7. Known gaps and risks (update as they're resolved)
 
 Findings from the 7 Oct 2026 test session:
+
+- **The bot reported the first real booking as failed.** TableCheck's success page says "Your Reservation is Accepted", which the success check didn't recognise; fixed. The 18:30 attempt was refused ("selected time is unavailable") even though the availability API said free. The API can lag, so on that error try the nearest free time.
+- **19:00 at h:armonia looked like a "request" booking** that the venue must accept. It has a different final button; not handled yet.
 
 - **TableCheck has two booking flows.**
   - **Classic form** (`/en/shops/<slug>/reserve`), e.g. h:armonia. **Works end to end in dry run**: grid → seats-only → purpose "Date" → required Q&A "None" → guest details → TableCheck's confirmation page. The page holds the slot for 10 minutes. It reports the cancellation policy and the at-venue total, e.g. ¥500/person coperto.
