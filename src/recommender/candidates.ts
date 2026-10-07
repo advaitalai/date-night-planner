@@ -55,6 +55,8 @@ export async function discover(k: Constraints, anchor: LatLng, slot: Slot, limit
         const [g] = await textSearch(s.name, { lat: s.lat, lng: s.lng }, 300, 1).catch(() => []);
         if (g) fields = { ...toPlaceFields(g), cuisine: fields.cuisine ?? toPlaceFields(g).cuisine };
       }
+      // TableCheck's average dinner spend is a better budget signal than Google's ¥–¥¥¥¥.
+      if (s.budgetDinnerAvg != null) fields.price_level = priceLevelForJpy(s.budgetDinnerAvg);
       found.push(upsertPlace({ ...fields, name: s.name, source: "discovered", booking_channel: "tablecheck", tablecheck_slug: s.slug }));
     }
   } catch (err) {
@@ -72,6 +74,14 @@ export async function discover(k: Constraints, anchor: LatLng, slot: Slot, limit
     }
   }
   return found;
+}
+
+/** Map an average spend per person to the same 1–4 scale the filters use (see PRICE_LEVEL_JPY). */
+export function priceLevelForJpy(jpy: number): number {
+  if (jpy <= 2500) return 1;
+  if (jpy <= 6000) return 2;
+  if (jpy <= 15000) return 3;
+  return 4;
 }
 
 /** Saved places (both lists) plus anything discovered earlier. */

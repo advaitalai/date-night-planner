@@ -138,7 +138,8 @@ export const tablecheck: BookingAdapter = {
     try {
       const cal = (await getJson(`${API}/hub/availability_calendar`, {
         method: "POST",
-        body: JSON.stringify({ locale: "en", start_at: slot.date, shop_id: place.tablecheck_slug, num_people: String(slot.partySize) }),
+        // The calendar returns a window of ~9 slots around start_at, so send the requested time, not just the date.
+        body: JSON.stringify({ locale: "en", start_at: jst(slot.date, slot.time).toISO(), shop_id: place.tablecheck_slug, num_people: String(slot.partySize) }),
       })) as Calendar;
       return readCalendar(cal, slot);
     } catch (err) {
