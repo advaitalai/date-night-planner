@@ -130,6 +130,11 @@ async function ensureLoggedIn(page: Page): Promise<void> {
   await page.waitForLoadState("networkidle");
 }
 
+/** TableCheck's post-submit page, e.g. "Your Reservation is Accepted … Status Accepted". */
+export function isBookedPage(body: string): boolean {
+  return /reservation is (accepted|confirmed)|status\s+(accepted|confirmed)|confirmed|thank you|complete|予約が(完了|確定)|予約を受け付け/i.test(body);
+}
+
 /** Menu items the bot will pick: seat-only reservations without prepayment. Never courses. */
 export function isSeatOnly(name: string): boolean {
   return /seats? only|table only|席のみ|お席のみ|座席のみ/i.test(name);
@@ -234,7 +239,7 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(2000);
   const body = await page.locator("body").innerText();
-  if (!/confirmed|thank you|complete|reservation (number|no)|予約が(完了|確定)/i.test(body)) {
+  if (!isBookedPage(body)) {
     return { status: "failed", policyText, detail: `no confirmation shown after submitting: ${body.slice(0, 300)}` };
   }
   const ref = body.match(/(?:reservation|booking|予約)\s*(?:no\.?|number|ref|code|番号)[:\s#]*([A-Z0-9-]{5,})/i)?.[1];

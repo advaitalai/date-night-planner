@@ -124,3 +124,11 @@ describe("TableCheck seat-only menu", () => {
     expect(isSeatOnly("Dinner Course A")).toBe(false);
   });
 });
+
+describe("TableCheck booked page", () => {
+  it("recognises the accepted page", async () => {
+    const { isBookedPage } = await import("../src/booking/tablecheck");
+    expect(isBookedPage("Your Reservation is Accepted\nAt\nh:armonia\nStatus\nAccepted")).toBe(true);
+    expect(isBookedPage("Your selected time is unavailable.")).toBe(false);
+  });
+});
