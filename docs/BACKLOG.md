@@ -13,6 +13,8 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 
 ## Booking coverage
 
+- **TableCheck newer flow** (`/reserve/message` → landing → menu): finish the booking steps. The flow is mapped in REQUIREMENTS §7. Kuss Daikanyama, TUITUI and Taro Yamada use it.
+
 4. **AI phone calls for phone-only restaurants.** This is common in Tokyo. It needs a Japanese voice agent (Twilio plus a realtime voice model) that:
    - makes the call;
    - confirms the date, time and number of people;

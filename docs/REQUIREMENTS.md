@@ -49,6 +49,7 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 - R13. If too few places pass the filters, loosen the standing limits once (travel +10 min, budget ×1.5) and say so. If nothing works, explain why, naming example places for each reason.
 
 ### 4.4 Reservations
+- R13a. **Seat-only bookings.** Never book courses or anything needing prepayment or a card. Pick TableCheck's seat-only item (e.g. "Reservation for seats only"), or skip the place. The ¥ amounts shown to users are average spend per person, not prices.
 - R14. **The bot books itself.** Posting a link or phone number for a human to act on doesn't count. It also changes and cancels bookings.
 - R15. How it books, in order of preference:
   1. **TableCheck:** availability from the public diner API; booking as a guest in a headless browser.
@@ -91,17 +92,19 @@ See `docs/BACKLOG.md`. Highlights:
 
 ## 7. Known gaps and risks (update as they're resolved)
 
-- TableCheck and Tabelog browser steps were written without access to the live sites. They need tuning on the first real run. Failures save screenshots to `data/screens/`.
-- Booking sites may show captchas to cloud and datacenter IP addresses. If that happens, run the booking from Advait's laptop.
-- The first dry run (on Advait's laptop) found no options:
-  - 20 too far
-  - 12 not bookable
-  - 6 over budget
-  - 4 closed
+Findings from the 7 Oct 2026 test session:
 
-  Fix: run `npm run audit` and review the not-bookable and unknown places. If needed, loosen the travel and budget limits.
+- **TableCheck has two booking flows.**
+  - **Classic form** (`/en/shops/<slug>/reserve`), e.g. h:armonia. **Works end to end in dry run**: grid → seats-only → purpose "Date" → required Q&A "None" → guest details → TableCheck's confirmation page. The page holds the slot for 10 minutes. It reports the cancellation policy and the at-venue total, e.g. ¥500/person coperto.
+  - **Newer step-by-step flow** (`/en/<slug>/reserve/message` → landing → menu), e.g. Kuss Daikanyama. Mapped as far as the menu page (stable `data-testid`s: `Landing Date Panel Opener Button`, `[data-testid=day][data-date=…]`, `Landing Time Button`, `Landing Service Category Button`, `Landing Find A Table Button`, then the menu with "Seat only reservation"). Booking isn't implemented yet; the bot reports it as unsupported.
+- **TableCheck availability API:** `hub/availability_calendar` returns about 9 slots around `start_at`, so send the JST date and time. Fixed.
+- **TableCheck search** returns names in `text_translations`. Fixed.
+- **Tabelog** shows a Cloudflare bot check to cloud/datacenter IPs, even through a headless browser. It can't be used from cloud sessions. Try from a home connection.
+- **Audit:** 13 of 59 dinner places are on TableCheck, 1 is email, and 5 are on other platforms. 37 show as "phone only", which is overstated because Tabelog was unreachable. Discovery finds many more TableCheck places near home: ~40 within 1.3 km with Friday tables.
+- **Real bookings from cloud sessions** are blocked by the session's auto-mode safety classifier, even with Advait's go-ahead. A real booking needs a permission rule, or has to be run from Advait's laptop/VM.
+- Sandbox only: Chromium needed the proxy CA added to `~/.pki/nssdb` (`certutil -A -t "C,," -n ccr-agent-proxy -i /root/.ccr/agent-proxy-ca.crt`).
 - Google sign-in may refuse automated browsers, which would block the one-time Tabelog login.
-- First planning run is slow: one Claude call per place to build its profile, plus booking-type lookups. Both are cached afterwards.
+- The first planning run is slow: one Claude call per place for its profile, plus booking-type lookups. Both are cached afterwards.
 
 ## 8. How a new session should start
 
