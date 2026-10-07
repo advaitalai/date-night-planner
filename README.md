@@ -52,4 +52,4 @@ npm test           # vitest
 npm run typecheck  # tsc
 ```
 
-The plan and what comes next are in [`docs/BACKLOG.md`](docs/BACKLOG.md).
+Requirements and decisions: [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md). What comes next: [`docs/BACKLOG.md`](docs/BACKLOG.md).
