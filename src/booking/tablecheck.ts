@@ -176,6 +176,17 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
       const name = (await data.getAttribute("data-name")) ?? "";
       const pay = (await data.getAttribute("data-payment-type")) ?? "none";
       if (!isSeatOnly(name) || pay !== "none" || !(await items.nth(i).isVisible())) continue;
+      // Seat-only items are tied to seating categories (e.g. Tables/Counters, not Partition);
+      // the slot must be free in that category, so select it explicitly.
+      const categories = JSON.parse((await data.getAttribute("data-service-categories")) ?? "[]") as string[];
+      if (categories.length) {
+        const radio = page.locator(`input[name='reservation[service_category]'][value='${categories[0]}']`);
+        // The radio sits inside a Bootstrap toggle button; click the wrapper.
+        if ((await radio.count()) && !(await radio.isChecked())) {
+          await radio.locator("xpath=..").click();
+          await page.waitForTimeout(1500);
+        }
+      }
       await items.nth(i).locator("label.menu-item-order-btn").first().click();
       chose = name;
       break;
