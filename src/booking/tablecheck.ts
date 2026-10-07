@@ -43,8 +43,15 @@ async function getJson(url: string, init?: RequestInit): Promise<unknown> {
 /** Text search for shop slugs by name. */
 export async function tcAutocomplete(text: string): Promise<{ slug: string; name: string }[]> {
   const q = new URLSearchParams({ shop_universe_id: SHOP_UNIVERSE_ID, locale: "en", text });
-  const data = (await getJson(`${API}/autocomplete?${q}`)) as { shops?: { text: string; payload?: { shop_slug?: string } }[] };
-  return (data.shops ?? []).filter((s) => s.payload?.shop_slug).map((s) => ({ slug: s.payload!.shop_slug!, name: s.text }));
+  type Hit = { text?: string; text_translations?: { locale: string; translation: string }[]; payload?: { shop_slug?: string } };
+  const data = (await getJson(`${API}/autocomplete?${q}`)) as { shops?: Hit[] };
+  return (data.shops ?? [])
+    .filter((s) => s.payload?.shop_slug)
+    .map((s) => ({
+      slug: s.payload!.shop_slug!,
+      // Newer responses carry names only in text_translations.
+      name: s.text ?? s.text_translations?.find((t) => t.locale === "en")?.translation ?? s.text_translations?.[0]?.translation ?? s.payload!.shop_slug!,
+    }));
 }
 
 /** Shops near a point with online availability for the slot. Used for discovery. */
