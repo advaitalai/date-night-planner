@@ -113,3 +113,14 @@ describe("reservation emails", () => {
     expect(mime).toContain(Buffer.from("こんにちは").toString("base64"));
   });
 });
+
+describe("TableCheck seat-only menu", () => {
+  it("recognises seat-only items and rejects courses", async () => {
+    const { isSeatOnly } = await import("../src/booking/tablecheck");
+    expect(isSeatOnly("Reservation for seats only")).toBe(true);
+    expect(isSeatOnly("Seat only reservation")).toBe(true);
+    expect(isSeatOnly("お席のみのご予約")).toBe(true);
+    expect(isSeatOnly("Omakase course")).toBe(false);
+    expect(isSeatOnly("Dinner Course A")).toBe(false);
+  });
+});
