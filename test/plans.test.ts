@@ -73,3 +73,17 @@ describe("weekly rhythm", () => {
     expect(pendingJobs()[0].dedupe_key).toContain("2026-10-07");
   });
 });
+
+describe("self-chat test mode", () => {
+  it("only needs Advait's vote", async () => {
+    const { config } = await import("../src/config");
+    const before = config.wa.groupJid;
+    config.wa.groupJid = "self";
+    try {
+      expect(consensus(plan({ Advait: [2] }))).toBe(2);
+    } finally {
+      config.wa.groupJid = before;
+    }
+    expect(consensus(plan({ Advait: [2] }))).toBeNull();
+  });
+});

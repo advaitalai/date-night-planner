@@ -1,5 +1,5 @@
 import { bookAndAnnounce, checkAvailability } from "../booking/service";
-import { PEOPLE } from "../config";
+import { voters } from "../config";
 import { getPlace, getPlan, updatePlan } from "../db/repo";
 import { say } from "../notify";
 import type { Plan } from "../types";
@@ -13,7 +13,7 @@ export function rankByVotes(plan: Plan): number[] {
 
 /** The option both people picked, if they agree. */
 export function consensus(plan: Plan): number | null {
-  const picks = PEOPLE.map((p) => plan.votes[p]);
+  const picks = voters().map((p) => plan.votes[p]);
   if (picks.some((v) => !v || v.length !== 1)) return null;
   return picks.every((v) => v[0] === picks[0][0]) ? picks[0][0] : null;
 }
@@ -50,13 +50,13 @@ export async function onVotes(planId: number, votes: Record<string, number[]>): 
   if (plan.status !== "proposed") return;
   const agreed = consensus(plan);
   if (agreed != null) {
-    await say(`You both picked *${plan.options[agreed].name}* 🎉 Booking it now…`);
+    await say(`${voters().length > 1 ? "You both picked" : "You picked"} *${plan.options[agreed].name}* 🎉 Booking it now…`);
     await bookOption(planId, agreed);
     return;
   }
-  const voted = PEOPLE.filter((p) => plan.votes[p]?.length);
-  if (voted.length === PEOPLE.length) {
-    const desc = PEOPLE.map((p) => `${p}: ${plan.votes[p].map((i) => plan.options[i].name).join(" / ")}`).join(", ");
+  const voted = voters().filter((p) => plan.votes[p]?.length);
+  if (voted.length === voters().length) {
+    const desc = voters().map((p) => `${p}: ${plan.votes[p].map((i) => plan.options[i].name).join(" / ")}`).join(", ");
     await say(`Split vote — ${desc}. Settle it in the poll or tell me which one; otherwise I'll book the top-voted option on Sunday evening.`);
   }
 }

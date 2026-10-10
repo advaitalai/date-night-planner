@@ -12,7 +12,7 @@ import path from "node:path";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
 import { handleMessage } from "../agent/loop";
-import { config, PEOPLE } from "../config";
+import { config, isSelfChat, PEOPLE } from "../config";
 import { kvGet, kvSet } from "../db";
 import { getPlanByPoll, getUser, logMessage, upsertUser, userByJid } from "../db/repo";
 import { say, setSender } from "../notify";
@@ -75,7 +75,19 @@ function textOf(m: WAMessage): string {
   return msg?.conversation ?? msg?.extendedTextMessage?.text ?? msg?.imageMessage?.caption ?? "";
 }
 
+/** The chat the bot lives in: the configured group, or Advait's own chat in self-chat mode. */
+function chatJid(): string {
+  return isSelfChat() ? jidNormalizedUser(sock?.user?.id) : config.wa.groupJid;
+}
+
+function isOurChat(remoteJid: string | null | undefined): boolean {
+  if (!remoteJid) return false;
+  // The "Message yourself" chat can appear under the phone-number jid or the LID.
+  return isSelfChat() ? botJids().includes(jidNormalizedUser(remoteJid)) : remoteJid === config.wa.groupJid;
+}
+
 function isAddressed(m: WAMessage, text: string): boolean {
+  if (isSelfChat()) return true;
   const ctx = m.message?.extendedTextMessage?.contextInfo;
   if (ctx?.stanzaId && sentByBot.has(ctx.stanzaId)) return true;
   if (!config.wa.selfMode) {
@@ -126,7 +138,7 @@ async function handlePollVote(m: WAMessage): Promise<void> {
 }
 
 async function onMessage(m: WAMessage): Promise<void> {
-  if (m.key.remoteJid !== config.wa.groupJid) return;
+  if (!isOurChat(m.key.remoteJid)) return;
   if (m.message?.pollUpdateMessage) return handlePollVote(m);
   if (m.key.fromMe && (!config.wa.selfMode || sentByBot.has(m.key.id ?? ""))) return;
   const text = textOf(m).trim();
@@ -135,7 +147,7 @@ async function onMessage(m: WAMessage): Promise<void> {
   logMessage(person, text, m.key.id ?? undefined);
   if (!isAddressed(m, text)) return;
 
-  await sock?.sendPresenceUpdate("composing", config.wa.groupJid).catch(() => {});
+  await sock?.sendPresenceUpdate("composing", chatJid()).catch(() => {});
   try {
     const reply = await handleMessage(person, text);
     if (reply) await say(reply);
@@ -164,7 +176,8 @@ export async function startWhatsApp(): Promise<void> {
       console.log("WhatsApp connected as", sock?.user?.id);
       const groups = await sock!.groupFetchAllParticipating();
       for (const g of Object.values(groups)) console.log(`  group: ${g.subject} → ${g.id}`);
-      if (!config.wa.groupJid) console.log("Set WA_GROUP_JID to one of the ids above and restart.");
+      if (!config.wa.groupJid) console.log('Set WA_GROUP_JID to one of the ids above (or "self" for your own 1-1 chat) and restart.');
+      if (isSelfChat()) console.log(`Self-chat mode: talk to the bot in WhatsApp's "Message yourself" chat (${chatJid()}).`);
     }
     if (connection === "close") {
       const code = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
@@ -184,14 +197,14 @@ export async function startWhatsApp(): Promise<void> {
   setSender({
     async text(text) {
       if (!sock || !config.wa.groupJid) return console.log(`[group] ${text}`), undefined;
-      const sent = await sock.sendMessage(config.wa.groupJid, { text: config.wa.selfMode ? BOT_PREFIX + text : text });
+      const sent = await sock.sendMessage(chatJid(), { text: config.wa.selfMode ? BOT_PREFIX + text : text });
       rememberSent(sent?.key.id);
       return sent?.key.id ?? undefined;
     },
     async poll(question, options) {
       if (!sock || !config.wa.groupJid) return undefined;
       const name = config.wa.selfMode ? BOT_PREFIX + question : question;
-      const sent = await sock.sendMessage(config.wa.groupJid, { poll: { name, values: options, selectableCount: 1 } });
+      const sent = await sock.sendMessage(chatJid(), { poll: { name, values: options, selectableCount: 1 } });
       rememberSent(sent?.key.id);
       const secret = sent?.message?.messageContextInfo?.messageSecret;
       if (sent?.key.id && secret) {

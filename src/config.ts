@@ -63,6 +63,19 @@ export function domesticPhone(phone: string): string {
 export const PEOPLE = ["Advait", "Emily"] as const;
 export type Person = (typeof PEOPLE)[number];
 
+/**
+ * WA_GROUP_JID=self runs the bot in Advait's "Message yourself" chat: a private
+ * 1-1 test channel. Only Advait votes there, and every message is for the bot.
+ */
+export function isSelfChat(): boolean {
+  return config.wa.groupJid === "self";
+}
+
+/** Who has to vote before a poll counts as agreed. */
+export function voters(): readonly Person[] {
+  return isSelfChat() ? [config.wa.selfName as Person] : PEOPLE;
+}
+
 /** Default anchors. Coordinates are approximate and refined by geocoding on first run. */
 export const DEFAULT_ANCHORS = {
   home: {

@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { PEOPLE } from "../config";
+import { voters } from "../config";
 import { kvGet, kvSet } from "../db";
 import { activePlanFor, addVisit, getPlace, getPrefs, getReservation, updatePlan, updatePrefs, updateReservation } from "../db/repo";
 import { cancelReservation, policyLine } from "../booking/service";
@@ -53,7 +53,7 @@ export function registerWeeklyJobs(): void {
   registerJob("nudge", async ({ date }: { date: string }) => {
     const plan = activePlanFor(date);
     if (!plan || plan.status !== "proposed") return;
-    const missing = PEOPLE.filter((p) => !plan.votes[p]?.length);
+    const missing = voters().filter((p) => !plan.votes[p]?.length);
     if (missing.length) await say(`Reminder: ${missing.join(" and ")} — vote for ${fmtDate(date)} in the poll above so I can lock a table in 🙏`);
   });
 
