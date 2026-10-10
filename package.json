@@ -1,0 +1,56 @@
+{
+  "name": "date-night-planner",
+  "version": "1.0.0",
+  "description": "WhatsApp date-night planning agent: recommends, checks availability, books and manages reservations.",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "import-csv": "tsx src/scripts/import-csv.ts",
+    "audit": "tsx src/scripts/audit.ts",
+    "browser-login": "tsx src/scripts/browser-login.ts",
+    "chat": "tsx src/scripts/chat.ts",
+    "test-call": "tsx src/scripts/test-call.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/advaitalai/date-night-planner.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/advaitalai/date-night-planner/issues"
+  },
+  "homepage": "https://github.com/advaitalai/date-night-planner#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@whiskeysockets/baileys": "^6.7.24",
+    "better-sqlite3": "^13.0.3",
+    "csv-parse": "^7.0.3",
+    "dotenv": "^18.0.5",
+    "fastify": "^5.12.5",
+    "googleapis": "^183.0.0",
+    "jszip": "^3.10.2",
+    "link-preview-js": "^3.2.0",
+    "luxon": "^3.7.2",
+    "pino": "^10.4.0",
+    "playwright-core": "^1.63.0",
+    "qrcode-terminal": "^0.12.0",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/luxon": "^3.7.6",
+    "@types/node": "^26.6.4",
+    "@types/qrcode-terminal": "^0.12.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
+}
