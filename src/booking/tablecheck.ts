@@ -189,7 +189,7 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   for (let i = 0; i < (await cells.count()); i++) {
     const bb = await cells.nth(i).boundingBox();
     if (!bb || Math.abs(bb.x + bb.width / 2 - (hb.x + hb.width / 2)) > 5) continue;
-    if (!/available/.test((await cells.nth(i).getAttribute("class")) ?? "")) return { status: "failed", detail: `${slot.time} on ${slot.date} is not available` };
+    if (!/available/.test((await cells.nth(i).getAttribute("class")) ?? "")) return { status: "failed", full: true, detail: `${slot.time} on ${slot.date} is full on TableCheck` };
     await cells.nth(i).locator("a").click();
     picked = true;
     break;
@@ -252,7 +252,8 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   const confirmBtn = page.locator("input[type=submit][value='Confirm']");
   if (!(await confirmBtn.isVisible().catch(() => false))) {
     const errors = (await page.locator(".has-error, .alert-danger, .error, .help-block").allInnerTexts().catch(() => [])).join(" / ");
-    return { status: "failed", detail: `TableCheck didn't accept the form${errors ? `: ${errors.slice(0, 300)}` : ""}` };
+    const full = /time is unavailable|fully booked|満席/i.test(errors);
+    return { status: "failed", full, detail: full ? `${slot.time} is full on TableCheck` : `TableCheck didn't accept the form${errors ? `: ${errors.slice(0, 300)}` : ""}` };
   }
   const summary = (await page.locator("body").innerText()).replace(/\n{2,}/g, "\n");
   // The confirmation page has a "Cancellation Policy" section; keep the venue message for context.

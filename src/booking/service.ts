@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import { z } from "zod";
 import { config } from "../config";
-import { createReservation, getPlace, getPrefs, getReservation, updatePlan, updateReservation } from "../db/repo";
+import { createReservation, getPlace, getPrefs, getReservation, updatePlace, updatePlan, updateReservation } from "../db/repo";
 import { cancelJobs, schedule } from "../jobs/scheduler";
 import { extract } from "../llm";
 import { say, status } from "../notify";
@@ -9,19 +9,51 @@ import type { Place, Reservation } from "../types";
 import { fmtDate, freeCancelDeadline, jst, now, ZONE } from "../util/time";
 import { email } from "./email";
 import { tabelog } from "./tabelog";
+import { detectChannel } from "./detect";
+import { phone, vapiConfigured } from "./phone";
 import { tablecheck } from "./tablecheck";
-import type { AvailabilityResult, BookingAdapter, Slot } from "./types";
+import type { AvailabilityResult, BookingAdapter, BookResult, Slot } from "./types";
+import { clientFor } from "../google/auth";
+import { BOOKER } from "../google/gmail";
 
-const ADAPTERS: Record<string, BookingAdapter> = { tablecheck, tabelog, email };
+const ADAPTERS: Record<string, BookingAdapter> = { tablecheck, tabelog, email, phone };
 
-export function adapterFor(place: Place): BookingAdapter | null {
-  return ADAPTERS[place.booking_channel] ?? null;
+/** The adapter that holds an existing reservation (for changes and cancellations). */
+export function adapterFor(place: Place, reservation?: Reservation): BookingAdapter | null {
+  return ADAPTERS[reservation?.channel ?? place.booking_channel] ?? null;
+}
+
+export interface Route {
+  channel: "tablecheck" | "tabelog" | "email" | "phone";
+  adapter: BookingAdapter;
+  /** Status-line phrase while trying this route. */
+  doing: string;
+}
+
+/**
+ * How to book a place, fastest and most predictable first:
+ * booking-site automation (TableCheck, Tabelog), then email, then an AI phone call.
+ */
+export function bookingRoutes(place: Place): Route[] {
+  const routes: Route[] = [];
+  if (place.tablecheck_slug) routes.push({ channel: "tablecheck", adapter: tablecheck, doing: `Booking ${place.name} on TableCheck (seats only)…` });
+  if (place.tabelog_url && place.booking_channel === "tabelog") routes.push({ channel: "tabelog", adapter: tabelog, doing: `Booking ${place.name} on Tabelog…` });
+  if (place.booking_email && clientFor(BOOKER)) routes.push({ channel: "email", adapter: email, doing: `Emailing ${place.name}…` });
+  if (place.phone && vapiConfigured()) routes.push({ channel: "phone", adapter: phone, doing: `Calling ${place.name} (AI call, takes a few minutes)…` });
+  return routes;
+}
+
+/** Fill in booking links/emails we haven't looked up yet (done lazily, at booking time). */
+async function ensureDetected(place: Place): Promise<Place> {
+  if (place.tablecheck_slug || place.tabelog_url || place.booking_email || place.booking_channel !== "unknown") return place;
+  const d = await detectChannel(place).catch(() => null);
+  return d ? updatePlace(place.id, { booking_channel: d.channel, ...d.patch }) : place;
 }
 
 export async function checkAvailability(place: Place, slot: Slot): Promise<AvailabilityResult> {
-  const adapter = adapterFor(place);
-  if (!adapter) return { status: "unknown", detail: `can't check ${place.booking_channel} places` };
-  return adapter.checkAvailability(place, slot);
+  const site = bookingRoutes(place).find((r) => r.channel === "tablecheck" || r.channel === "tabelog");
+  if (!site) return { status: "unknown", detail: "no booking site to check; it's confirmed when booking" };
+  return site.adapter.checkAvailability(place, slot);
 }
 
 // ---------- cancellation policy ----------
@@ -86,24 +118,37 @@ export interface BookOutcome {
 }
 
 export async function bookPlace(place: Place, slot: Slot, opts: { planId?: number; notes?: string } = {}): Promise<BookOutcome> {
-  const adapter = adapterFor(place);
-  if (!adapter) return { ok: false, message: `I can't book ${place.name} myself (${place.booking_channel}).` };
+  place = await ensureDetected(place);
+  const routes = bookingRoutes(place);
+  if (!routes.length) return { ok: false, message: `I don't have a way to book ${place.name} yet (no booking site, email or phone number I can use).` };
   const prefs = getPrefs();
   const notes = [opts.notes, prefs.dietary && `Dietary: ${prefs.dietary}`].filter(Boolean).join(" / ") || undefined;
 
-  await status(`Filling in ${place.name}'s booking form (seats only)…`);
-  let result;
-  try {
-    result = await adapter.book(place, slot, config.booking.contact, notes);
-  } catch (err) {
-    result = { status: "failed" as const, detail: (err as Error).message };
+  const tried: string[] = [];
+  let result: BookResult | undefined;
+  let route: Route | undefined;
+  for (const r of routes) {
+    await status(r.doing);
+    try {
+      result = await r.adapter.book(place, slot, config.booking.contact, notes);
+    } catch (err) {
+      result = { status: "failed", detail: (err as Error).message };
+    }
+    route = r;
+    if (result.status !== "failed") break;
+    tried.push(`${r.channel}: ${result.detail ?? "failed"}`);
+    console.log(`[booking] ${place.name} via ${r.channel} failed: ${result.detail}`);
+    // A definite "that time is full" ends the attempt; trying other channels won't free a table.
+    if (result.full) break;
   }
-  if (result.status === "failed") return { ok: false, message: `Booking ${place.name} failed: ${result.detail ?? "unknown error"}` };
+  if (!result || !route || result.status === "failed") {
+    return { ok: false, message: `I couldn't book *${place.name}* for ${fmtDate(slot.date)} ${slot.time}.\n\n${tried.map((t) => `• ${t}`).join("\n")}` };
+  }
 
   const reservation = createReservation({
     plan_id: opts.planId ?? null,
     place_id: place.id,
-    channel: place.booking_channel,
+    channel: route.channel,
     status: result.status,
     date: slot.date,
     time: slot.time,
@@ -114,16 +159,17 @@ export async function bookPlace(place: Place, slot: Slot, opts: { planId?: numbe
     policy_text: result.policyText ?? null,
     free_cancel_deadline: null,
     cancel_fee: null,
-    notes: result.detail ?? null,
+    notes: result.detail?.slice(0, 2000) ?? null,
   });
   const withPolicy = await applyPolicy(reservation.id, result.policyText ?? null);
   if (opts.planId) updatePlan(opts.planId, { status: result.status === "confirmed" ? "booked" : "booking", chosen_place_id: place.id });
 
-  const when = `${fmtDate(slot.date)} ${slot.time}, ${slot.partySize} people`;
+  const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people`;
+  const how = { tablecheck: "on TableCheck", tabelog: "on Tabelog", email: "by email", phone: "by phone" }[route.channel];
   const message =
     result.status === "confirmed"
-      ? `✅ Booked ${place.name} — ${when}.${result.externalRef ? ` Ref ${result.externalRef}.` : ""}\n${policyLine(withPolicy)}`
-      : `📨 Reservation requested at ${place.name} — ${when}. ${result.detail ?? ""} I'll post here when they confirm.`;
+      ? [`✅ *Booked ${place.name}*`, `${when}, ${how}${result.externalRef ? `\nRef ${result.externalRef}` : ""}`, policyLine(withPolicy)].filter(Boolean).join("\n\n")
+      : [`📨 *Reservation requested at ${place.name}*`, `${when}, ${how}`, "I'll post here when they confirm."].join("\n\n");
   return { ok: true, reservation: withPolicy, message };
 }
 
@@ -138,7 +184,7 @@ export async function cancelReservation(id: number, reason?: string): Promise<st
   const r = getReservation(id);
   if (!r || (r.status !== "confirmed" && r.status !== "requested")) return `No active reservation #${id}.`;
   const place = getPlace(r.place_id)!;
-  const adapter = adapterFor(place);
+  const adapter = adapterFor(place, r);
   if (!adapter) return `I can't cancel ${place.name} myself.`;
   const res = await adapter.cancel(r, place, config.booking.contact).catch((err: Error) => ({ ok: false, detail: err.message }));
   if (!res.ok) return `⚠️ Couldn't cancel ${place.name}: ${res.detail}. Please handle it manually before the deadline.`;
@@ -152,7 +198,7 @@ export async function modifyReservation(id: number, change: Partial<Slot>): Prom
   const r = getReservation(id);
   if (!r || (r.status !== "confirmed" && r.status !== "requested")) return `No active reservation #${id}.`;
   const place = getPlace(r.place_id)!;
-  const adapter = adapterFor(place);
+  const adapter = adapterFor(place, r);
   if (!adapter) return `I can't change ${place.name} myself.`;
   const slot: Slot = { date: change.date ?? r.date, time: change.time ?? r.time, partySize: change.partySize ?? r.party_size };
 

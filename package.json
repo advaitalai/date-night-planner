@@ -10,7 +10,8 @@
     "import-csv": "tsx src/scripts/import-csv.ts",
     "audit": "tsx src/scripts/audit.ts",
     "browser-login": "tsx src/scripts/browser-login.ts",
-    "chat": "tsx src/scripts/chat.ts"
+    "chat": "tsx src/scripts/chat.ts",
+    "test-call": "tsx src/scripts/test-call.ts"
   },
   "repository": {
     "type": "git",

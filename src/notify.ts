@@ -32,7 +32,13 @@ export function setSender(s: Sender): void {
   sender = s;
 }
 
+/** House style: no em dashes in anything the bot sends. */
+export function tidy(text: string): string {
+  return text.replace(/\s*—\s*/g, ", ").replace(/ – /g, ", ");
+}
+
 export async function say(text: string): Promise<string | undefined> {
+  text = tidy(text);
   logMessage("planner", text);
   console.log(`[out] ${text.slice(0, 500)}`);
   return sender.text(text);

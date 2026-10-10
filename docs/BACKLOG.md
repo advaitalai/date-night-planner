@@ -15,13 +15,11 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 
 - **TableCheck newer flow** (`/reserve/message` → landing → menu): finish the booking steps. The flow is mapped in REQUIREMENTS §7. Kuss Daikanyama, TUITUI and Taro Yamada use it.
 
-4. **AI phone calls for phone-only restaurants.** This is common in Tokyo. It needs a Japanese voice agent (Twilio plus a realtime voice model) that:
-   - makes the call;
-   - confirms the date, time and number of people;
-   - asks about the cancellation policy;
-   - writes the outcome back to the reservation.
-
-   AutoReserve (Hello Inc.) offers this as a consumer app, but it has no public API.
+4. **AI phone calls: from test to production.** The Vapi adapter and test call are built. Next:
+   - a Japanese caller number, since restaurants may ignore international numbers;
+   - a natural Japanese voice choice;
+   - real-restaurant trials in dry run, then live;
+   - calling back to accept an offered alternative time.
 5. **More booking platforms:** Hot Pepper Gourmet (its search API is free; booking would go through the browser), OMAKASE, ebica, Toreta and Ikyu. `detect.ts` already marks these places as `other_online`.
 6. **Contact forms:** some restaurants offer a web form but no email address. Fill the form with the same Japanese template.
 7. **Watch fully booked places for cancellations.** Poll TableCheck availability for places they both want that are full, and book automatically when a table frees up.

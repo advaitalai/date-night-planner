@@ -15,8 +15,11 @@ import type { Constraints } from "./parseRequest";
 
 const REDETECT_DAYS = 30;
 
-/** Fill in Google details, booking channel and profile where missing. Cached in the DB. */
-export async function enrich(place: Place): Promise<Place> {
+/**
+ * Fill in Google details (and the review-based profile unless `lite`).
+ * Booking-channel detection is left to booking time, so recommending stays fast.
+ */
+export async function enrich(place: Place, opts: { lite?: boolean } = {}): Promise<Place> {
   let p = place;
   if (!config.google.mapsKey) return p;
   try {
@@ -25,14 +28,7 @@ export async function enrich(place: Place): Promise<Place> {
       const hit = (p.cid && results.find((r) => cidFromMapsUri(r.googleMapsUri) === p.cid)) || results[0];
       if (hit) p = updatePlace(p.id, { ...toPlaceFields(hit), name: p.name });
     }
-    const detectedAt = kvGet<string | null>(`detect:${p.id}`, null);
-    const stale = !detectedAt || DateTime.fromISO(detectedAt).plus({ days: REDETECT_DAYS }) < DateTime.now();
-    if (p.booking_channel === "unknown" && stale) {
-      const d = await detectChannel(p);
-      p = updatePlace(p.id, { booking_channel: d.channel, ...d.patch });
-      kvSet(`detect:${p.id}`, new Date().toISOString());
-    }
-    if (!p.profile && p.google_place_id && p.booking_channel !== "not_restaurant") p = await buildProfile(p);
+    if (!opts.lite && !p.profile && p.google_place_id && p.booking_channel !== "not_restaurant") p = await buildProfile(p);
   } catch (err) {
     console.warn(`enrich ${p.name}:`, (err as Error).message);
   }
@@ -44,10 +40,15 @@ export async function enrich(place: Place): Promise<Place> {
  * that have availability for the slot (bookable by construction), plus a
  * Google text search for the requested cuisine/vibe.
  */
-export async function discover(k: Constraints, anchor: LatLng, slot: Slot, limit = 8): Promise<Place[]> {
+/**
+ * New places beyond the saved lists: TableCheck shops with tables at that time,
+ * plus Google searches for the requested cuisine/vibe (or good restaurants in
+ * general) within the travel radius.
+ */
+export async function discover(k: Constraints, anchor: LatLng, slot: Slot, radiusM = 3000, limit = 20): Promise<Place[]> {
   const found: Place[] = [];
   try {
-    const shops = await tcSearchNear(anchor.lat, anchor.lng, slot, { distance: "3km" });
+    const shops = await tcSearchNear(anchor.lat, anchor.lng, slot, { distance: `${Math.round(radiusM / 1000)}km` });
     const known = new Set(listPlaces("tablecheck_slug IS NOT NULL").map((p) => p.tablecheck_slug));
     for (const s of shops.filter((s) => !known.has(s.slug) && s.availableDates.includes(slot.date)).slice(0, limit)) {
       let fields: Partial<Place> = { lat: s.lat, lng: s.lng, cuisine: s.cuisines[0] ?? null };
@@ -65,9 +66,13 @@ export async function discover(k: Constraints, anchor: LatLng, slot: Slot, limit
 
   if (config.google.mapsKey) {
     try {
-      const query = [...k.cuisines, ...k.vibe, "restaurant"].join(" ");
-      for (const g of await textSearch(query, anchor, 2500, limit)) {
-        found.push(upsertPlace({ ...toPlaceFields(g), name: g.displayName?.text ?? "?", source: "discovered" }));
+      const queries = k.cuisines.length
+        ? k.cuisines.map((c) => [c, ...k.vibe, "restaurant"].join(" "))
+        : [[...k.vibe, "restaurant"].join(" "), "date night restaurant"];
+      for (const q of queries) {
+        for (const g of await textSearch(q, anchor, radiusM, limit)) {
+          found.push(upsertPlace({ ...toPlaceFields(g), name: g.displayName?.text ?? "?", source: "discovered" }));
+        }
       }
     } catch (err) {
       console.warn("Google discovery failed:", (err as Error).message);

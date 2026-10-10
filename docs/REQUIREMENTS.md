@@ -42,21 +42,21 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 
 ### 4.3 Recommendations
 - R8. Rotate cuisines: rank cuisines from the last ~3 dates lower.
-- R9. **Check availability before recommending.** It must never propose a place and then come back with "sorry, it's booked". At most one option per round may be an email-only place, clearly marked "availability unconfirmed".
+- R9. **Pick first, then book** (changed 10 Oct 2026, from Advait's beta feedback). Options are chosen for fit: open then, distance, budget, cuisine, rotation. Live availability is not checked up front; the bot books right after the choice and reports quickly if the time is full, with the alternatives.
 - R10. Go beyond the saved lists. Find similar places (by cuisine, vibe and price) and new places near the starting point. Explain the link, e.g. "similar to X on Emily's list".
 - R11. Each option comes with a short pitch saying why: a signature dish, the vibe ("live band"), travel time. Pitches may only use facts from stored reviews or profiles, with nothing invented.
 - R12. Hard filters: open at that time, within the travel limit, bookable by the bot, not visited recently, within budget, matching any requested cuisine.
-- R13. If too few places pass the filters, loosen the standing limits once (travel +10 min, budget ×1.5) and say so. If nothing works, explain why, naming example places for each reason.
+- R13. If too few places pass the filters, widen automatically (travel +10 then +20 min, budget ×1.5 then any) and say so. For a cuisine request ("anything Indian?") search beyond the saved lists before ever saying there's nothing. Explain what ruled places out only as a last resort.
 
 ### 4.4 Reservations
 - R13a. **Seat-only bookings.** Never book courses or anything needing prepayment or a card. Pick TableCheck's seat-only item (e.g. "Reservation for seats only"), or skip the place. The ¥ amounts shown to users are average spend per person, not prices.
 - R14. **The bot books itself.** Posting a link or phone number for a human to act on doesn't count. It also changes and cancels bookings.
-- R15. How it books, in order of preference:
-  1. **TableCheck:** availability from the public diner API; booking as a guest in a headless browser.
-  2. **Tabelog online booking:** headless browser using a saved Tabelog login (Google sign-in done once by hand).
-  3. **Email:** fixed polite template, Japanese first then English, sent from Advait's Gmail. Replies are read and classified.
+- R15. Booking order, fastest and most predictable first; on failure move to the next (a definite "that time is full" stops and asks instead):
+  1. **Booking sites:** TableCheck (guest booking in a headless browser), then Tabelog (saved login).
+  2. **Email:** fixed polite template, Japanese first then English, from Advait's Gmail. Replies are read and classified.
+  3. **AI phone call:** Vapi (Japanese speech, Claude for the conversation). Says it's an AI assistant, seats only, never agrees to a course or card, asks the cancellation policy. The transcript is read to get the outcome.
 - R16. Google "Reserve a table" has no consumer API; it hands off to the booking site behind it, so the bot books there.
-- R17. Phone-only places are not in the MVP. They're ranked lower and reported as skipped. AI phone calls are in the backlog.
+- R17. Any place with a phone number is bookable (via an AI call). Walk-in-only places are excluded.
 - R18. Cancellation policy:
   - Read the policy from the booking page or email and work out the last moment to cancel for free (assume 24h if no policy is stated, and say so).
   - Ask "still on?" 48h before that deadline and again at 24h.
@@ -64,7 +64,13 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 - R19. Never fail silently. If a booking fails (slot gone, captcha, site changed), say so in the group and try the next option.
 - R20. `DRY_RUN=1` (the default) stops before the final confirm click and sends emails to Advait instead of the restaurant. Turn it off only after the booking flow has been checked live.
 
-### 4.5 Reminders
+### 4.5 Chat UX
+
+- R23. Messages use WhatsApp formatting: *bold* names, short lines, blank lines between items. Never em dashes.
+- R24. Show what the bot is doing: ⏳ on the incoming message, a single status line edited as work progresses ("Checking opening hours for 92 places…"), removed when the answer arrives; ✅ or ❌ at the end.
+- R25. People reply in words or with a number; polls are optional.
+
+### 4.6 Reminders
 - R21. Day-of reminder at 11:00 with place, time, ref, address and map link.
 - R22. The visit is logged after the date; it feeds cuisine rotation and the don't-revisit-too-soon window.
 

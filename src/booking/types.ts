@@ -22,6 +22,8 @@ export interface BookResult {
   manageUrl?: string;
   gmailThreadId?: string;
   policyText?: string;
+  /** The requested time is definitely full (don't try other channels). */
+  full?: boolean;
   detail?: string;
 }
 

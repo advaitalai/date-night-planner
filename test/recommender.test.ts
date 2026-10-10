@@ -20,12 +20,16 @@ const ctx = (over: Partial<ScoreContext> = {}): ScoreContext => ({
 });
 
 describe("filters", () => {
+  it("treats any place with a phone number as bookable (AI call)", () => {
+    expect(applyFilters([cand({ booking_channel: "phone", tablecheck_slug: null, phone: "03-1234-5678" })], EMPTY_CONSTRAINTS, settings).kept).toHaveLength(1);
+  });
+
   it("keeps a bookable, open, nearby place", () => {
     expect(applyFilters([cand()], EMPTY_CONSTRAINTS, settings).kept).toHaveLength(1);
   });
 
   it.each([
-    ["not_bookable", cand({ booking_channel: "phone" })],
+    ["not_bookable", cand({ booking_channel: "walkin", tablecheck_slug: null })],
     ["closed", cand({}, { openAtSlot: false })],
     ["too_far", cand({}, { travelMin: 40 })],
     ["visited_recently", cand({}, { lastVisitDaysAgo: 14 })],
@@ -113,8 +117,9 @@ describe("explainRejections", () => {
       rejectedExamples: { too_far: ["Canal Cafe"], not_bookable: ["Ghungroo"] },
       notBookableChannels: { phone: 8, unknown: 4 },
     });
-    expect(text.split("\n")[0]).toBe("• 20 too far (e.g. Canal Cafe)");
-    expect(text).toContain("12 I can't book them myself — 8 phone-only, 4 no booking info found (e.g. Ghungroo)");
+    expect(text).toContain("• *20* too far\n   e.g. Canal Cafe");
+    expect(text).toContain("• *12* have no way to book (8 phone-only, 4 no booking info found)\n   e.g. Ghungroo");
+    expect(text).not.toContain("—");
   });
 });
 
@@ -128,7 +133,7 @@ describe("options message", () => {
           placeId: 1, name: "h:armonia", availability: "available", score: 3, pitch: "",
           what: "Handmade pasta and charcoal-grilled wagyu in a cosy Italian bar",
           why: "A change from last week's Indian, and practically next door",
-          place: place({ name: "h:armonia", price_level: 2, rating: 4.6, maps_url: "https://maps.google.com/?cid=1" }),
+          place: place({ name: "h:armonia", cuisine: "italian", price_level: 2, rating: 4.6, maps_url: "https://maps.google.com/?cid=1" }),
           travelMin: 6, anchor: "home",
         },
       ],
@@ -136,9 +141,10 @@ describe("options message", () => {
       solo: true,
     });
     if (process.env.SHOW_SAMPLE) console.log(msg);
-    expect(msg).toContain("1️⃣ *h:armonia*");
-    expect(msg).toContain("_Why:_ A change from last week's Indian");
-    expect(msg).toContain("¥¥ · ★ 4.6 · 6 min from home · table free ✓");
+    expect(msg).toContain("1️⃣ *h:armonia*\n_Italian  ·  ¥¥  ·  ★ 4.6  ·  6 min from home_\nHandmade pasta");
+    expect(msg).toContain("*Why:* A change from last week's Indian, and practically next door.");
+    expect(msg).toContain("📍 https://maps.google.com/?cid=1");
     expect(msg).toContain("Reply with a number");
+    expect(msg).not.toContain("—");
   });
 });

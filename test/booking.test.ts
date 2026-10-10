@@ -145,3 +145,34 @@ describe("TableCheck classic menu check", () => {
     expect(parseClassicMenu("<html>no menu</html>")).toBe(true);
   });
 });
+
+describe("AI phone calls", () => {
+  it("formats numbers as E.164 for Vapi", async () => {
+    const { toE164 } = await import("../src/booking/phone");
+    expect(toE164("03-6431-8960")).toBe("+81364318960");
+    expect(toE164("070-1568-0178")).toBe("+817015680178");
+    expect(toE164("+81 70-1568-0178")).toBe("+817015680178");
+  });
+
+  it("writes a seats-only Japanese script that admits being an AI", async () => {
+    const { bookingScript } = await import("../src/booking/phone");
+    const s = bookingScript(place({ name: "h:armonia" }), { date: "2026-10-16", time: "18:30", partySize: 2 }, { name: "Advait Alai", nameKana: "アドヴァイト アライ", phone: "070-0000-0000", email: "a@example.com" }, "ja");
+    expect(s.firstMessage).toContain("AIアシスタント");
+    expect(s.systemPrompt).toContain("席のみ");
+    expect(s.systemPrompt).toContain("クレジットカード");
+    expect(s.systemPrompt).toContain("2026年10月16日（金）18:30");
+  });
+});
+
+describe("booking order", () => {
+  it("tries booking sites, then email, then phone", async () => {
+    process.env.VAPI_API_KEY = "test";
+    process.env.VAPI_PHONE_NUMBER_ID = "test";
+    const { bookingRoutes } = await import("../src/booking/service");
+    const routes = bookingRoutes(place({ tablecheck_slug: "armonia", phone: "03-6431-8960" }));
+    expect(routes.map((r) => r.channel)).toEqual(["tablecheck", "phone"]);
+    expect(bookingRoutes(place({ tablecheck_slug: null, phone: "03-1111-2222" })).map((r) => r.channel)).toEqual(["phone"]);
+    delete process.env.VAPI_API_KEY;
+    delete process.env.VAPI_PHONE_NUMBER_ID;
+  });
+});

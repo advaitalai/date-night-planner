@@ -112,7 +112,19 @@ The setup page is only reachable through an SSH tunnel from your laptop, so noth
 
   If Google refuses the sign-in in that window, Tabelog places fall back to email or manual booking for now.
 
-## 7. Check and go live
+## 7. AI phone calls (optional, last resort after sites and email)
+
+1. Sign up at **vapi.ai**. Dashboard → **API Keys** → copy the private key into `VAPI_API_KEY`.
+2. Vapi's free numbers only call the US, so calls to Japan need a **Twilio** number:
+   - Sign up at **twilio.com**. A trial account works for testing, but it can only call numbers you verify (add your own mobile under *Verified Caller IDs*) and plays a short "trial account" notice first.
+   - Buy a number (a US number is the simplest; a Japanese number needs address verification).
+   - Twilio Console → Voice → Settings → **Geo permissions** → enable **Japan**.
+3. In Vapi: **Phone Numbers → Import → Twilio**, enter the Account SID, Auth Token and the number. Copy the new number's **ID** into `VAPI_PHONE_NUMBER_ID`.
+4. Test with a call to yourself (you play the restaurant): `npm run test-call` (Japanese) or `npm run test-call -- en`.
+
+With `DRY_RUN=1` every booking call goes to `BOOKING_PHONE` (you) instead of the restaurant. Costs are per minute on both Vapi and Twilio; check their pricing pages.
+
+## 8. Check and go live
 
 1. Run `npm run import-csv -- fixtures/Tokyo_food.csv Advait "Tokyo food"`, then `npm run audit`. Read `audit-report.md` to see how your saved places can be booked.
 2. In the group, say "planner plan next Wednesday". Check that the options and poll look right, vote, and check that the dry-run booking reaches the confirm step.

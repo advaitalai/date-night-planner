@@ -85,7 +85,7 @@ export type PlanStatus = "proposed" | "booking" | "booked" | "done" | "cancelled
 export interface PlanOption {
   placeId: number;
   name: string;
-  availability: "available" | "unconfirmed";
+  availability: "available" | "unconfirmed" | "unchecked";
   /** what + why, kept for the agent's context. */
   pitch: string;
   what?: string;

@@ -31,10 +31,19 @@ function nameMatches(place: Place, names: string[]): boolean {
   return names.some((x) => n.includes(x.toLowerCase()) || x.toLowerCase().includes(n));
 }
 
+/**
+ * Whether the bot has any way to try booking: a booking site, an email
+ * address, or a phone number for an AI call. Walk-in-only places don't count.
+ */
+export function canAttemptBooking(p: Place): boolean {
+  if (p.booking_channel === "walkin" || p.booking_channel === "not_restaurant") return false;
+  return Boolean(p.tablecheck_slug || p.tabelog_url || p.booking_email || p.phone || SELF_BOOKABLE.includes(p.booking_channel));
+}
+
 export function rejectReason(c: Candidate, k: Constraints, s: FilterSettings): RejectReason | null {
   const p = c.place;
   if (nameMatches(p, k.excludePlaces)) return "excluded";
-  if (!SELF_BOOKABLE.includes(p.booking_channel)) return "not_bookable";
+  if (!canAttemptBooking(p)) return "not_bookable";
   if (c.openAtSlot === false) return "closed";
   if (c.travelMin > (k.maxTravelMin ?? s.maxTravelMin)) return "too_far";
   if (c.lastVisitDaysAgo != null && c.lastVisitDaysAgo < s.revisitCooldownWeeks * 7) return "visited_recently";

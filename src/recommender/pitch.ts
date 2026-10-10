@@ -6,7 +6,7 @@ import { mostSimilarSaved } from "./similarity";
 
 export interface PitchInput {
   option: Scored;
-  availability: "available" | "unconfirmed";
+  availability: "available" | "unconfirmed" | "unchecked";
   anchorLabel: string;
 }
 
@@ -27,7 +27,7 @@ export function factsFor(input: PitchInput, saved: Place[]): Record<string, unkn
     vibe: p.profile?.vibeTags ?? [],
     priceBand: p.profile?.priceBand ?? null,
     whyRanked: input.option.reasons,
-    availability: input.availability === "available" ? "table confirmed free at that time" : "email-only: availability not confirmed yet",
+    bookingNote: input.availability === "available" ? "table confirmed free at that time" : "availability is checked when booking",
   };
 }
 
@@ -54,7 +54,7 @@ export async function writePitches(inputs: PitchInput[], saved: Place[]): Promis
 For each option return:
 - what: one short line (max ~12 words) on the food and the feel, e.g. "Handmade pasta and charcoal-grilled wagyu in a cosy counter bar".
 - why: one short line (max ~14 words) on why it fits this week: their lists, a change of cuisine, similar to a place they saved, closeness.
-Use ONLY the given facts. If a fact is missing, leave it out. No emojis. One entry per option, in order.`,
+Use ONLY the given facts. If a fact is missing, leave it out. No emojis, no em dashes. One entry per option, in order.`,
       JSON.stringify(facts, null, 2),
       "medium",
     );
