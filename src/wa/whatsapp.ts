@@ -12,7 +12,7 @@ import path from "node:path";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
 import { handleMessage } from "../agent/loop";
-import { config, isSelfChat, PEOPLE } from "../config";
+import { config, isSelfChat, isSolo, PEOPLE } from "../config";
 import { kvGet, kvSet } from "../db";
 import { getPlanByPoll, getUser, logMessage, upsertUser, userByJid } from "../db/repo";
 import { say, setSender } from "../notify";
@@ -87,7 +87,7 @@ function isOurChat(remoteJid: string | null | undefined): boolean {
 }
 
 function isAddressed(m: WAMessage, text: string): boolean {
-  if (isSelfChat()) return true;
+  if (isSolo()) return true;
   const ctx = m.message?.extendedTextMessage?.contextInfo;
   if (ctx?.stanzaId && sentByBot.has(ctx.stanzaId)) return true;
   if (!config.wa.selfMode) {
@@ -147,13 +147,23 @@ async function onMessage(m: WAMessage): Promise<void> {
   logMessage(person, text, m.key.id ?? undefined);
   if (!isAddressed(m, text)) return;
 
-  await sock?.sendPresenceUpdate("composing", chatJid()).catch(() => {});
+  console.log(`[in] ${person}: ${text}`);
+  // Visible "working on it" signal: ⏳ on their message, ✅ when answered (❌ on error).
+  // Typing indicators don't show in self-chats, and fade after ~25s elsewhere.
+  const react = (emoji: string) => sock?.sendMessage(chatJid(), { react: { text: emoji, key: m.key } }).catch(() => {});
+  await react("⏳");
+  const typing = setInterval(() => void sock?.sendPresenceUpdate("composing", chatJid()).catch(() => {}), 10_000);
   try {
     const reply = await handleMessage(person, text);
     if (reply) await say(reply);
+    await react("✅");
   } catch (err) {
     console.error("agent error:", err);
-    await say("Sorry — something went wrong on my side. Try again in a minute?");
+    await react("❌");
+    await say(`Sorry, something went wrong on my side (${(err as Error).message.slice(0, 120)}). Try again?`);
+  } finally {
+    clearInterval(typing);
+    void sock?.sendPresenceUpdate("paused", chatJid()).catch(() => {});
   }
 }
 
@@ -177,6 +187,7 @@ export async function startWhatsApp(): Promise<void> {
       const groups = await sock!.groupFetchAllParticipating();
       for (const g of Object.values(groups)) console.log(`  group: ${g.subject} → ${g.id}`);
       if (!config.wa.groupJid) console.log('Set WA_GROUP_JID to one of the ids above (or "self" for your own 1-1 chat) and restart.');
+      if (config.wa.solo && !isSelfChat()) console.log("Solo test mode: every message in the chat is for the bot; only your vote counts.");
       if (isSelfChat()) console.log(`Self-chat mode: talk to the bot in WhatsApp's "Message yourself" chat (${chatJid()}).`);
     }
     if (connection === "close") {

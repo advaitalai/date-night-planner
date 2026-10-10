@@ -24,9 +24,9 @@ export interface RecommendResult {
   anchor: Anchor;
   constraints: Constraints;
   options: RecommendOption[];
-  rejectedCounts: Partial<Record<RejectReason | "fully_booked", number>>;
+  rejectedCounts: Partial<Record<RejectReason | "fully_booked" | "unsupported_flow" | "courses_only", number>>;
   /** A few place names per reason, for explaining an empty result. */
-  rejectedExamples: Partial<Record<RejectReason | "fully_booked", string[]>>;
+  rejectedExamples: Partial<Record<RejectReason | "fully_booked" | "unsupported_flow" | "courses_only", string[]>>;
   /** Booking channels of the places rejected as not bookable. */
   notBookableChannels: Record<string, number>;
   /** Limits loosened automatically because too few places passed. */
@@ -147,6 +147,10 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
         verified.push(s);
         availability.set(s.place.id, "unconfirmed");
         unconfirmed++;
+      } else if (r.blocker) {
+        rejectedCounts[r.blocker] = (rejectedCounts[r.blocker] ?? 0) + 1;
+        const ex = (rejectedExamples[r.blocker] ??= []);
+        if (ex.length < 3) ex.push(s.place.name);
       } else if (r.status === "unavailable") {
         rejectedCounts.fully_booked = (rejectedCounts.fully_booked ?? 0) + 1;
         (rejectedExamples.fully_booked ??= []).push(s.place.name);
@@ -206,6 +210,8 @@ const REASON_LABEL: Record<string, string> = {
   cuisine: "didn't match the cuisine",
   excluded: "ruled out",
   fully_booked: "fully booked",
+  unsupported_flow: "use a TableCheck booking flow I can't complete yet",
+  courses_only: "only take course bookings or need a card",
 };
 
 const CHANNEL_LABEL: Record<string, string> = {

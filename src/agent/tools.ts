@@ -4,8 +4,9 @@ import { bookAndAnnounce, cancelReservation, checkAvailability, modifyReservatio
 import { config, PEOPLE } from "../config";
 import { db, kvSet } from "../db";
 import { findPlaceByName, getPlace, getPlan, getPrefs, upcomingReservations, updatePrefs, upsertPlace } from "../db/repo";
+import { say } from "../notify";
 import { ensureWeeklyJobs, skipDate } from "../jobs/weekly";
-import { cidFromMapsUri, textSearch, toPlaceFields } from "../places/google";
+import { cidFromMapsUri, placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
 import { cidFromSavedUrl } from "../places/takeout";
 import { bookOption } from "../plans/decide";
 import { proposePlan } from "../recommender";
@@ -59,8 +60,36 @@ export const tools = [
       date: z.string().optional().describe("YYYY-MM-DD if known; defaults to the next usual date night"),
     }),
     run: async ({ request, date }) => {
+      await say("🔎 On it: finding options and checking live availability. This takes a minute or two.");
       const { plan, message } = await proposePlan(request, { date });
       return plan ? `Posted ${plan.options.length} options and a poll for ${plan.date} ${plan.time}. Don't repeat them.` : `Posted to group: ${message}`;
+    },
+  }),
+
+  betaZodTool({
+    name: "option_details",
+    description:
+      "Everything known about option N (1-based) of the latest proposal: cuisine, price, rating, highlights, dishes, review snippets, address, travel, booking terms. Use for 'tell me more about option 2' / 'why that one?'.",
+    inputSchema: z.object({ option_number: z.number().int().min(1) }),
+    run: async ({ option_number }) => {
+      const row = db().prepare("SELECT id FROM plans ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined;
+      const plan = row ? getPlan(row.id) : undefined;
+      const opt = plan?.options[option_number - 1];
+      if (!plan || !opt) return "No such option in the latest proposal.";
+      const place = await enrich(getPlace(opt.placeId)!);
+      let reviews: string[] = [];
+      if (place.google_place_id && config.google.mapsKey) reviews = reviewSnippets(await placeDetails(place.google_place_id), 4);
+      return [
+        describe(place),
+        `Pitch already sent: ${opt.pitch}`,
+        place.profile ? `Profile: ${place.profile.summary} | vibe: ${place.profile.vibeTags.join(", ")} | dishes: ${place.profile.signatureDishes.join(", ")}` : "",
+        place.address ? `Address: ${place.address}` : "",
+        place.maps_url ? `Map: ${place.maps_url}` : "",
+        `Booking: ${place.booking_channel}, ${opt.availability === "available" ? "table confirmed free" : "availability unconfirmed"} for ${plan.date} ${plan.time}`,
+        ...reviews,
+      ]
+        .filter(Boolean)
+        .join("\n");
     },
   }),
 

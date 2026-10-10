@@ -53,6 +53,12 @@ Use ONLY the given facts. If a fact is missing, don't mention it. No emojis exce
   } catch (err) {
     console.warn("pitch writing failed:", (err as Error).message);
   }
-  // Plain fallback built from the same facts.
-  return facts.map((f) => [f.cuisine, f.travel, ...(f.whyRanked as string[])].filter(Boolean).join(" · "));
+  // Fallback built from the same facts, still saying what it is and why it was picked.
+  return facts.map((f) => {
+    const what = [f.cuisine, f.priceBand ? `${f.priceBand} price` : null, f.googleRating ? `Google ${f.googleRating}★` : null].filter(Boolean).join(", ");
+    const highlights = (f.highlights as string[]).slice(0, 2).join("; ");
+    const similar = f.similarToSaved as { name: string; savedBy: string[] } | null;
+    const why = [...(f.whyRanked as string[]), similar ? `similar to ${similar.name} (${similar.savedBy.join(" & ")}'s list)` : null].filter(Boolean).join(", ");
+    return [what && `${what}.`, highlights && `${highlights}.`, why && `Why: ${why}.`, `${f.travel}.`].filter(Boolean).join(" ");
+  });
 }

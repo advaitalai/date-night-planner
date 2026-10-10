@@ -27,6 +27,7 @@ export function setSender(s: Sender): void {
 
 export async function say(text: string): Promise<string | undefined> {
   logMessage("planner", text);
+  console.log(`[out] ${text.slice(0, 500)}`);
   return sender.text(text);
 }
 

@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 import type { Page } from "playwright-core";
 import { config, domesticPhone, type Contact } from "../config";
+import { kvGet, kvSet } from "../db";
 import type { Place, Reservation } from "../types";
 import { jst, ZONE } from "../util/time";
 import { withPage } from "./browser";
@@ -130,6 +131,32 @@ async function ensureLoggedIn(page: Page): Promise<void> {
   await page.waitForLoadState("networkidle");
 }
 
+export interface TcShopInfo {
+  /** "classic" = /en/shops/<slug>/reserve single-page form; "new" = step-by-step flow. */
+  flow: "classic" | "new";
+  /** Has a seat-only menu item without prepayment (or no menu at all). null = unknown. */
+  seatOnly: boolean | null;
+}
+
+/** Seat-only, prepayment-free check on the classic form's server-rendered menu. */
+export function parseClassicMenu(html: string): boolean {
+  const items = [...html.matchAll(/<div class="menu-item-data"([^>]*)>/g)].map((m) => ({
+    name: m[1].match(/data-name="([^"]*)"/)?.[1] ?? "",
+    pay: m[1].match(/data-payment-type="([^"]*)"/)?.[1] ?? "none",
+  }));
+  return items.length === 0 || items.some((i) => isSeatOnly(i.name) && i.pay === "none");
+}
+
+/** Which booking flow a shop uses and whether it offers seat-only. Cached for a week. */
+export async function tcShopInfo(slug: string): Promise<TcShopInfo> {
+  const cached = kvGet<(TcShopInfo & { at: string }) | null>(`tcinfo:${slug}`, null);
+  if (cached && Date.now() - Date.parse(cached.at) < 7 * 86_400_000) return cached;
+  const res = await fetch(`https://www.tablecheck.com/en/shops/${slug}/reserve`, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0" } });
+  const info: TcShopInfo = res.status >= 300 && res.status < 400 ? { flow: "new", seatOnly: null } : { flow: "classic", seatOnly: parseClassicMenu(await res.text()) };
+  kvSet(`tcinfo:${slug}`, { ...info, at: new Date().toISOString() });
+  return info;
+}
+
 /** TableCheck's post-submit page, e.g. "Your Reservation is Accepted … Status Accepted". */
 export function isBookedPage(body: string): boolean {
   return /reservation is (accepted|confirmed)|status\s+(accepted|confirmed)|confirmed|thank you|complete|予約が(完了|確定)|予約を受け付け/i.test(body);
@@ -252,6 +279,10 @@ export const tablecheck: BookingAdapter = {
   async checkAvailability(place: Place, slot: Slot): Promise<AvailabilityResult> {
     if (!place.tablecheck_slug) return { status: "unknown", detail: "no TableCheck slug" };
     try {
+      // Only recommend what the bot can actually book: classic form + seat-only without a card.
+      const info = await tcShopInfo(place.tablecheck_slug);
+      if (info.flow === "new") return { status: "unknown", blocker: "unsupported_flow", detail: "uses TableCheck's newer booking flow (not supported yet)" };
+      if (info.seatOnly === false) return { status: "unknown", blocker: "courses_only", detail: "courses only, or seat-only needs a card" };
       const cal = (await getJson(`${API}/hub/availability_calendar`, {
         method: "POST",
         // The calendar returns a window of ~9 slots around start_at, so send the requested time, not just the date.

@@ -12,6 +12,8 @@ export interface AvailabilityResult {
   /** Nearby free times on the same date (HH:mm), when the platform exposes them. */
   alternatives?: string[];
   detail?: string;
+  /** Why a place can't be booked by the bot even if a table is free. */
+  blocker?: "unsupported_flow" | "courses_only";
 }
 
 export interface BookResult {

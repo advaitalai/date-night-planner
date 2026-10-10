@@ -32,6 +32,7 @@
     "fastify": "^5.12.5",
     "googleapis": "^183.0.0",
     "jszip": "^3.10.2",
+    "link-preview-js": "^3.2.0",
     "luxon": "^3.7.2",
     "pino": "^10.4.0",
     "playwright-core": "^1.63.0",

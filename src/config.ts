@@ -18,6 +18,8 @@ export const config = {
      */
     selfMode: env("WA_SELF_MODE", "1") === "1",
     selfName: "Advait",
+    /** Solo test: only Advait votes and every message is for the bot (any chat, e.g. a group with just him). */
+    solo: env("WA_SOLO", "0") === "1",
     phones: { Advait: env("ADVAIT_PHONE"), Emily: env("EMILY_PHONE") } as Record<string, string>,
   },
 
@@ -71,9 +73,14 @@ export function isSelfChat(): boolean {
   return config.wa.groupJid === "self";
 }
 
+/** Solo testing: Advait alone, either in "Message yourself" or with WA_SOLO=1. */
+export function isSolo(): boolean {
+  return isSelfChat() || config.wa.solo;
+}
+
 /** Who has to vote before a poll counts as agreed. */
 export function voters(): readonly Person[] {
-  return isSelfChat() ? [config.wa.selfName as Person] : PEOPLE;
+  return isSolo() ? [config.wa.selfName as Person] : PEOPLE;
 }
 
 /** Default anchors. Coordinates are approximate and refined by geocoding on first run. */

@@ -132,3 +132,16 @@ describe("TableCheck booked page", () => {
     expect(isBookedPage("Your selected time is unavailable.")).toBe(false);
   });
 });
+
+describe("TableCheck classic menu check", () => {
+  it("needs a seat-only item without prepayment", async () => {
+    const { parseClassicMenu } = await import("../src/booking/tablecheck");
+    const seat = `<div class="menu-item-data" data-id="1" data-name="Reservation for seats only" data-menu-type="main" data-payment-type="none">`;
+    const course = `<div class="menu-item-data" data-id="2" data-name="Omakase course" data-payment-type="postpay_optional">`;
+    const cardSeat = `<div class="menu-item-data" data-id="3" data-name="Seats only" data-payment-type="prepay">`;
+    expect(parseClassicMenu(seat + course)).toBe(true);
+    expect(parseClassicMenu(course)).toBe(false);
+    expect(parseClassicMenu(cardSeat + course)).toBe(false);
+    expect(parseClassicMenu("<html>no menu</html>")).toBe(true);
+  });
+});
