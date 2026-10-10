@@ -1,7 +1,7 @@
 import { bookAndAnnounce, checkAvailability } from "../booking/service";
 import { voters } from "../config";
 import { getPlace, getPlan, updatePlan } from "../db/repo";
-import { say } from "../notify";
+import { say, status } from "../notify";
 import type { Plan } from "../types";
 
 /** Option indexes ordered by votes, ties broken by the recommender's ranking (lower index). */
@@ -32,6 +32,7 @@ export async function bookOption(planId: number, index: number): Promise<void> {
   for (const i of order) {
     const place = getPlace(plan.options[i].placeId);
     if (!place) continue;
+    await status(`Re-checking the table at ${place.name}…`);
     const avail = await checkAvailability(place, slot);
     if (avail.status === "unavailable") {
       await say(`${place.name} just filled up for ${slot.time}${avail.alternatives?.length ? ` (free: ${avail.alternatives.join(", ")})` : ""}. Trying the next option…`);

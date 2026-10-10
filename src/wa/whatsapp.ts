@@ -5,6 +5,7 @@ import makeWASocket, {
   jidNormalizedUser,
   useMultiFileAuthState,
   type WAMessage,
+  type WAMessageKey,
   type WASocket,
 } from "@whiskeysockets/baileys";
 import { createHash } from "node:crypto";
@@ -15,7 +16,7 @@ import { handleMessage } from "../agent/loop";
 import { config, isSelfChat, isSolo, PEOPLE } from "../config";
 import { kvGet, kvSet } from "../db";
 import { getPlanByPoll, getUser, logMessage, upsertUser, userByJid } from "../db/repo";
-import { say, setSender } from "../notify";
+import { clearStatus, say, setSender, status } from "../notify";
 import { onVotes } from "../plans/decide";
 
 /**
@@ -45,6 +46,9 @@ let sock: WASocket | undefined;
 const BOT_PREFIX = "🤖 ";
 /** Ids of messages the bot itself sent, so self mode doesn't answer itself. */
 const sentByBot = new Set<string>();
+
+/** Full keys of bot messages, needed to edit or delete them (the live status line). */
+const sentKeys = new Map<string, WAMessageKey>();
 
 function rememberSent(id: string | null | undefined): void {
   if (!id) return;
@@ -152,6 +156,7 @@ async function onMessage(m: WAMessage): Promise<void> {
   // Typing indicators don't show in self-chats, and fade after ~25s elsewhere.
   const react = (emoji: string) => sock?.sendMessage(chatJid(), { react: { text: emoji, key: m.key } }).catch(() => {});
   await react("⏳");
+  await status("Reading your message…");
   const typing = setInterval(() => void sock?.sendPresenceUpdate("composing", chatJid()).catch(() => {}), 10_000);
   try {
     const reply = await handleMessage(person, text);
@@ -163,6 +168,7 @@ async function onMessage(m: WAMessage): Promise<void> {
     await say(`Sorry, something went wrong on my side (${(err as Error).message.slice(0, 120)}). Try again?`);
   } finally {
     clearInterval(typing);
+    await clearStatus();
     void sock?.sendPresenceUpdate("paused", chatJid()).catch(() => {});
   }
 }
@@ -177,8 +183,22 @@ export async function startWhatsApp(): Promise<void> {
   });
   sock.ev.on("creds.update", saveCreds);
 
+  // Link with an 8-character code instead of a QR (handy when the terminal isn't on your screen):
+  // WhatsApp → Linked devices → Link a device → Link with phone number instead.
+  const pairingPhone = process.env.WA_PAIRING_PHONE;
+  if (pairingPhone && !state.creds.registered) {
+    setTimeout(async () => {
+      try {
+        const code = await sock!.requestPairingCode(pairingPhone.replace(/\D/g, ""));
+        console.log(`\nPairing code: ${code}\nWhatsApp → Settings → Linked devices → Link a device → "Link with phone number instead" → enter the code.\n`);
+      } catch (err) {
+        console.error("pairing code request failed:", (err as Error).message);
+      }
+    }, 3000);
+  }
+
   sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
+    if (qr && !process.env.WA_PAIRING_PHONE) {
       console.log(`Scan this QR with ${config.wa.selfMode ? "your" : "the bot's"} WhatsApp (Settings → Linked devices → Link a device):`);
       qrcode.generate(qr, { small: true });
     }
@@ -210,7 +230,19 @@ export async function startWhatsApp(): Promise<void> {
       if (!sock || !config.wa.groupJid) return console.log(`[group] ${text}`), undefined;
       const sent = await sock.sendMessage(chatJid(), { text: config.wa.selfMode ? BOT_PREFIX + text : text });
       rememberSent(sent?.key.id);
+      if (sent?.key.id) sentKeys.set(sent.key.id, sent.key);
       return sent?.key.id ?? undefined;
+    },
+    async edit(id, text) {
+      const key = sentKeys.get(id);
+      if (!sock || !key) return;
+      await sock.sendMessage(chatJid(), { text: config.wa.selfMode ? BOT_PREFIX + text : text, edit: key });
+    },
+    async remove(id) {
+      const key = sentKeys.get(id);
+      if (!sock || !key) return;
+      await sock.sendMessage(chatJid(), { delete: key });
+      sentKeys.delete(id);
     },
     async poll(question, options) {
       if (!sock || !config.wa.groupJid) return undefined;

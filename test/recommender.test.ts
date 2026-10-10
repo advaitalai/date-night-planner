@@ -117,3 +117,28 @@ describe("explainRejections", () => {
     expect(text).toContain("12 I can't book them myself — 8 phone-only, 4 no booking info found (e.g. Ghungroo)");
   });
 });
+
+describe("options message", () => {
+  it("renders one card per place with what, why, info and how to reply", async () => {
+    const { formatOptions } = await import("../src/recommender");
+    const msg = formatOptions({
+      header: "Fri 9 Oct · 18:30 · 2 people",
+      options: [
+        {
+          placeId: 1, name: "h:armonia", availability: "available", score: 3, pitch: "",
+          what: "Handmade pasta and charcoal-grilled wagyu in a cosy Italian bar",
+          why: "A change from last week's Indian, and practically next door",
+          place: place({ name: "h:armonia", price_level: 2, rating: 4.6, maps_url: "https://maps.google.com/?cid=1" }),
+          travelMin: 6, anchor: "home",
+        },
+      ],
+      notes: [""],
+      solo: true,
+    });
+    if (process.env.SHOW_SAMPLE) console.log(msg);
+    expect(msg).toContain("1️⃣ *h:armonia*");
+    expect(msg).toContain("_Why:_ A change from last week's Indian");
+    expect(msg).toContain("¥¥ · ★ 4.6 · 6 min from home · table free ✓");
+    expect(msg).toContain("Reply with a number");
+  });
+});

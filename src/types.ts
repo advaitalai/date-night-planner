@@ -86,7 +86,10 @@ export interface PlanOption {
   placeId: number;
   name: string;
   availability: "available" | "unconfirmed";
+  /** what + why, kept for the agent's context. */
   pitch: string;
+  what?: string;
+  why?: string;
   score: number;
 }
 

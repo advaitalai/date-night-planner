@@ -1,14 +1,14 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { bookAndAnnounce, cancelReservation, checkAvailability, modifyReservation, policyLine } from "../booking/service";
-import { config, PEOPLE } from "../config";
+import { config, PEOPLE, voters } from "../config";
 import { db, kvSet } from "../db";
 import { findPlaceByName, getPlace, getPlan, getPrefs, upcomingReservations, updatePrefs, upsertPlace } from "../db/repo";
-import { say } from "../notify";
+import { status } from "../notify";
 import { ensureWeeklyJobs, skipDate } from "../jobs/weekly";
 import { cidFromMapsUri, placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
 import { cidFromSavedUrl } from "../places/takeout";
-import { bookOption } from "../plans/decide";
+import { bookOption, onVotes } from "../plans/decide";
 import { proposePlan } from "../recommender";
 import { onboardingLink } from "../web/server";
 import { enrich, savedPool, toCandidate } from "../recommender/candidates";
@@ -50,7 +50,7 @@ const slotFields = {
   party_size: z.number().int().min(1).max(12).optional(),
 };
 
-export const tools = [
+const rawTools = [
   betaZodTool({
     name: "recommend_options",
     description:
@@ -60,7 +60,6 @@ export const tools = [
       date: z.string().optional().describe("YYYY-MM-DD if known; defaults to the next usual date night"),
     }),
     run: async ({ request, date }) => {
-      await say("🔎 On it: finding options and checking live availability. This takes a minute or two.");
       const { plan, message } = await proposePlan(request, { date });
       return plan ? `Posted ${plan.options.length} options and a poll for ${plan.date} ${plan.time}. Don't repeat them.` : `Posted to group: ${message}`;
     },
@@ -90,6 +89,23 @@ export const tools = [
       ]
         .filter(Boolean)
         .join("\n");
+    },
+  }),
+
+  betaZodTool({
+    name: "pick_option",
+    description:
+      "Record that a person picked option N (1-based) of the open proposal, e.g. they replied '2', 'the Italian one' or 'armonia please'. Books automatically once everyone who needs to agree has picked the same option. Use the sender of the message as `person`.",
+    inputSchema: z.object({ option_number: z.number().int().min(1), person: z.enum(PEOPLE) }),
+    run: async ({ option_number, person }) => {
+      const plan = latestProposedPlan();
+      if (!plan) return "There is no open proposal right now.";
+      if (option_number > plan.options.length) return `The proposal only has ${plan.options.length} options.`;
+      await onVotes(plan.id, { ...plan.votes, [person]: [option_number - 1] });
+      const after = getPlan(plan.id)!;
+      if (after.status !== "proposed") return "Everyone agreed; booking was attempted and the outcome posted to the chat.";
+      const waiting = voters().filter((p) => !after.votes[p]?.length);
+      return waiting.length ? `Noted ${person}'s pick (${plan.options[option_number - 1].name}). Waiting for ${waiting.join(" and ")}.` : "Picks recorded; they differ, the chat was told.";
     },
   }),
 
@@ -284,3 +300,27 @@ export const tools = [
     run: async () => PEOPLE.map((p) => `${p}: ${onboardingLink(p)}`).join("\n"),
   }),
 ];
+
+/** Short "what I'm doing" phrases for the live status line. */
+const STATUS: Record<string, string> = {
+  recommend_options: "Understanding what you're after…",
+  option_details: "Pulling up details and reviews…",
+  book_plan_option: "Booking it…",
+  book_place: "Checking the table and booking…",
+  check_availability: "Checking live availability…",
+  search_places: "Searching places…",
+  find_similar: "Finding similar places…",
+  list_reservations: "Looking up your bookings…",
+  modify_reservation: "Changing the booking…",
+  cancel_reservation: "Cancelling the booking…",
+  update_preferences: "Updating your preferences…",
+  add_saved_place: "Adding the place…",
+};
+
+export const tools = rawTools.map((t) => ({
+  ...t,
+  run: async (...args: Parameters<typeof t.run>) => {
+    if (STATUS[t.name]) await status(STATUS[t.name]);
+    return (t.run as (...a: unknown[]) => ReturnType<typeof t.run>)(...args);
+  },
+}));

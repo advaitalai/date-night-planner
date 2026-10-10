@@ -20,6 +20,8 @@ export const config = {
     selfName: "Advait",
     /** Solo test: only Advait votes and every message is for the bot (any chat, e.g. a group with just him). */
     solo: env("WA_SOLO", "0") === "1",
+    /** Also post a WhatsApp poll with the options (default off: people reply in words). */
+    polls: env("WA_POLLS", "0") === "1",
     phones: { Advait: env("ADVAIT_PHONE"), Emily: env("EMILY_PHONE") } as Record<string, string>,
   },
 

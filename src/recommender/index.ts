@@ -1,8 +1,8 @@
 import { checkAvailability } from "../booking/service";
 import type { Slot } from "../booking/types";
-import { config } from "../config";
+import { config, voters } from "../config";
 import { createPlan, findPlaceByName, getPrefs, getPlace, recentVisits, updatePlan } from "../db/repo";
-import { poll, say } from "../notify";
+import { clearStatus, poll, say, status } from "../notify";
 import { geocode } from "../places/google";
 import type { Anchor, Place, Plan, PlanOption } from "../types";
 import { estimateTravelMin } from "../util/geo";
@@ -71,6 +71,7 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   const anchor = await resolveAnchor(k);
   const maxTravel = k.maxTravelMin ?? prefs.maxTravelMin;
 
+  await status(`Looking through your saved places and nearby spots for ${fmtDate(slot.date)} ${slot.time}…`);
   // 1. Candidate pool: saved lists (+ earlier discoveries), plus fresh discoveries unless told otherwise.
   let pool = savedPool();
   if (!k.onlySaved) pool = [...pool, ...(await discover(k, anchor, slot))];
@@ -85,6 +86,7 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
     similarTo = hit ? await enrich(hit) : null;
   }
 
+  await status(`Checking opening hours and travel times for ${enriched.length} places…`);
   // 2. Hard filters.
   const cands = (await mapLimit(enriched, 4, (p) => toCandidate(p, anchor, slot))).filter((c): c is Candidate => c !== null);
   const settings = { maxTravelMin: maxTravel, revisitCooldownWeeks: prefs.revisitCooldownWeeks, budgetPerPersonMaxJpy: prefs.budgetPerPersonMaxJpy };
@@ -131,6 +133,7 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
     .map((c) => scoreCandidate(c, { constraints: k, recentCuisines, cuisineCooldownDates: prefs.cuisineCooldownDates, similarTo }))
     .sort((a, b) => b.score - a.score);
 
+  await status(`Checking live availability (seats only) at the top ${Math.min(scored.length, 12)} places…`);
   // 4. Availability before proposing: walk down the ranking until we have n bookable options.
   const verified: Scored[] = [];
   const availability = new Map<number, RecommendOption["availability"]>();
@@ -171,6 +174,7 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
     return { message };
   }
 
+  await status("Writing up the options…");
   const pitches = await writePitches(
     r.options.map((o) => ({ option: o.scored, availability: o.availability, anchorLabel: r.anchor.label })),
     savedPool(),
@@ -179,26 +183,60 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
     placeId: o.scored.place.id,
     name: o.scored.place.name,
     availability: o.availability,
-    pitch: pitches[i],
+    what: pitches[i].what,
+    why: pitches[i].why,
+    pitch: `${pitches[i].what}. Why: ${pitches[i].why}`,
     score: o.scored.score,
   }));
   const plan = createPlan({ date: r.slot.date, time: r.slot.time, party_size: r.slot.partySize, status: "proposed", request: text || null, options });
 
-  const lines = options.map((o, i) => `${i + 1}. *${o.name}*${o.availability === "unconfirmed" ? " _(availability unconfirmed)_" : ""}\n${o.pitch}${mapsLink(o.placeId)}`);
-  const skipped = r.skippedFavourites.length
-    ? `\n\n(Skipped ${r.skippedFavourites.map((p) => p.name).join(", ")}: phone/other booking only for now.)`
-    : "";
-  const relaxedNote = r.relaxed.length ? `\n(Few places fit your usual limits, so I allowed ${r.relaxed.join(" and ")}.)` : "";
-  const message = `🍷 Options for ${fmtDate(r.slot.date)}, ${r.slot.time} (${r.slot.partySize} people, from ${r.anchor.label}). All checked for availability:\n\n${lines.join("\n\n")}${skipped}\n\nVote below 👇 I'll book as soon as you both pick the same one.${relaxedNote}`;
+  const message = formatOptions({
+    header: `${fmtDate(r.slot.date)} · ${r.slot.time} · ${r.slot.partySize} people`,
+    options: options.map((o, i) => ({ ...o, place: getPlace(o.placeId)!, travelMin: r.options[i].scored.travelMin, anchor: r.anchor.label })),
+    notes: [
+      r.relaxed.length ? `Few places fit your usual limits, so I allowed ${r.relaxed.join(" and ")}.` : "",
+      r.skippedFavourites.length ? `Skipped ${r.skippedFavourites.map((p) => p.name).join(", ")}: phone or other booking only for now.` : "",
+    ],
+    solo: voters().length === 1,
+  });
   await say(message);
-  const pollId = await poll(`Date night ${fmtDate(r.slot.date)} ${r.slot.time}`, options.map((o, i) => `${i + 1}. ${o.name}`.slice(0, 100)));
+  await clearStatus();
+  let pollId: string | undefined;
+  if (config.wa.polls) pollId = await poll(`Date night ${fmtDate(r.slot.date)} ${r.slot.time}`, options.map((o, i) => `${i + 1}. ${o.name}`.slice(0, 100)));
   const saved = updatePlan(plan.id, { poll_msg_id: pollId ?? null });
   return { plan: saved, message };
 }
 
-function mapsLink(placeId: number): string {
-  const p = getPlace(placeId);
-  return p?.maps_url ? `\n${p.maps_url}` : "";
+const NUM = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
+
+/**
+ * The options message: one scannable card per place (name, what, why, a
+ * compact info line, map link), then how to answer. WhatsApp formatting:
+ * *bold*, _italic_.
+ */
+export function formatOptions(input: {
+  header: string;
+  options: (PlanOption & { place: Place; travelMin: number; anchor: string })[];
+  notes: string[];
+  solo: boolean;
+}): string {
+  const cards = input.options.map((o, i) => {
+    const p = o.place;
+    const info = [
+      p.price_level ? "¥".repeat(p.price_level) : null,
+      p.rating ? `★ ${p.rating}` : null,
+      `${o.travelMin} min from ${o.anchor}`,
+      o.availability === "unconfirmed" ? "_availability unconfirmed_" : "table free ✓",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return [`${NUM[i] ?? `${i + 1}.`} *${o.name}*`, o.what ?? "", o.why ? `_Why:_ ${o.why}` : "", info, p.maps_url ?? ""].filter(Boolean).join("\n");
+  });
+  const ask = input.solo
+    ? "Reply with a number, or tell me what you'd prefer (\"somewhere closer\", \"something Japanese\")."
+    : "Reply with a number, either of you, or tell me what you'd prefer. I'll book once you both agree.";
+  const notes = input.notes.filter(Boolean).map((n) => `_${n}_`);
+  return [`🍷 *${input.header}*`, "_Free tables, seats only (no courses)_", ...cards, ...notes, ask].join("\n\n");
 }
 
 const REASON_LABEL: Record<string, string> = {

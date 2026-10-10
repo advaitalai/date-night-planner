@@ -4,7 +4,7 @@ import { config } from "../config";
 import { createReservation, getPlace, getPrefs, getReservation, updatePlan, updateReservation } from "../db/repo";
 import { cancelJobs, schedule } from "../jobs/scheduler";
 import { extract } from "../llm";
-import { say } from "../notify";
+import { say, status } from "../notify";
 import type { Place, Reservation } from "../types";
 import { fmtDate, freeCancelDeadline, jst, now, ZONE } from "../util/time";
 import { email } from "./email";
@@ -91,6 +91,7 @@ export async function bookPlace(place: Place, slot: Slot, opts: { planId?: numbe
   const prefs = getPrefs();
   const notes = [opts.notes, prefs.dietary && `Dietary: ${prefs.dietary}`].filter(Boolean).join(" / ") || undefined;
 
+  await status(`Filling in ${place.name}'s booking form (seats only)…`);
   let result;
   try {
     result = await adapter.book(place, slot, config.booking.contact, notes);
