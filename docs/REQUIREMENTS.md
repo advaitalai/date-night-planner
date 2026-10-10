@@ -117,7 +117,7 @@ Findings from the 7 Oct 2026 test session:
 
 ## 8. How a new session should start
 
-1. Read this file, `README.md`, `docs/SETUP.md` and `docs/BACKLOG.md`.
+1. Read `docs/STATUS.md` (current state and preferences), this file, `README.md`, `docs/SETUP.md` and `docs/BACKLOG.md`.
 2. Check what's available: `ANTHROPIC_API_KEY`, `GOOGLE_MAPS_API_KEY`, the `BOOKING_*` variables, and network access to tablecheck.com and tabelog.com. If something is missing, ask Advait to add it in the environment settings. Never ask for keys in the chat.
 3. Toward the success event:
    1. `npm install`
