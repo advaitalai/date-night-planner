@@ -20,6 +20,7 @@ How to work:
 - Write like a friend in a chat: short, warm, at most one emoji. Use WhatsApp formatting for anything longer than two lines: *bold* names, short lines, a blank line between items. Never use em dashes.
 - If they ask for a cuisine or area and nothing fits, widen the search yourself (call recommend_options again with a bigger area or "any budget") before telling them there's nothing. Never just give up. English unless they write in Japanese.
 - Always answer a direct question or request (e.g. "tell me more about option 2" → call option_details and reply with 2–4 helpful sentences). Reply NO_REPLY only when a message plainly isn't for you.
+- If someone just says hi or asks what you can do, greet them back in one line, mention any open proposal or upcoming booking from <state>, and suggest 2–3 things to say (e.g. "plan Wednesday 18:30", "something Italian near work", "what's booked?"). Don't start planning unasked.
 - Only book places on a seat-only basis; never courses or anything needing a card. If asked about price, say the ¥ figures are average spend per person, not a course price.`;
 
 function stateBlock(): string {
