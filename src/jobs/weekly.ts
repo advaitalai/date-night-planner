@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { voters } from "../config";
+import { config, voters } from "../config";
 import { kvGet, kvSet } from "../db";
 import { activePlanFor, addVisit, getPlace, getPrefs, getReservation, updatePlan, updatePrefs, updateReservation } from "../db/repo";
 import { cancelReservation, policyLine } from "../booking/service";
@@ -54,7 +54,10 @@ export function registerWeeklyJobs(): void {
     const plan = activePlanFor(date);
     if (!plan || plan.status !== "proposed") return;
     const missing = voters().filter((p) => !plan.votes[p]?.length);
-    if (missing.length) await say(`Reminder: ${missing.join(" and ")} — vote for ${fmtDate(date)} in the poll above so I can lock a table in 🙏`);
+    if (missing.length) {
+      const how = config.wa.polls ? "vote in the poll above" : "reply with an option number";
+      await say(`⏰ *Reminder:* ${missing.join(" and ")}, ${how} for ${fmtDate(date)} so I can book it 🙏`);
+    }
   });
 
   registerJob("decide", async ({ date }: { date: string }) => {
@@ -66,7 +69,7 @@ export function registerWeeklyJobs(): void {
       return;
     }
     const top = rankByVotes(plan)[0];
-    await say(`Deadline's up — booking the top-voted option, *${plan.options[top].name}*.`);
+    await say(`Deadline's up. Booking the top-voted option, *${plan.options[top].name}*.`);
     await bookOption(plan.id, top);
   });
 

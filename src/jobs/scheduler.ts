@@ -40,6 +40,15 @@ export function pendingJobs(): { id: number; run_at: string; type: string; dedup
 
 const MAX_ATTEMPTS = 3;
 
+/**
+ * Reminders that are pointless once they're this late (e.g. the app was off
+ * when they were due). They're dropped instead of all firing at startup.
+ */
+const STALE_AFTER_MS: Record<string, number> = {
+  nudge: 2 * 3600_000,
+  dayof_reminder: 6 * 3600_000,
+};
+
 export async function runDueJobs(nowIso = new Date().toISOString()): Promise<number> {
   if (running) return 0;
   running = true;
@@ -47,8 +56,14 @@ export async function runDueJobs(nowIso = new Date().toISOString()): Promise<num
   try {
     const due = db()
       .prepare("SELECT * FROM jobs WHERE status = 'pending' AND run_at <= ? ORDER BY run_at LIMIT 20")
-      .all(nowIso) as { id: number; type: string; payload: string; attempts: number }[];
+      .all(nowIso) as { id: number; type: string; payload: string; attempts: number; run_at: string }[];
     for (const job of due) {
+      const staleAfter = STALE_AFTER_MS[job.type];
+      if (staleAfter && Date.parse(nowIso) - Date.parse(job.run_at) > staleAfter) {
+        db().prepare("UPDATE jobs SET status = 'cancelled', last_error = 'stale: missed while the app was off' WHERE id = ?").run(job.id);
+        console.log(`[jobs] skipped stale ${job.type}#${job.id} (due ${job.run_at})`);
+        continue;
+      }
       const handler = handlers.get(job.type);
       if (!handler) {
         db().prepare("UPDATE jobs SET status = 'failed', last_error = 'no handler' WHERE id = ?").run(job.id);

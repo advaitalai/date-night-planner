@@ -57,6 +57,17 @@ describe("scheduler", () => {
     const row = db().prepare("SELECT status, attempts FROM jobs WHERE type = 'flaky'").get() as { status: string; attempts: number };
     expect(row).toEqual({ status: "pending", attempts: 1 });
   });
+
+  it("drops reminders that were missed while the app was off", async () => {
+    const seen: string[] = [];
+    registerJob("nudge", async () => void seen.push("nudge"));
+    schedule("nudge", DateTime.now().minus({ hours: 10 }), { date: "2026-10-14" }, "stale-nudge");
+    schedule("nudge", DateTime.now().minus({ minutes: 5 }), { date: "2026-10-21" }, "fresh-nudge");
+    await runDueJobs();
+    expect(seen).toEqual(["nudge"]);
+    const row = db().prepare("SELECT status FROM jobs WHERE dedupe_key = 'stale-nudge'").get() as { status: string };
+    expect(row.status).toBe("cancelled");
+  });
 });
 
 describe("weekly rhythm", () => {

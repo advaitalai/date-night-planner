@@ -58,6 +58,6 @@ export async function onVotes(planId: number, votes: Record<string, number[]>): 
   const voted = voters().filter((p) => plan.votes[p]?.length);
   if (voted.length === voters().length) {
     const desc = voters().map((p) => `${p}: ${plan.votes[p].map((i) => plan.options[i].name).join(" / ")}`).join(", ");
-    await say(`Split vote — ${desc}. Settle it in the poll or tell me which one; otherwise I'll book the top-voted option on Sunday evening.`);
+    await say(`Split vote: ${desc}. Settle it in the poll or tell me which one; otherwise I'll book the top-voted option on Sunday evening.`);
   }
 }

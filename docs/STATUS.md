@@ -46,7 +46,9 @@ Last updated: 11 Oct 2026.
 - **Laptop setup:** `.env` has the Anthropic, Google Maps and booking details, plus `WA_SELF_MODE=1`, `WA_GROUP_JID=<solo group id>`, `WA_SOLO=1`, `DRY_RUN=1`.
   - `npm install` rewrites `package-lock.json` on his Mac. If `git pull` complains, run `git checkout -- package-lock.json` first.
 - **WhatsApp "Message yourself" chat:** Baileys fails to decrypt later messages there (`Bad MAC`). Use a solo group instead.
-- **Harmless log noise:** Baileys `init queries` timeouts.
+- **Harmless log noise:** Baileys `init queries` timeouts and "Invalid mex newsletter notification".
+- **Old plans fire their jobs on startup.** A plan proposed in an earlier beta run keeps its Sunday nudge and decide jobs. Stale nudges (over 2h late) are now dropped; "decide" still runs. Say "skip this week" or plan again to move on.
+- `npm install` reports 2 high vulnerabilities in link-preview-js (via Baileys). No fix upstream. Low risk (only previews links the bot sends). Recheck before the VM deploy; option: turn off link previews.
 - **Cloud sessions:**
   - Tabelog shows a Cloudflare bot check, so it can't be used from there.
   - The auto-mode safety check blocks real bookings. Use Accept-edits mode and let Advait approve the command.
