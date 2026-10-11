@@ -42,6 +42,18 @@ export const config = {
     },
     tablecheck: { email: env("TABLECHECK_EMAIL"), password: env("TABLECHECK_PASSWORD") },
     tabelog: { email: env("TABELOG_EMAIL"), password: env("TABELOG_PASSWORD") },
+    /**
+     * Restrict booking to these channels, e.g. "phone" to test the AI call end to
+     * end from WhatsApp (with DRY_RUN=1 the call comes to BOOKING_PHONE). Empty = all.
+     */
+    only: env("BOOKING_ONLY").split(",").map((s) => s.trim()).filter(Boolean),
+  },
+
+  call: {
+    /** Language the AI caller speaks: "ja" for restaurants, "en" for testing. */
+    language: (env("CALL_LANGUAGE", "ja") === "en" ? "en" : "ja") as "ja" | "en",
+    /** How the caller says the booking name, if text-to-speech mangles BOOKING_NAME. */
+    nameSpoken: env("BOOKING_NAME_SPOKEN"),
   },
 
   dryRun: env("DRY_RUN", "1") === "1",

@@ -24,6 +24,8 @@ export interface BookResult {
   policyText?: string;
   /** The requested time is definitely full (don't try other channels). */
   full?: boolean;
+  /** Other times the venue offered (HH:mm). */
+  alternatives?: string[];
   detail?: string;
 }
 

@@ -2,7 +2,7 @@
 
 The running log of where the project is. **Update this at the end of every session.** It's what a new session (or a compacted one) relies on to pick up without re-asking Advait.
 
-Last updated: 10 Oct 2026.
+Last updated: 11 Oct 2026.
 
 ## Where we are
 
@@ -11,14 +11,15 @@ Last updated: 10 Oct 2026.
 | 1. Simulated chat (no code) | ✅ Done 7 Oct. Advait approved the flow. |
 | 2. Real booking by chatting with Claude | ✅ Done 7 Oct. **h:armonia, Fri 9 Oct 18:00, 2 people, seats only**, booked via TableCheck and kept. The first real booking (MVP success event). |
 | 3. WhatsApp beta (solo, Advait only) | 🔄 In progress. Running on Advait's laptop in a WhatsApp group that has only him in it (`WA_SOLO=1`). First two beta rounds gave feedback (below), and the fixes are pushed. Next round not yet run. |
-| 3b. AI phone calls | 🔄 Built (`src/booking/phone.ts`, `npm run test-call`). Not yet tried live: Advait needs a Vapi account and a Twilio number (docs/SETUP.md §7). |
+| 3b. AI phone calls | ✅ Test call worked 11 Oct (English, Advait played the restaurant and said "full"; the outcome was read correctly). Vapi + Twilio trial (US number) set up on the laptop. |
+| 3c. Full WhatsApp loop with a mock call | 🔄 Next. Live recommendations in WhatsApp; booking forced to an AI call that rings Advait (`BOOKING_ONLY=phone`, `DRY_RUN=1`, `CALL_LANGUAGE=en`). |
 | 4. Add Emily to the group | ⏳ Only after Advait has vetted the solo flow. Don't bother Emily until it works. |
 | 5. Always-on server (Google Cloud e2-micro) | ⏳ After the beta. |
 
 ## Next steps
 
-1. Advait sets up Vapi and Twilio, runs `npm run test-call`, and shares the transcript and outcome. Tune the call script and voice from that.
-2. Advait reruns the WhatsApp solo beta (`git pull`, `npm install`, `npm start`). Check:
+1. Phase 3c: Advait runs the WhatsApp solo beta with `BOOKING_ONLY=phone`, `CALL_LANGUAGE=en`, `DRY_RUN=1`. Plan, pick, take the call as the restaurant, then try "book the time they offered" and "cancel it" (both call him again). Remove the mock reservation afterwards, or its reminders will fire.
+2. Same run also checks the WhatsApp solo beta (`git pull`, `npm install`, `npm start`). Check:
    - the options cards' formatting;
    - "anything Indian?" widens instead of giving up;
    - the status line shows what the bot is doing;
@@ -59,6 +60,9 @@ Last updated: 10 Oct 2026.
   - Free numbers are US-only, so a Twilio number is needed for Japan.
   - Model `claude-sonnet-5` (from Vapi's Anthropic list), Deepgram `nova-2` with `ja`, ElevenLabs `eleven_multilingual_v2`.
   - Restaurants may ignore +1 numbers; a Japanese number is in the backlog.
+  - Twilio's "add an emergency address" banner can be ignored: the $75 fee only applies to 911 calls from that number.
+  - Use the **private** Vapi key. The phone number **ID** (UUID) is on the number's page in Vapi.
+  - TTS read "Advait Alai" as "Advait A Lie". `BOOKING_NAME_SPOKEN` overrides the spoken name.
 
 ## Beta feedback log
 
@@ -75,3 +79,6 @@ Last updated: 10 Oct 2026.
   - The availability check was failing and slowed things down.
   - **Asked for:** booking order sites > email > phone, and an AI call demo.
   - **Fixed:** cards, pick first then book, widening, the booking order, and the Vapi phone adapter with a test-call script.
+- **11 Oct, test call:**
+  - "Perfect." The caller declined an offered 19:30 to ask for more times, then lost it.
+  - **Fixed:** the script now accepts an offered time as a note and says it'll call back; offered times flow back to WhatsApp ("They offered 19:30. Book that?"). Call progress shows in the status line.

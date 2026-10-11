@@ -122,7 +122,9 @@ The setup page is only reachable through an SSH tunnel from your laptop, so noth
 3. In Vapi: **Phone Numbers → Import → Twilio**, enter the Account SID, Auth Token and the number. Copy the new number's **ID** into `VAPI_PHONE_NUMBER_ID`.
 4. Test with a call to yourself (you play the restaurant): `npm run test-call` (Japanese) or `npm run test-call -- en`.
 
-With `DRY_RUN=1` every booking call goes to `BOOKING_PHONE` (you) instead of the restaurant. Costs are per minute on both Vapi and Twilio; check their pricing pages.
+With `DRY_RUN=1` every booking call goes to `BOOKING_PHONE` (you) instead of the restaurant.
+
+**End-to-end test from WhatsApp:** add `BOOKING_ONLY=phone` and `CALL_LANGUAGE=en` to `.env`, keep `DRY_RUN=1`, and run `npm start`. Every booking then becomes an AI call to you. Remove `BOOKING_ONLY` afterwards. Costs are per minute on both Vapi and Twilio; check their pricing pages.
 
 ## 8. Check and go live
 

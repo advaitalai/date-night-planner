@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { config, domesticPhone, intlPhone, type Contact } from "../config";
 import { extract } from "../llm";
+import { status } from "../notify";
 import type { Place, Reservation } from "../types";
 import { jaDate } from "./email";
 import type { AvailabilityResult, BookingAdapter, BookResult, ChangeResult, Slot } from "./types";
@@ -48,17 +49,18 @@ export interface CallScript {
 /** The booking conversation. Seat-only, no courses, no card, honest that it's an AI. */
 export function bookingScript(place: Place, slot: Slot, c: Contact, language: CallLanguage, task: "book" | "cancel" = "book", existing?: Reservation): CallScript {
   const when = jaDate(slot.date, slot.time);
+  const spoken = config.call.nameSpoken || c.name;
   if (language === "en") {
     return {
       language,
-      firstMessage: `Hello, is this ${place.name}? I'm an AI assistant calling on behalf of ${c.name} ${task === "book" ? "to make a reservation" : "about a reservation"}.`,
-      systemPrompt: `You are a polite AI assistant on a phone call with the restaurant ${place.name}, calling on behalf of ${c.name}.
+      firstMessage: `Hello, is this ${place.name}? I'm an AI assistant calling on behalf of ${spoken} ${task === "book" ? "to make a reservation" : "about a reservation"}.`,
+      systemPrompt: `You are a polite AI assistant on a phone call with the restaurant ${place.name}, calling on behalf of ${spoken}.
 Goal: ${task === "book" ? `book a table for ${slot.partySize} on ${slot.date} at ${slot.time}, seats only (no set course).` : `cancel the reservation for ${existing?.party_size} on ${existing?.date} at ${existing?.time} under the name ${c.name}.`}
 Rules:
 - Say you are an AI assistant if asked, and keep it short and friendly.
 - Never agree to a set course, prepayment or giving a credit card. If they require one, thank them and end the call.
-- If the time is full, ask for the nearest free times within an hour either side, note them, and say ${c.name} will call back. Do not book a different time.
-- If they accept, confirm the date, time, number of people, the name ${c.name} and the phone number ${intlPhone(c.phone)}.
+- If the time is full and they offer another time, don't turn it down or ask for more options: thank them, note it, and say you'll check with ${spoken} and call back shortly to confirm. If they don't offer one, ask for the nearest free times within an hour either side. Never book a different time yourself.
+- If they accept, confirm the date, time, number of people, the name ${spoken} and the phone number ${intlPhone(c.phone)}.
 - Ask about the cancellation policy (until when you can cancel for free).
 - When done, thank them and say goodbye.`,
     };
@@ -71,7 +73,7 @@ Rules:
 ルール：
 - AIであることを聞かれたら正直に答える。
 - コース料理、事前決済、クレジットカード情報の提供には同意しない。必須と言われたらお礼を言って電話を終える。
-- 満席の場合は、前後1時間以内の空いている時間を伺い、メモして「改めてご連絡します」と伝える。別の時間で勝手に予約しない。
+- 満席で別の時間を提案された場合は、断ったり他の時間を重ねて聞いたりせず、お礼を言ってメモし、「本人に確認して、すぐに折り返しご連絡します」と伝える。提案がなければ、前後1時間以内の空いている時間を伺う。別の時間で勝手に予約しない。
 - 予約できた場合は、日時・人数・お名前（${c.nameKana || c.name}）・電話番号（${domesticPhone(c.phone)}）を確認する。
 - キャンセルポリシー（いつまで無料でキャンセルできるか）を確認する。
 - 最後にお礼を言って電話を終える。`,
@@ -151,11 +153,15 @@ function dialTarget(place: Place, c: Contact): string | null {
   return place.phone ?? null;
 }
 
+const CALL_STATUS: Record<string, string> = { ringing: "ringing", "in-progress": "on the call" };
+
 async function runCall(place: Place, c: Contact, script: CallScript, goal: string): Promise<{ outcome: CallOutcome; transcript: string }> {
   const to = dialTarget(place, c);
   if (!to) throw new Error("no phone number to call");
   const call = await startCall(to, script);
-  const done = await waitForCall(call.id);
+  const done = await waitForCall(call.id, 8 * 60_000, (s) => {
+    if (CALL_STATUS[s]) void status(`📞 ${place.name}: ${CALL_STATUS[s]}…`);
+  });
   const transcript = done.artifact?.transcript ?? "";
   return { outcome: await readOutcome(transcript, done.endedReason, goal), transcript };
 }
@@ -169,29 +175,36 @@ export const phone: BookingAdapter = {
 
   async book(place: Place, slot: Slot, c: Contact): Promise<BookResult> {
     if (!vapiConfigured()) return { status: "failed", detail: "phone calls aren't set up (VAPI_API_KEY / VAPI_PHONE_NUMBER_ID)" };
-    if (!place.phone) return { status: "failed", detail: "no phone number" };
-    const { outcome, transcript } = await runCall(place, c, bookingScript(place, slot, c, "ja"), `book ${slot.partySize} people on ${slot.date} at ${slot.time}, seats only`);
+    if (!dialTarget(place, c)) return { status: "failed", detail: "no phone number" };
+    const { outcome, transcript } = await runCall(place, c, bookingScript(place, slot, c, config.call.language), `book ${slot.partySize} people on ${slot.date} at ${slot.time}, seats only`);
     const dry = config.dryRun ? " (dry run: called you instead of the restaurant)" : "";
     if (outcome.outcome === "booked") {
       return { status: "confirmed", policyText: outcome.cancellationPolicy ?? undefined, detail: `Booked by phone${dry}. ${outcome.summaryEn}\n\nTranscript:\n${transcript.slice(0, 1500)}` };
     }
-    const alt = outcome.alternativeTimes.length ? ` They offered ${outcome.alternativeTimes.join(", ")}.` : "";
-    return { status: "failed", detail: `Phone call: ${outcome.summaryEn}${alt}${dry}` };
+    return {
+      status: "failed",
+      full: outcome.outcome === "full",
+      alternatives: outcome.alternativeTimes,
+      detail: `Phone call: ${outcome.summaryEn}${dry}`,
+    };
   },
 
   async modify(r: Reservation, place: Place, slot: Slot, c: Contact): Promise<ChangeResult> {
     // Cancel-and-rebook over the phone is fragile; ask them to change it in one call instead.
-    if (!vapiConfigured() || !place.phone) return { ok: false, detail: "phone calls aren't set up" };
-    const script = bookingScript(place, slot, c, "ja");
-    script.systemPrompt += `\n既存の予約（${jaDate(r.date, r.time)}、${r.party_size}名）を、${jaDate(slot.date, slot.time)}、${slot.partySize}名に変更できるか伺ってください。`;
+    if (!vapiConfigured() || !dialTarget(place, c)) return { ok: false, detail: "phone calls aren't set up" };
+    const script = bookingScript(place, slot, c, config.call.language);
+    script.systemPrompt +=
+      config.call.language === "en"
+        ? `\nThis is about an existing booking (${r.date} ${r.time}, ${r.party_size} people). Ask whether it can be changed to ${slot.date} ${slot.time} for ${slot.partySize}.`
+        : `\n既存の予約（${jaDate(r.date, r.time)}、${r.party_size}名）を、${jaDate(slot.date, slot.time)}、${slot.partySize}名に変更できるか伺ってください。`;
     const { outcome } = await runCall(place, c, script, `change booking to ${slot.date} ${slot.time} for ${slot.partySize}`);
     return { ok: outcome.outcome === "booked", detail: outcome.summaryEn };
   },
 
   async cancel(r: Reservation, place: Place, c: Contact): Promise<ChangeResult> {
-    if (!vapiConfigured() || !place.phone) return { ok: false, detail: "phone calls aren't set up" };
+    if (!vapiConfigured() || !dialTarget(place, c)) return { ok: false, detail: "phone calls aren't set up" };
     const slot = { date: r.date, time: r.time, partySize: r.party_size };
-    const { outcome } = await runCall(place, c, bookingScript(place, slot, c, "ja", "cancel", r), `cancel the booking on ${r.date} ${r.time}`);
+    const { outcome } = await runCall(place, c, bookingScript(place, slot, c, config.call.language, "cancel", r), `cancel the booking on ${r.date} ${r.time}`);
     return { ok: outcome.outcome === "cancelled", detail: outcome.summaryEn };
   },
 };

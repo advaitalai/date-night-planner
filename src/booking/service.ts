@@ -39,8 +39,10 @@ export function bookingRoutes(place: Place): Route[] {
   if (place.tablecheck_slug) routes.push({ channel: "tablecheck", adapter: tablecheck, doing: `Booking ${place.name} on TableCheck (seats only)…` });
   if (place.tabelog_url && place.booking_channel === "tabelog") routes.push({ channel: "tabelog", adapter: tabelog, doing: `Booking ${place.name} on Tabelog…` });
   if (place.booking_email && clientFor(BOOKER)) routes.push({ channel: "email", adapter: email, doing: `Emailing ${place.name}…` });
-  if (place.phone && vapiConfigured()) routes.push({ channel: "phone", adapter: phone, doing: `Calling ${place.name} (AI call, takes a few minutes)…` });
-  return routes;
+  // In a dry run the call goes to BOOKING_PHONE, so the place's own number isn't needed.
+  if ((place.phone || config.dryRun) && vapiConfigured()) routes.push({ channel: "phone", adapter: phone, doing: `📞 Calling ${place.name} (AI call, a few minutes)…` });
+  const only = config.booking.only;
+  return only.length ? routes.filter((r) => only.includes(r.channel)) : routes;
 }
 
 /** Fill in booking links/emails we haven't looked up yet (done lazily, at booking time). */
@@ -142,7 +144,9 @@ export async function bookPlace(place: Place, slot: Slot, opts: { planId?: numbe
     if (result.full) break;
   }
   if (!result || !route || result.status === "failed") {
-    return { ok: false, message: `I couldn't book *${place.name}* for ${fmtDate(slot.date)} ${slot.time}.\n\n${tried.map((t) => `• ${t}`).join("\n")}` };
+    const head = result?.full ? `❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.` : `I couldn't book *${place.name}* for ${fmtDate(slot.date)} ${slot.time}.`;
+    const alts = result?.alternatives?.length ? `\n\nThey offered *${result.alternatives.join(", ")}*. Want me to book that, or try another option?` : result?.full ? "\n\nWant me to try another option or time?" : "";
+    return { ok: false, message: `${head}\n\n${tried.map((t) => `• ${t}`).join("\n")}${alts}` };
   }
 
   const reservation = createReservation({
@@ -166,9 +170,10 @@ export async function bookPlace(place: Place, slot: Slot, opts: { planId?: numbe
 
   const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people`;
   const how = { tablecheck: "on TableCheck", tabelog: "on Tabelog", email: "by email", phone: "by phone" }[route.channel];
+  const mock = config.dryRun && route.channel === "phone" ? "\n\n_Dry run: the call went to you, not the restaurant._" : "";
   const message =
     result.status === "confirmed"
-      ? [`✅ *Booked ${place.name}*`, `${when}, ${how}${result.externalRef ? `\nRef ${result.externalRef}` : ""}`, policyLine(withPolicy)].filter(Boolean).join("\n\n")
+      ? [`✅ *Booked ${place.name}*`, `${when}, ${how}${result.externalRef ? `\nRef ${result.externalRef}` : ""}`, policyLine(withPolicy)].filter(Boolean).join("\n\n") + mock
       : [`📨 *Reservation requested at ${place.name}*`, `${when}, ${how}`, "I'll post here when they confirm."].join("\n\n");
   return { ok: true, reservation: withPolicy, message };
 }
@@ -176,7 +181,7 @@ export async function bookPlace(place: Place, slot: Slot, opts: { planId?: numbe
 export function policyLine(r: Reservation): string {
   if (!r.free_cancel_deadline) return "";
   const d = DateTime.fromISO(r.free_cancel_deadline, { zone: ZONE }).toFormat("ccc d LLL HH:mm");
-  const assumed = r.notes?.includes("assuming 24h") ? " (policy not stated — assuming 24h)" : "";
+  const assumed = r.notes?.includes("assuming 24h") ? " (policy not stated, assuming 24h)" : "";
   return `Free cancellation until ${d}${assumed}${r.cancel_fee ? `; after that: ${r.cancel_fee}` : ""}.`;
 }
 

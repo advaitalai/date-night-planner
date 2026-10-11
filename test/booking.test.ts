@@ -175,4 +175,18 @@ describe("booking order", () => {
     delete process.env.VAPI_API_KEY;
     delete process.env.VAPI_PHONE_NUMBER_ID;
   });
+
+  it("can be limited to one channel (BOOKING_ONLY=phone) and calls you in a dry run", async () => {
+    process.env.VAPI_API_KEY = "test";
+    process.env.VAPI_PHONE_NUMBER_ID = "test";
+    const { config } = await import("../src/config");
+    const { bookingRoutes } = await import("../src/booking/service");
+    config.booking.only = ["phone"];
+    expect(bookingRoutes(place({ tablecheck_slug: "armonia", phone: "03-6431-8960" })).map((r) => r.channel)).toEqual(["phone"]);
+    // No number of its own: still callable in a dry run, because the call goes to BOOKING_PHONE.
+    expect(bookingRoutes(place({ tablecheck_slug: "armonia", phone: null })).map((r) => r.channel)).toEqual(config.dryRun ? ["phone"] : []);
+    config.booking.only = [];
+    delete process.env.VAPI_API_KEY;
+    delete process.env.VAPI_PHONE_NUMBER_ID;
+  });
 });
