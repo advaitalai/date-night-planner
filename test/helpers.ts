@@ -38,6 +38,7 @@ export function place(overrides: Partial<Place> = {}): Place {
     saved_by: ["Advait"],
     note: null,
     details_fetched_at: null,
+    features: null,
     ...overrides,
   };
 }

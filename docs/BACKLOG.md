@@ -27,6 +27,9 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 
 ## Planning & recommendations
 
+- **Places API cost watch.** Searches now include Google's atmosphere attributes (live music, serves dinner…), which bill at the "Enterprise + Atmosphere" tier. Check usage in the Cloud console after a few weeks; drop the attributes from searches and fetch them only for must-have requests if it adds up.
+- **Remember wishes across a conversation.** The agent combines earlier wishes when re-asking ("Thai or Mexican, with live music"); a stored "current wish" per date would make that reliable.
+
 9. **Google Calendar invites** for both people when a booking is confirmed. Update or remove the invite when the booking changes or is cancelled.
 10. **Non-dinner date ideas** from the saved lists (spa, gallery, cafés), e.g. "Saturday afternoon plan".
 11. **A "midway" anchor:** somewhere between home and the office, or between two places where they'll be that day.

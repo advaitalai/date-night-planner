@@ -1,14 +1,17 @@
 import { config } from "../config";
-import type { OpeningPeriod, Place } from "../types";
+import type { OpeningPeriod, Place, PlaceFeatures } from "../types";
 import { estimateTravelMin, type LatLng } from "../util/geo";
 
 const PLACES = "https://places.googleapis.com/v1";
 const ROUTES = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
 /**
- * Searches skip reviews/editorial summary so they bill at the cheaper search
- * tier; place details (used once per place for its profile) include them.
+ * Searches skip reviews/editorial summary; place details (used once per place
+ * for its profile) include them. Both carry Google's yes/no attributes
+ * (live music, serves dinner…), which bill at the "Enterprise + Atmosphere" tier.
  */
+export const FEATURE_FIELDS = ["liveMusic", "servesDinner", "outdoorSeating", "servesCocktails", "servesWine", "servesVegetarianFood"] as const;
+
 const SEARCH_FIELDS = [
   "id",
   "displayName",
@@ -24,6 +27,7 @@ const SEARCH_FIELDS = [
   "nationalPhoneNumber",
   "reservable",
   "googleMapsUri",
+  ...FEATURE_FIELDS,
 ];
 
 const DETAIL_FIELDS = [
@@ -43,6 +47,7 @@ const DETAIL_FIELDS = [
   "editorialSummary",
   "reviews",
   "googleMapsUri",
+  ...FEATURE_FIELDS,
 ];
 
 export interface GPlace {
@@ -62,6 +67,12 @@ export interface GPlace {
   editorialSummary?: { text: string };
   reviews?: { rating?: number; text?: { text: string }; originalText?: { text: string } }[];
   googleMapsUri?: string;
+  liveMusic?: boolean;
+  servesDinner?: boolean;
+  outdoorSeating?: boolean;
+  servesCocktails?: boolean;
+  servesWine?: boolean;
+  servesVegetarianFood?: boolean;
 }
 
 function requireKey(): string {
@@ -119,6 +130,21 @@ export async function placeDetails(placeId: string): Promise<GPlace> {
   });
   if (!res.ok) throw new Error(`Place details ${res.status}: ${await res.text()}`);
   return (await res.json()) as GPlace;
+}
+
+/** Just the yes/no attributes, for saved places looked up before they were collected. */
+export async function placeFeatures(placeId: string): Promise<PlaceFeatures> {
+  const res = await fetch(`${PLACES}/places/${placeId}`, {
+    headers: { "X-Goog-Api-Key": requireKey(), "X-Goog-FieldMask": FEATURE_FIELDS.join(",") },
+  });
+  if (!res.ok) throw new Error(`Place features ${res.status}: ${await res.text()}`);
+  return featuresOf((await res.json()) as GPlace);
+}
+
+export function featuresOf(g: GPlace): PlaceFeatures {
+  const out: PlaceFeatures = {};
+  for (const f of FEATURE_FIELDS) if (typeof g[f] === "boolean") out[f] = g[f];
+  return out;
 }
 
 export async function geocode(address: string): Promise<LatLng | null> {
@@ -197,6 +223,7 @@ export function toPlaceFields(g: GPlace): Partial<Place> {
     maps_url: g.googleMapsUri ?? null,
     opening_periods: g.regularOpeningHours?.periods ?? null,
     reservable: g.reservable ?? null,
+    features: featuresOf(g),
     details_fetched_at: new Date().toISOString(),
   };
 }

@@ -3,6 +3,7 @@ import { voters } from "../config";
 import { getPlace, getPlan, updatePlan } from "../db/repo";
 import { say, status } from "../notify";
 import type { Plan } from "../types";
+import { fmtDate } from "../util/time";
 
 /** Option indexes ordered by votes, ties broken by the recommender's ranking (lower index). */
 export function rankByVotes(plan: Plan): number[] {
@@ -19,30 +20,27 @@ export function consensus(plan: Plan): number | null {
 }
 
 /**
- * Book option `index` of a plan. Availability is re-checked first (the poll
- * may be a day old); if it's gone, move to the next option in vote order.
+ * Book option `index` of a plan: only that place, never a different one
+ * without asking. If it's full or can't be booked, say so and let them choose.
  */
-export async function bookOption(planId: number, index: number): Promise<void> {
+export async function bookOption(planId: number, index: number, opts: { callApproved?: boolean } = {}): Promise<void> {
   const plan = getPlan(planId);
   if (!plan || plan.status !== "proposed") return;
+  const place = getPlace(plan.options[index]?.placeId);
+  if (!place) return;
   updatePlan(planId, { status: "booking" });
-  const order = [index, ...rankByVotes(plan).filter((i) => i !== index)];
   const slot = { date: plan.date, time: plan.time, partySize: plan.party_size };
-
-  for (const i of order) {
-    const place = getPlace(plan.options[i].placeId);
-    if (!place) continue;
-    await status(`Re-checking the table at ${place.name}…`);
-    const avail = await checkAvailability(place, slot);
-    if (avail.status === "unavailable") {
-      await say(`${place.name} just filled up for ${slot.time}${avail.alternatives?.length ? ` (free: ${avail.alternatives.join(", ")})` : ""}. Trying the next option…`);
-      continue;
-    }
-    const out = await bookAndAnnounce(place, slot, { planId });
-    if (out.ok) return;
+  await status(`Checking the table at ${place.name}…`);
+  const avail = await checkAvailability(place, slot);
+  if (avail.status === "unavailable") {
+    updatePlan(planId, { status: "proposed" });
+    const alts = avail.alternatives?.length ? `\nFree nearby: *${avail.alternatives.join(", ")}*.` : "";
+    await say(`❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.${alts}\n\nWant one of those times, or another option?`);
+    return;
   }
-  updatePlan(planId, { status: "proposed" });
-  await say("I couldn't book any of the options 😕 Tell me what to try instead (another time, day or area).");
+  const out = await bookAndAnnounce(place, slot, { planId, callApproved: opts.callApproved });
+  // Not booked (full, failed, or waiting for a go-ahead to call): the proposal stays open.
+  if (!out.ok) updatePlan(planId, { status: "proposed" });
 }
 
 /** Record poll votes; book straight away when both people pick the same option. */
@@ -58,6 +56,6 @@ export async function onVotes(planId: number, votes: Record<string, number[]>): 
   const voted = voters().filter((p) => plan.votes[p]?.length);
   if (voted.length === voters().length) {
     const desc = voters().map((p) => `${p}: ${plan.votes[p].map((i) => plan.options[i].name).join(" / ")}`).join(", ");
-    await say(`Split vote: ${desc}. Settle it in the poll or tell me which one; otherwise I'll book the top-voted option on Sunday evening.`);
+    await say(`Split vote: ${desc}. Tell me which one; otherwise I'll book the top-voted option on Sunday evening.`);
   }
 }

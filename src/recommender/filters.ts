@@ -1,5 +1,5 @@
-import { SELF_BOOKABLE, type Place } from "../types";
-import type { Constraints } from "./parseRequest";
+import { SELF_BOOKABLE, type Place, type PlaceFeatures } from "../types";
+import type { Constraints, Feature } from "./parseRequest";
 import { cuisineMatch, cuisineOf, priceLevelOf } from "./similarity";
 
 export interface Candidate {
@@ -14,12 +14,55 @@ export interface FilterSettings {
   maxTravelMin: number;
   revisitCooldownWeeks: number;
   budgetPerPersonMaxJpy: number | null;
+  /** Places already suggested for this date (left out when they ask for new options). */
+  excludeIds?: Set<number>;
 }
 
 /** Rough dinner spend per person for a Google price level / profile band. */
 export const PRICE_LEVEL_JPY: Record<number, number> = { 0: 0, 1: 1500, 2: 4000, 3: 9000, 4: 20000 };
 
-export type RejectReason = "not_bookable" | "too_far" | "closed" | "visited_recently" | "over_budget" | "cuisine" | "excluded";
+export type RejectReason =
+  | "not_bookable"
+  | "too_far"
+  | "closed"
+  | "visited_recently"
+  | "over_budget"
+  | "cuisine"
+  | "excluded"
+  | "shown_before"
+  | "not_dinner"
+  | "missing_feature";
+
+/** Google attribute behind each must-have, and words that show it in reviews/profiles. */
+export const FEATURE_INFO: Record<Feature, { key: keyof PlaceFeatures; label: string; words: RegExp; query: string }> = {
+  live_music: { key: "liveMusic", label: "live music", words: /live (music|jazz|band|performance)|jazz (club|bar)|ライブ/i, query: "live music restaurant" },
+  outdoor_seating: { key: "outdoorSeating", label: "outdoor seating", words: /terrace|outdoor|patio|rooftop|テラス/i, query: "terrace restaurant" },
+  cocktails: { key: "servesCocktails", label: "cocktails", words: /cocktail/i, query: "cocktail bar dinner" },
+  wine: { key: "servesWine", label: "wine", words: /\bwine\b|ワイン/i, query: "wine bar dinner" },
+  vegetarian: { key: "servesVegetarianFood", label: "vegetarian options", words: /vegetarian|vegan|plant-based/i, query: "vegetarian restaurant" },
+};
+
+/** True / false from Google's attribute, else whether reviews mention it, else unknown (null). */
+export function hasFeature(p: Place, f: Feature): boolean | null {
+  const info = FEATURE_INFO[f];
+  const attr = p.features?.[info.key];
+  if (attr === true) return true;
+  const text = [...(p.profile?.vibeTags ?? []), ...(p.profile?.highlights ?? []), p.profile?.summary ?? ""].join(" ");
+  if (info.words.test(text)) return true;
+  return attr === false ? false : null;
+}
+
+const NOT_DINNER_TYPES = new Set(["dessert_shop", "dessert_restaurant", "cafe", "coffee_shop", "bakery", "confectionery", "ice_cream_shop", "tea_house", "donut_shop", "candy_store", "chocolate_shop", "juice_shop"]);
+const NOT_DINNER_WORDS = /dessert|sweets|patisserie|pâtisserie|parfait|cafe|café|coffee|bakery|kakigori|甘味|スイーツ/i;
+
+/** Dessert bars, cafés and bakeries aren't dinner, unless that's what they asked for. */
+export function isDinnerPlace(p: Place, k: Constraints): boolean {
+  if (k.cuisines.some((c) => NOT_DINNER_WORDS.test(c))) return true;
+  if (p.features?.servesDinner === false) return false;
+  if (p.primary_type && NOT_DINNER_TYPES.has(p.primary_type)) return false;
+  const label = `${p.cuisine ?? ""} ${p.profile?.cuisine ?? ""}`;
+  return !NOT_DINNER_WORDS.test(label);
+}
 
 export interface FilterResult {
   kept: Candidate[];
@@ -43,6 +86,9 @@ export function canAttemptBooking(p: Place): boolean {
 export function rejectReason(c: Candidate, k: Constraints, s: FilterSettings): RejectReason | null {
   const p = c.place;
   if (nameMatches(p, k.excludePlaces)) return "excluded";
+  if (s.excludeIds?.has(p.id)) return "shown_before";
+  if (!isDinnerPlace(p, k)) return "not_dinner";
+  if (k.features.some((f) => hasFeature(p, f) !== true)) return "missing_feature";
   if (!canAttemptBooking(p)) return "not_bookable";
   if (c.openAtSlot === false) return "closed";
   if (c.travelMin > (k.maxTravelMin ?? s.maxTravelMin)) return "too_far";

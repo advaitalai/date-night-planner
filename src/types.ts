@@ -26,6 +26,19 @@ export interface PlaceProfile {
   summary: string;
 }
 
+/**
+ * Google's place attributes (Places API "atmosphere" fields). Missing = unknown.
+ * Used as hard filters ("live music") and to drop places that don't do dinner.
+ */
+export interface PlaceFeatures {
+  liveMusic?: boolean;
+  servesDinner?: boolean;
+  outdoorSeating?: boolean;
+  servesCocktails?: boolean;
+  servesWine?: boolean;
+  servesVegetarianFood?: boolean;
+}
+
 export interface Place {
   id: number;
   google_place_id: string | null;
@@ -56,6 +69,7 @@ export interface Place {
   saved_by: string[];
   note: string | null;
   details_fetched_at: string | null;
+  features: PlaceFeatures | null;
 }
 
 export type ReservationStatus = "requested" | "confirmed" | "cancelled" | "failed" | "done";

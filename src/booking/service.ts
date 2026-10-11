@@ -12,6 +12,7 @@ import { tabelog } from "./tabelog";
 import { detectChannel } from "./detect";
 import { phone, vapiConfigured } from "./phone";
 import { tablecheck } from "./tablecheck";
+import { askToCall, runCall, type PendingCall } from "./calls";
 import type { AvailabilityResult, BookingAdapter, BookResult, Slot } from "./types";
 import { clientFor } from "../google/auth";
 import { BOOKER } from "../google/gmail";
@@ -117,43 +118,63 @@ export interface BookOutcome {
   ok: boolean;
   reservation?: Reservation;
   message: string;
+  /** Waiting for someone to OK a phone call. */
+  awaitingCall?: boolean;
 }
 
-export async function bookPlace(place: Place, slot: Slot, opts: { planId?: number; notes?: string } = {}): Promise<BookOutcome> {
+export interface BookOpts {
+  planId?: number;
+  notes?: string;
+  /** Someone in the chat explicitly said to phone this place. Without it, a phone booking only asks. */
+  callApproved?: boolean;
+}
+
+/**
+ * Book one place, trying its booking routes in order (site, then email). Never
+ * moves on to a different place. A phone call is never made without a go-ahead
+ * in the chat: if phoning is the way left, this asks first (calls.ts).
+ */
+export async function bookPlace(place: Place, slot: Slot, opts: BookOpts = {}): Promise<BookOutcome> {
   place = await ensureDetected(place);
   const routes = bookingRoutes(place);
-  if (!routes.length) return { ok: false, message: `I don't have a way to book ${place.name} yet (no booking site, email or phone number I can use).` };
+  if (!routes.length) return { ok: false, message: `I don't have a way to book *${place.name}* (no booking site, email or phone number I can use).` };
   const prefs = getPrefs();
   const notes = [opts.notes, prefs.dietary && `Dietary: ${prefs.dietary}`].filter(Boolean).join(" / ") || undefined;
 
   const tried: string[] = [];
-  let result: BookResult | undefined;
-  let route: Route | undefined;
   for (const r of routes) {
+    if (r.channel === "phone") {
+      const call: PendingCall = { kind: "book", placeId: place.id, slot, planId: opts.planId };
+      return opts.callApproved ? runCall(call) : { ok: false, awaitingCall: true, message: askToCall(call, place, tried) };
+    }
     await status(r.doing);
+    let result: BookResult;
     try {
       result = await r.adapter.book(place, slot, config.booking.contact, notes);
     } catch (err) {
       result = { status: "failed", detail: (err as Error).message };
     }
-    route = r;
-    if (result.status !== "failed") break;
-    tried.push(`${r.channel}: ${result.detail ?? "failed"}`);
+    if (result.status !== "failed") return recordBooking(place, slot, r.channel, result, opts.planId);
     console.log(`[booking] ${place.name} via ${r.channel} failed: ${result.detail}`);
+    tried.push(`${CHANNEL_NAME[r.channel]} didn't work (${result.detail ?? "unknown error"})`);
     // A definite "that time is full" ends the attempt; trying other channels won't free a table.
-    if (result.full) break;
+    if (result.full) {
+      const alts = result.alternatives?.length ? `\nFree nearby: *${result.alternatives.join(", ")}*.` : "";
+      return { ok: false, message: `❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.${alts}\n\nWant one of those times, or another option?` };
+    }
   }
-  if (!result || !route || result.status === "failed") {
-    const head = result?.full ? `❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.` : `I couldn't book *${place.name}* for ${fmtDate(slot.date)} ${slot.time}.`;
-    const alts = result?.alternatives?.length ? `\n\nThey offered *${result.alternatives.join(", ")}*. Want me to book that, or try another option?` : result?.full ? "\n\nWant me to try another option or time?" : "";
-    return { ok: false, message: `${head}\n\n${tried.map((t) => `• ${t}`).join("\n")}${alts}` };
-  }
+  return { ok: false, message: `❌ I couldn't book *${place.name}* for ${fmtDate(slot.date)} ${slot.time}.\n\n${tried.map((t) => `• ${t}`).join("\n")}\n\nWant to try another option?` };
+}
 
+const CHANNEL_NAME: Record<Route["channel"], string> = { tablecheck: "TableCheck", tabelog: "Tabelog", email: "Email", phone: "The phone call" };
+
+/** Save a successful booking, schedule its reminders, and write the confirmation. */
+export async function recordBooking(place: Place, slot: Slot, channel: Route["channel"], result: BookResult, planId?: number): Promise<BookOutcome> {
   const reservation = createReservation({
-    plan_id: opts.planId ?? null,
+    plan_id: planId ?? null,
     place_id: place.id,
-    channel: route.channel,
-    status: result.status,
+    channel,
+    status: result.status === "requested" ? "requested" : "confirmed",
     date: slot.date,
     time: slot.time,
     party_size: slot.partySize,
@@ -166,11 +187,11 @@ export async function bookPlace(place: Place, slot: Slot, opts: { planId?: numbe
     notes: result.detail?.slice(0, 2000) ?? null,
   });
   const withPolicy = await applyPolicy(reservation.id, result.policyText ?? null);
-  if (opts.planId) updatePlan(opts.planId, { status: result.status === "confirmed" ? "booked" : "booking", chosen_place_id: place.id });
+  if (planId) updatePlan(planId, { status: result.status === "confirmed" ? "booked" : "booking", chosen_place_id: place.id });
 
   const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people`;
-  const how = { tablecheck: "on TableCheck", tabelog: "on Tabelog", email: "by email", phone: "by phone" }[route.channel];
-  const mock = config.dryRun && route.channel === "phone" ? "\n\n_Dry run: the call went to you, not the restaurant._" : "";
+  const how = { tablecheck: "on TableCheck", tabelog: "on Tabelog", email: "by email", phone: "by phone" }[channel];
+  const mock = config.dryRun && channel === "phone" ? "\n\n_Dry run: the call went to you, not the restaurant._" : "";
   const message =
     result.status === "confirmed"
       ? [`✅ *Booked ${place.name}*`, `${when}, ${how}${result.externalRef ? `\nRef ${result.externalRef}` : ""}`, policyLine(withPolicy)].filter(Boolean).join("\n\n") + mock
@@ -185,10 +206,14 @@ export function policyLine(r: Reservation): string {
   return `Free cancellation until ${d}${assumed}${r.cancel_fee ? `; after that: ${r.cancel_fee}` : ""}.`;
 }
 
-export async function cancelReservation(id: number, reason?: string): Promise<string> {
+export async function cancelReservation(id: number, reason?: string, opts: { callApproved?: boolean } = {}): Promise<string> {
   const r = getReservation(id);
   if (!r || (r.status !== "confirmed" && r.status !== "requested")) return `No active reservation #${id}.`;
   const place = getPlace(r.place_id)!;
+  if (r.channel === "phone") {
+    const call: PendingCall = { kind: "cancel", placeId: place.id, slot: { date: r.date, time: r.time, partySize: r.party_size }, reservationId: r.id, reason };
+    return opts.callApproved ? (await runCall(call)).message : askToCall(call, place, []);
+  }
   const adapter = adapterFor(place, r);
   if (!adapter) return `I can't cancel ${place.name} myself.`;
   const res = await adapter.cancel(r, place, config.booking.contact).catch((err: Error) => ({ ok: false, detail: err.message }));
@@ -199,13 +224,17 @@ export async function cancelReservation(id: number, reason?: string): Promise<st
   return `❌ Cancelled ${place.name} (${fmtDate(r.date)} ${r.time}).${res.detail ? ` ${res.detail}` : ""}`;
 }
 
-export async function modifyReservation(id: number, change: Partial<Slot>): Promise<string> {
+export async function modifyReservation(id: number, change: Partial<Slot>, opts: { callApproved?: boolean } = {}): Promise<string> {
   const r = getReservation(id);
   if (!r || (r.status !== "confirmed" && r.status !== "requested")) return `No active reservation #${id}.`;
   const place = getPlace(r.place_id)!;
+  const slot: Slot = { date: change.date ?? r.date, time: change.time ?? r.time, partySize: change.partySize ?? r.party_size };
+  if (r.channel === "phone") {
+    const call: PendingCall = { kind: "modify", placeId: place.id, slot, reservationId: r.id };
+    return opts.callApproved ? (await runCall(call)).message : askToCall(call, place, []);
+  }
   const adapter = adapterFor(place, r);
   if (!adapter) return `I can't change ${place.name} myself.`;
-  const slot: Slot = { date: change.date ?? r.date, time: change.time ?? r.time, partySize: change.partySize ?? r.party_size };
 
   if (place.booking_channel !== "email") {
     const avail = await adapter.checkAvailability(place, slot);
@@ -229,7 +258,7 @@ export async function modifyReservation(id: number, change: Partial<Slot>): Prom
 }
 
 /** Book, and announce the outcome in the group. */
-export async function bookAndAnnounce(place: Place, slot: Slot, opts: { planId?: number; notes?: string } = {}): Promise<BookOutcome> {
+export async function bookAndAnnounce(place: Place, slot: Slot, opts: BookOpts = {}): Promise<BookOutcome> {
   const out = await bookPlace(place, slot, opts);
   await say(out.message);
   return out;

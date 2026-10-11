@@ -1,5 +1,5 @@
 import { DEFAULT_ANCHORS } from "../config";
-import type { Place, Plan, Prefs, Reservation } from "../types";
+import type { Place, Plan, Prefs, Reservation, PlanOption } from "../types";
 import { db, kvGet, kvSet } from "./index";
 
 // ---------- prefs ----------
@@ -33,7 +33,7 @@ export function updatePrefs(patch: Partial<Prefs>): Prefs {
 
 // ---------- places ----------
 
-const JSON_PLACE_FIELDS = ["types", "opening_periods", "profile", "saved_by"] as const;
+const JSON_PLACE_FIELDS = ["types", "opening_periods", "profile", "saved_by", "features"] as const;
 
 function rowToPlace(row: Record<string, unknown>): Place {
   const p = { ...row } as Record<string, unknown>;
@@ -160,6 +160,12 @@ export function activePlanFor(date: string): Plan | undefined {
     .prepare("SELECT * FROM plans WHERE date = ? AND status != 'cancelled' ORDER BY id DESC LIMIT 1")
     .get(date) as Record<string, unknown> | undefined;
   return row ? rowToPlan(row) : undefined;
+}
+
+/** Places already suggested for a date, across the last few proposals for it. */
+export function shownForDate(date: string, lastPlans = 5): Set<number> {
+  const rows = db().prepare("SELECT options FROM plans WHERE date = ? ORDER BY id DESC LIMIT ?").all(date, lastPlans) as { options: string }[];
+  return new Set(rows.flatMap((r) => (JSON.parse(r.options) as PlanOption[]).map((o) => o.placeId)));
 }
 
 export function updatePlan(id: number, patch: Partial<Plan>): Plan {

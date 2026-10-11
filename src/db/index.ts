@@ -115,6 +115,16 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 `;
 
+/** Columns added after the first release (CREATE TABLE IF NOT EXISTS won't add them). */
+const ADDED_COLUMNS: [table: string, column: string, type: string][] = [["places", "features", "TEXT"]];
+
+function migrate(db: Database.Database): void {
+  for (const [table, column, type] of ADDED_COLUMNS) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
 let instance: Database.Database | undefined;
 
 export function openDb(file = path.join(config.dataDir, "planner.db")): Database.Database {
@@ -123,6 +133,7 @@ export function openDb(file = path.join(config.dataDir, "planner.db")): Database
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 

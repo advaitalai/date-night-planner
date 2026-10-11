@@ -45,23 +45,45 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 - R9. **Pick first, then book** (changed 10 Oct 2026, from Advait's beta feedback). Options are chosen for fit: open then, distance, budget, cuisine, rotation. Live availability is not checked up front; the bot books right after the choice and reports quickly if the time is full, with the alternatives.
 - R10. Go beyond the saved lists. Find similar places (by cuisine, vibe and price) and new places near the starting point. Explain the link, e.g. "similar to X on Emily's list".
 - R11. Each option comes with a short pitch saying why: a signature dish, the vibe ("live band"), travel time. Pitches may only use facts from stored reviews or profiles, with nothing invented.
-- R12. Hard filters: open at that time, within the travel limit, bookable by the bot, not visited recently, within budget, matching any requested cuisine.
+- R12. Hard filters: open at that time, within the travel limit, bookable by the bot, not visited recently, within budget, matching any requested cuisine. Also (11 Oct):
+  - **Dinner places only:** no cafés, dessert bars or bakeries (Google's `servesDinner`, place type, cuisine label), unless they ask for dessert.
+  - **Must-haves are hard filters:** live music, terrace, cocktails, wine, vegetarian. A place passes if Google's attribute says yes or its reviews mention it.
+  - **"New options" means new:** places already suggested for that date are left out unless asked for.
+  - **Seats only:** TableCheck places whose menu is all courses are dropped before picking.
+- R12a. **Honesty about misses.** If no option has an asked-for cuisine or vibe, the options message says so. The agent only describes what the recommender returned.
 - R13. If too few places pass the filters, widen automatically (travel +10 then +20 min, budget ×1.5 then any) and say so. For a cuisine request ("anything Indian?") search beyond the saved lists before ever saying there's nothing. Explain what ruled places out only as a last resort.
 
 ### 4.4 Reservations
 - R13a. **Seat-only bookings.** Never book courses or anything needing prepayment or a card. Pick TableCheck's seat-only item (e.g. "Reservation for seats only"), or skip the place. The ¥ amounts shown to users are average spend per person, not prices.
 - R14. **The bot books itself.** Posting a link or phone number for a human to act on doesn't count. It also changes and cancels bookings.
-- R15. Booking order, fastest and most predictable first; on failure move to the next (a definite "that time is full" stops and asks instead):
+- R15. Booking order, fastest and most predictable first; on failure move to the next channel for the **same place** (a definite "that time is full" stops and asks instead). Never move on to a different place without asking:
   1. **Booking sites:** TableCheck (guest booking in a headless browser), then Tabelog (saved login).
   2. **Email:** fixed polite template, Japanese first then English, from Advait's Gmail. Replies are read and classified.
   3. **AI phone call:** Vapi (Japanese speech, Claude for the conversation). Says it's an AI assistant, seats only, never agrees to a course or card, asks the cancellation policy. The transcript is read to get the outcome.
+- R15a. **No call without a human go-ahead** (11 Oct). Every call (book, change, cancel, retry, call back for an offered time) is proposed in the chat first ("Shall I call them…? Reply *call* or *no*"). A message that itself says "call X" counts as the go-ahead. Auto-cancel and the Sunday deadline never phone on their own; they ask.
+- R15b. **After each call, report and propose the next step** (which again needs a yes):
+
+  | Outcome | Message | Proposed next call |
+  |---|---|---|
+  | Booked | ✅ booked, cancellation deadline | none |
+  | Full, they offered a time | ❌ full, they offered 19:00 | call back and book 19:00 |
+  | Full, nothing offered | ❌ fully booked | none; another option or day? |
+  | Course/card required | 🚫 breaks seats-only | none; another option? |
+  | Line busy | 📵 busy | try again in 30 min |
+  | No answer | 📵 nobody picked up (closed now? opens at…) | try at opening +15 min, or in 1 hour |
+  | Voicemail | 📼 no message left | try again in 1 hour |
+  | Closed (holiday etc.) | 🔒 closed | none; another option or day? |
+  | Wrong number | ☎️ number dropped from the place | none; another option? |
+  | They'll call back | 📞 they'll call your phone | none; tell me what they say |
+  | Call didn't connect | ⚠️ plain reason from Vapi/Twilio, e.g. "Twilio balance is $0.12" | call again once fixed |
+  | Unclear | 🤷 summary | try again |
 - R16. Google "Reserve a table" has no consumer API; it hands off to the booking site behind it, so the bot books there.
 - R17. Any place with a phone number is bookable (via an AI call). Walk-in-only places are excluded.
 - R18. Cancellation policy:
   - Read the policy from the booking page or email and work out the last moment to cancel for free (assume 24h if no policy is stated, and say so).
   - Ask "still on?" 48h before that deadline and again at 24h.
   - Cancel automatically only if someone asked to cancel, or if auto-cancel is turned on.
-- R19. Never fail silently. If a booking fails (slot gone, captcha, site changed), say so in the group and try the next option.
+- R19. Never fail silently. If a booking fails (slot gone, captcha, site changed), say so in the group and ask what to try next. (Changed 11 Oct: it used to move on to the next option by itself, and booked a place nobody picked.)
 - R20. `DRY_RUN=1` (the default) stops before the final confirm click and sends emails to Advait instead of the restaurant. Turn it off only after the booking flow has been checked live.
 
 ### 4.5 Chat UX

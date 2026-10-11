@@ -52,6 +52,45 @@ describe("filters", () => {
   it("allows unknown opening hours", () => {
     expect(applyFilters([cand({}, { openAtSlot: null })], EMPTY_CONSTRAINTS, settings).kept).toHaveLength(1);
   });
+
+  it.each([
+    ["a dessert-course counter", cand({ cuisine: "Dessert Course" })],
+    ["a café", cand({ primary_type: "cafe" })],
+    ["a place Google says doesn't serve dinner", cand({ features: { servesDinner: false } })],
+  ])("drops %s for dinner", (_label, c) => {
+    expect(applyFilters([c], EMPTY_CONSTRAINTS, settings).rejected[0].reason).toBe("not_dinner");
+  });
+
+  it("keeps dessert places when dessert is what they asked for", () => {
+    expect(applyFilters([cand({ cuisine: "Dessert Course" })], { ...EMPTY_CONSTRAINTS, cuisines: ["dessert"] }, settings).kept).toHaveLength(1);
+  });
+
+  it("treats must-haves as hard filters (Google attribute or reviews)", () => {
+    const k = { ...EMPTY_CONSTRAINTS, features: ["live_music" as const] };
+    const byAttr = cand({ name: "Jazz", features: { liveMusic: true } });
+    const byReview = cand({ name: "Band", profile: { cuisine: "american", vibeTags: ["live band"], signatureDishes: [], highlights: [], priceBand: "mid", summary: "" } });
+    const unknown = cand({ name: "Quiet" });
+    const no = cand({ name: "No", features: { liveMusic: false } });
+    const r = applyFilters([byAttr, byReview, unknown, no], k, settings);
+    expect(r.kept.map((c) => c.place.name)).toEqual(["Jazz", "Band"]);
+    expect(r.rejected.map((x) => x.reason)).toEqual(["missing_feature", "missing_feature"]);
+  });
+
+  it("leaves out places already suggested for that date", () => {
+    const shown = cand({ name: "Shown" });
+    const r = applyFilters([shown, cand({ name: "New" })], EMPTY_CONSTRAINTS, { ...settings, excludeIds: new Set([shown.place.id]) });
+    expect(r.kept.map((c) => c.place.name)).toEqual(["New"]);
+    expect(r.rejected[0].reason).toBe("shown_before");
+  });
+});
+
+describe("honest reporting", () => {
+  it("lists asked-for cuisines that no option has", async () => {
+    const { unmetParts } = await import("../src/recommender/index");
+    const opt = (p: Parameters<typeof place>[0]) => ({ scored: { ...cand(p), score: 1, reasons: [] }, availability: "unchecked" as const });
+    const k = { ...EMPTY_CONSTRAINTS, cuisines: ["thai", "mexican"] };
+    expect(unmetParts(k, [opt({ cuisine: "thai" }), opt({ cuisine: "thai" })])).toEqual(["mexican"]);
+  });
 });
 
 describe("scoring", () => {

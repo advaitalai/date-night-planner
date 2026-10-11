@@ -12,13 +12,14 @@ Last updated: 11 Oct 2026.
 | 2. Real booking by chatting with Claude | ✅ Done 7 Oct. **h:armonia, Fri 9 Oct 18:00, 2 people, seats only**, booked via TableCheck and kept. The first real booking (MVP success event). |
 | 3. WhatsApp beta (solo, Advait only) | 🔄 In progress. Running on Advait's laptop in a WhatsApp group that has only him in it (`WA_SOLO=1`). First two beta rounds gave feedback (below), and the fixes are pushed. Next round not yet run. |
 | 3b. AI phone calls | ✅ Test call worked 11 Oct (English, Advait played the restaurant and said "full"; the outcome was read correctly). Vapi + Twilio trial (US number) set up on the laptop. |
-| 3c. Full WhatsApp loop with a mock call | 🔄 Next. Live recommendations in WhatsApp; booking forced to an AI call that rings Advait (`BOOKING_ONLY=phone`, `DRY_RUN=1`, `CALL_LANGUAGE=en`). |
+| 3c. Full WhatsApp loop with a mock call | 🔄 First run done 11 Oct (log reviewed, round 3 below). Fixes pushed; Advait reruns, then shares his own notes. Run with `BOOKING_ONLY=phone`, `DRY_RUN=1`, `CALL_LANGUAGE=en`. |
 | 4. Add Emily to the group | ⏳ Only after Advait has vetted the solo flow. Don't bother Emily until it works. |
 | 5. Always-on server (Google Cloud e2-micro) | ⏳ After the beta. |
 
 ## Next steps
 
-1. Phase 3c: Advait runs the WhatsApp solo beta with `BOOKING_ONLY=phone`, `CALL_LANGUAGE=en`, `DRY_RUN=1`. Plan, pick, take the call as the restaurant, then try "book the time they offered" and "cancel it" (both call him again). Remove the mock reservation afterwards, or its reminders will fire.
+1. Phase 3c rerun: `git pull`, top up Twilio, optionally add `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` to `.env`. Check: calls only after "call"/"yes"; outcome questions; "live music" and "new options" honest; no dessert places. Then Advait shares his own notes.
+2. Earlier plan for 3c: Advait runs the WhatsApp solo beta with `BOOKING_ONLY=phone`, `CALL_LANGUAGE=en`, `DRY_RUN=1`. Plan, pick, take the call as the restaurant, then try "book the time they offered" and "cancel it" (both call him again). Remove the mock reservation afterwards, or its reminders will fire.
 2. Same run also checks the WhatsApp solo beta (`git pull`, `npm install`, `npm start`). Check:
    - the options cards' formatting;
    - "anything Indian?" widens instead of giving up;
@@ -28,6 +29,10 @@ Last updated: 11 Oct 2026.
 4. Then add Emily, then deploy to the VM.
 
 ## Advait's preferences (don't make him repeat these)
+
+- **Calls are tightly controlled.** Never phone a restaurant without a human go-ahead in the chat, including retries and call-backs. After each call, report the outcome and propose the next step as a question.
+- **Never book a place nobody picked.** If the chosen place fails, ask.
+- **Be honest about misses.** Never say options match a wish ("live music") unless they do.
 
 - **Design matters** ("a big sucker for good design"): rich WhatsApp formatting, short lines, blank lines between items, cards for options. **No em dashes, ever** (he called them out as an AI tell).
 - **Seats only, never set courses**, never prepayment or a card.
@@ -64,6 +69,8 @@ Last updated: 11 Oct 2026.
   - Restaurants may ignore +1 numbers; a Japanese number is in the backlog.
   - Twilio's "add an emergency address" banner can be ignored: the $75 fee only applies to 911 calls from that number.
   - Use the **private** Vapi key. The phone number **ID** (UUID) is on the number's page in Vapi.
+  - Twilio Japan rates (twilio.com/voice/pricing/jp, Oct 2026): about $0.19/min to mobiles, $0.07/min to landlines, plus Vapi's own per-minute cost. A $2–3 balance lasted about 8 short test calls (to a mobile).
+  - `call.start.error-get-transport` = Vapi couldn't place the call through Twilio (here: credit ran out).
   - TTS read "Advait Alai" as "Advait A Lie". `BOOKING_NAME_SPOKEN` overrides the spoken name.
 
 ## Beta feedback log
@@ -81,6 +88,10 @@ Last updated: 11 Oct 2026.
   - The availability check was failing and slowed things down.
   - **Asked for:** booking order sites > email > phone, and an AI call demo.
   - **Fixed:** cards, pick first then book, widening, the booking order, and the Vapi phone adapter with a test-call script.
+- **11 Oct, round 3 (full WhatsApp loop, mock calls):**
+  - Worked: call loop (full with offer, wrong number, booked, cancel by phone), status lines, skip a week.
+  - Broken: after Warayaki was full it called As and **booked Bruna** without asking; "book La Jolla" also called 2 other places. Claimed "live music picks" and "Mexican and Thai" when neither was true. "New options" repeated the same places. Dessert-course counter offered for dinner. h:armonia offered after they'd been. "Vote in the poll" with polls off. Double messages. Debug-style failure text. Last 4 calls failed: Twilio credit ran out ($2–3 left).
+  - **Fixed:** go-ahead for every call + outcome tree (REQUIREMENTS R15a/b); book only the chosen place; must-have filters using Google's attributes; dinner-only; no repeats; honest notes and facts; `log_visit`; Twilio balance and error check (optional `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`); no poll talk; NO_REPLY after posting tools.
 - **11 Oct, test call:**
   - "Perfect." The caller declined an offered 19:30 to ask for more times, then lost it.
   - **Fixed:** the script now accepts an offered time as a note and says it'll call back; offered times flow back to WhatsApp ("They offered 19:30. Book that?"). Call progress shows in the status line.

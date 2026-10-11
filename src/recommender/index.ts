@@ -1,18 +1,19 @@
 import { checkAvailability } from "../booking/service";
 import type { Slot } from "../booking/types";
 import { config, voters } from "../config";
-import { createPlan, findPlaceByName, getPrefs, getPlace, recentVisits, updatePlan } from "../db/repo";
+import { tcShopInfo } from "../booking/tablecheck";
+import { createPlan, findPlaceByName, getPrefs, getPlace, recentVisits, shownForDate, updatePlan } from "../db/repo";
 import { clearStatus, poll, say, status } from "../notify";
 import { geocode } from "../places/google";
 import type { Anchor, Place, Plan, PlanOption } from "../types";
 import { estimateTravelMin } from "../util/geo";
 import { fmtDate, nextWeekday, now } from "../util/time";
-import { discover, enrich, savedPool, toCandidate } from "./candidates";
-import { applyFilters, type Candidate, type FilterResult, type RejectReason } from "./filters";
+import { discover, enrich, ensureFeatures, savedPool, toCandidate } from "./candidates";
+import { applyFilters, FEATURE_INFO, hasFeature, type Candidate, type FilterResult, type RejectReason } from "./filters";
 import { EMPTY_CONSTRAINTS, parseRequest, type Constraints } from "./parseRequest";
 import { writePitches } from "./pitch";
 import { pickDiverse, scoreCandidate, type Scored } from "./score";
-import { cuisineOf } from "./similarity";
+import { cuisineMatch, cuisineOf } from "./similarity";
 
 export interface RecommendOption {
   scored: Scored;
@@ -33,6 +34,8 @@ export interface RecommendResult {
   relaxed: string[];
   /** Well-rated saved places skipped only because the bot can't book them itself. */
   skippedFavourites: Place[];
+  /** Parts of the request no option meets, e.g. "Mexican". Said out loud, never glossed over. */
+  unmet: string[];
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
@@ -70,7 +73,9 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   };
   const anchor = await resolveAnchor(k);
   const maxTravel = k.maxTravelMin ?? prefs.maxTravelMin;
-  const settings = { maxTravelMin: maxTravel, revisitCooldownWeeks: prefs.revisitCooldownWeeks, budgetPerPersonMaxJpy: prefs.budgetPerPersonMaxJpy };
+  // Asking again for the same date means "show me something else", unless they say otherwise.
+  const excludeIds = k.keepPrevious ? new Set<number>() : shownForDate(slot.date);
+  const settings = { maxTravelMin: maxTravel, revisitCooldownWeeks: prefs.revisitCooldownWeeks, budgetPerPersonMaxJpy: prefs.budgetPerPersonMaxJpy, excludeIds };
 
   // Widening rounds: usual limits first, then looser ones (only limits the request didn't set).
   const rounds = [settings];
@@ -90,7 +95,12 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   if (!k.onlySaved) pool = [...pool, ...(await discover(k, anchor, slot, Math.min(6000, 1500 + widest * 120)))];
   const unique = new Map(pool.map((p) => [p.id, p]));
   const near = [...unique.values()].filter((p) => p.lat == null || estimateTravelMin(anchor, { lat: p.lat, lng: p.lng! }) <= widest + 10);
-  const enriched = await mapLimit(near, 6, (p) => enrich(p, { lite: true }));
+  let enriched = await mapLimit(near, 6, (p) => enrich(p, { lite: true }));
+  if (k.features.length) {
+    // Must-haves are hard filters, so look up Google's attributes for nearby places that don't have them yet.
+    await status(`Checking which places have ${k.features.map((f) => FEATURE_INFO[f].label).join(" and ")}…`);
+    enriched = await mapLimit(enriched, 6, (p) => ensureFeatures(p));
+  }
 
   let similarTo: Place | null = null;
   if (k.similarTo) {
@@ -128,21 +138,56 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   const recentCuisines = recentVisits(prefs.cuisineCooldownDates)
     .map((v) => v.cuisine ?? cuisineOf(getPlace(v.place_id)!))
     .filter((c): c is string => !!c);
-  const scored = kept
+  let scored = kept
     .map((c) => scoreCandidate(c, { constraints: k, recentCuisines, cuisineCooldownDates: prefs.cuisineCooldownDates, similarTo }))
     .sort((a, b) => b.score - a.score);
+
+  // Seats only: drop TableCheck places near the top whose menu is all courses.
+  const courseOnly = new Set<number>();
+  for (const s of scored.slice(0, n * 4)) {
+    if (!s.place.tablecheck_slug) continue;
+    const info = await tcShopInfo(s.place.tablecheck_slug).catch(() => null);
+    if (info?.seatOnly === false) courseOnly.add(s.place.id);
+  }
+  if (courseOnly.size) {
+    scored = scored.filter((s) => !courseOnly.has(s.place.id));
+    rejectedCounts.courses_only = courseOnly.size;
+  }
   const picks = pickDiverse(scored, n);
 
   // 4. Read reviews only for the picks (profiles feed the pitch). No availability check here:
   //    you choose the place first, then the bot books it.
   await status("Reading reviews for the best matches…");
   const options = await mapLimit(picks, 3, async (s) => ({ scored: { ...s, place: await enrich(s.place) }, availability: "unchecked" as const }));
-  return { slot, anchor, constraints: k, options, rejectedCounts, rejectedExamples, notBookableChannels, relaxed, skippedFavourites: [] };
+  return { slot, anchor, constraints: k, options, rejectedCounts, rejectedExamples, notBookableChannels, relaxed, skippedFavourites: [], unmet: unmetParts(k, options) };
+}
+
+/** Which asked-for cuisines and vibes none of the options has. */
+export function unmetParts(k: Constraints, options: RecommendOption[]): string[] {
+  if (!options.length) return [];
+  const places = options.map((o) => o.scored.place);
+  const unmet: string[] = [];
+  for (const c of k.cuisines) if (!places.some((p) => cuisineMatch(cuisineOf(p), c) > 0)) unmet.push(c);
+  for (const v of k.vibe) {
+    const re = new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    if (!places.some((p) => re.test([...(p.profile?.vibeTags ?? []), ...(p.profile?.highlights ?? []), p.profile?.summary ?? ""].join(" ")))) unmet.push(v);
+  }
+  return unmet;
+}
+
+/** One line per option for the agent: what it is and which parts of the request it meets. */
+export function optionFacts(k: Constraints, options: RecommendOption[]): string[] {
+  return options.map((o, i) => {
+    const p = o.scored.place;
+    const has = k.features.filter((f) => hasFeature(p, f)).map((f) => FEATURE_INFO[f].label);
+    return `${i + 1}. ${p.name} (${cuisineOf(p) ?? "cuisine unknown"}, ${o.scored.travelMin} min)${has.length ? `, has ${has.join(", ")}` : ""}`;
+  });
 }
 
 /** Run the recommender, post the options + poll, and record the plan. */
-export async function proposePlan(text: string, opts: { date?: string } = {}): Promise<{ plan?: Plan; message: string }> {
+export async function proposePlan(text: string, opts: { date?: string } = {}): Promise<{ plan?: Plan; message: string; facts: string }> {
   const r = await recommend(text, opts);
+  const asked = [...r.constraints.cuisines, ...r.constraints.features.map((f) => FEATURE_INFO[f].label), ...r.constraints.vibe];
   if (r.options.length === 0) {
     const message = [
       `😕 *Nothing fits ${fmtDate(r.slot.date)}, ${r.slot.time} yet*`,
@@ -151,7 +196,8 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
       "Want me to try another time or day, a different area, or a specific cuisine?",
     ].join("\n\n");
     await say(message);
-    return { message };
+    await clearStatus();
+    return { message, facts: `No options posted: nothing fit${asked.length ? ` (asked for: ${asked.join(", ")})` : ""}. The chat was told why.` };
   }
 
   await status("Writing up the options…");
@@ -174,6 +220,8 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
     header: `${fmtDate(r.slot.date)} · ${r.slot.time} · ${r.slot.partySize} people`,
     options: options.map((o, i) => ({ ...o, place: getPlace(o.placeId)!, travelMin: r.options[i].scored.travelMin, anchor: r.anchor.label })),
     notes: [
+      r.unmet.length ? `I couldn't find anything ${r.unmet.join(" or ")} that fits, so these are the closest matches.` : "",
+      r.options.length < 3 ? `Only ${r.options.length} ${r.options.length === 1 ? "place fits" : "places fit"} everything you asked for.` : "",
       r.relaxed.length ? `Few places fit your usual limits, so I also looked ${r.relaxed.join(" and ")}.` : "",
     ],
     solo: voters().length === 1,
@@ -183,7 +231,15 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
   let pollId: string | undefined;
   if (config.wa.polls) pollId = await poll(`Date night ${fmtDate(r.slot.date)} ${r.slot.time}`, options.map((o, i) => `${i + 1}. ${o.name}`.slice(0, 100)));
   const saved = updatePlan(plan.id, { poll_msg_id: pollId ?? null });
-  return { plan: saved, message };
+  const facts = [
+    `Posted ${options.length} options for ${r.slot.date} ${r.slot.time}${asked.length ? ` (asked for: ${asked.join(", ")})` : ""}:`,
+    ...optionFacts(r.constraints, r.options),
+    r.unmet.length ? `NOT found: ${r.unmet.join(", ")} (the message says so).` : "",
+    r.rejectedCounts.shown_before ? `Left out ${r.rejectedCounts.shown_before} places suggested earlier.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return { plan: saved, message, facts };
 }
 
 const NUM = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
@@ -238,6 +294,9 @@ const REASON_LABEL: Record<string, string> = {
   fully_booked: "fully booked",
   unsupported_flow: "use a TableCheck booking flow I can't complete yet",
   courses_only: "only take course bookings or need a card",
+  shown_before: "already suggested",
+  not_dinner: "not dinner places (cafés, desserts)",
+  missing_feature: "don't have what you asked for",
 };
 
 const CHANNEL_LABEL: Record<string, string> = {

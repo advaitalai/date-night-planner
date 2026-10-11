@@ -6,6 +6,8 @@ import { gmailWatch } from "./jobs/gmailWatch";
 import { startScheduler, stopScheduler } from "./jobs/scheduler";
 import { takeoutWatch } from "./jobs/takeoutWatch";
 import { ensureWeeklyJobs, registerWeeklyJobs } from "./jobs/weekly";
+import { registerCallJobs } from "./booking/calls";
+import { MIN_TWILIO_BALANCE, twilioBalance } from "./booking/phone";
 import { geocode } from "./places/google";
 import { startWhatsApp } from "./wa/whatsapp";
 import { startWebServer } from "./web/server";
@@ -32,11 +34,14 @@ async function geocodeAnchors(): Promise<void> {
 async function main(): Promise<void> {
   console.log(`date-night-planner starting (DRY_RUN=${config.dryRun ? "on" : "off"}, model ${config.anthropicModel})`);
   registerWeeklyJobs();
+  registerCallJobs();
   ensureWeeklyJobs();
   startScheduler();
   every(5 * 60_000, "gmail watch", gmailWatch);
   every(30 * 60_000, "takeout watch", takeoutWatch);
   await geocodeAnchors();
+  const balance = await twilioBalance();
+  if (balance != null) console.log(`Twilio balance: $${balance.toFixed(2)}${balance < MIN_TWILIO_BALANCE ? " ⚠️ too low for calls, top up at console.twilio.com" : ""}`);
   await startWebServer();
   await startWhatsApp();
 }

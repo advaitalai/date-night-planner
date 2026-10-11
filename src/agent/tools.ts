@@ -3,8 +3,9 @@ import { z } from "zod";
 import { bookAndAnnounce, cancelReservation, checkAvailability, modifyReservation, policyLine } from "../booking/service";
 import { config, PEOPLE, voters } from "../config";
 import { db, kvSet } from "../db";
-import { findPlaceByName, getPlace, getPlan, getPrefs, upcomingReservations, updatePrefs, upsertPlace } from "../db/repo";
-import { status } from "../notify";
+import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, upcomingReservations, updatePrefs, upsertPlace } from "../db/repo";
+import { say, status } from "../notify";
+import { callTime, clearPendingCall, pendingCall, runCall, scheduleCall } from "../booking/calls";
 import { ensureWeeklyJobs, skipDate } from "../jobs/weekly";
 import { cidFromMapsUri, placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
 import { cidFromSavedUrl } from "../places/takeout";
@@ -50,18 +51,74 @@ const slotFields = {
   party_size: z.number().int().min(1).max(12).optional(),
 };
 
+/** A phone call needs a human yes. The model may only pass true when the message itself asks for a call. */
+const CALL_GO_AHEAD = z
+  .boolean()
+  .optional()
+  .describe("True ONLY if the latest message explicitly tells you to phone/call (e.g. 'call Time Out to book'). Otherwise leave it out: if a call is needed, the bot asks first.");
+
+function consensusReached(plan: Plan): boolean {
+  return voters().every((p) => plan.votes[p]?.length === 1 && plan.votes[p][0] === plan.votes[voters()[0]]?.[0]);
+}
+
 const rawTools = [
+  betaZodTool({
+    name: "place_call",
+    description:
+      "Place the phone call the bot is waiting on (see 'Pending call' in <state>), after someone in the chat says yes to it: 'yes', 'call', 'go ahead', 'call now', 'call at 17:00', 'try again in 30 min', 'book 19:00 instead'. Never use it without that go-ahead in the latest message.",
+    inputSchema: z.object({
+      at: z.string().optional().describe("HH:mm (JST) if they said to call at a time"),
+      in_minutes: z.number().int().min(1).optional().describe("If they said to call in N minutes; use the suggested delay when they just say yes to it"),
+      time: z.string().optional().describe("HH:mm to book instead of the original time, e.g. a time the restaurant offered"),
+    }),
+    run: async ({ at, in_minutes, time }) => {
+      const call = pendingCall();
+      if (!call) return "There's no call waiting for a go-ahead. If they asked to call a place, use book_place with call_go_ahead.";
+      const next = { ...call, slot: time ? { ...call.slot, time } : call.slot, alternatives: undefined, suggestDelayMin: undefined };
+      const when = callTime(at, in_minutes ?? (at ? undefined : call.suggestDelayMin));
+      if (when) {
+        await say(scheduleCall(next, when));
+        return "Scheduled; the chat was told. Reply NO_REPLY.";
+      }
+      const out = await runCall(next);
+      await say(out.message);
+      return "Called; the outcome was posted to the chat. Reply NO_REPLY.";
+    },
+  }),
+
+  betaZodTool({
+    name: "decline_call",
+    description: "They said no to the call the bot proposed (or want something else instead). Drops it.",
+    inputSchema: z.object({}),
+    run: async () => {
+      clearPendingCall();
+      return "Dropped the pending call. Acknowledge briefly and ask what they'd like instead, if unclear.";
+    },
+  }),
+
+  betaZodTool({
+    name: "log_visit",
+    description: "Record that they already went to a place (e.g. 'we went to h:armonia last week'), so it isn't suggested again soon.",
+    inputSchema: z.object({ place_name: z.string(), date: z.string().optional().describe("YYYY-MM-DD if known, else today") }),
+    run: async ({ place_name, date }) => {
+      const place = await placeByName(place_name);
+      if (!place) return `Couldn't find "${place_name}".`;
+      addVisit(place.id, date ?? now().toISODate()!, cuisineOf(place));
+      return `Logged a visit to ${place.name}. It won't be suggested again for a while.`;
+    },
+  }),
+
   betaZodTool({
     name: "recommend_options",
     description:
-      "Find, availability-check and post 3 date-night options with pitches plus a WhatsApp poll to the group. Use for any 'plan / suggest / find us somewhere' request. Pass the person's wording as `request` (cuisine, area, 'near work', vibe, 'similar to X').",
+      "Find and post up to 3 date-night options with pitches to the chat. Use for any 'plan / suggest / find us somewhere' request, including 'new options' or added wishes. Pass the person's full wish as `request`, combining earlier wishes that still apply (cuisine, area, 'near work', must-haves like live music or a terrace, 'similar to X', 'not X'). Places already suggested for that date are left out unless they ask for them again.",
     inputSchema: z.object({
       request: z.string().describe("The request in their words; empty string for a default proposal"),
       date: z.string().optional().describe("YYYY-MM-DD if known; defaults to the next usual date night"),
     }),
     run: async ({ request, date }) => {
-      const { plan, message } = await proposePlan(request, { date });
-      return plan ? `Posted ${plan.options.length} options and a poll for ${plan.date} ${plan.time}. Don't repeat them.` : `Posted to group: ${message}`;
+      const { facts } = await proposePlan(request, { date });
+      return `${facts}\nAlready posted to the chat. Reply exactly NO_REPLY. If you must add something, only state what these facts say; never claim a wish was met unless it's listed.`;
     },
   }),
 
@@ -95,7 +152,7 @@ const rawTools = [
   betaZodTool({
     name: "pick_option",
     description:
-      "Record that a person picked option N (1-based) of the open proposal, e.g. they replied '2', 'the Italian one' or 'armonia please'. Books automatically once everyone who needs to agree has picked the same option. Use the sender of the message as `person`.",
+      "Record that a person picked option N (1-based) of the open proposal, e.g. they replied '2', 'the Italian one' or 'armonia please'. Once everyone who needs to agree has picked it, books that place (and only that place) by booking site or email; if it needs a phone call it asks for a go-ahead first. Use the sender of the message as `person`.",
     inputSchema: z.object({ option_number: z.number().int().min(1), person: z.enum(PEOPLE) }),
     run: async ({ option_number, person }) => {
       const plan = latestProposedPlan();
@@ -103,7 +160,7 @@ const rawTools = [
       if (option_number > plan.options.length) return `The proposal only has ${plan.options.length} options.`;
       await onVotes(plan.id, { ...plan.votes, [person]: [option_number - 1] });
       const after = getPlan(plan.id)!;
-      if (after.status !== "proposed") return "Everyone agreed; booking was attempted and the outcome posted to the chat.";
+      if (after.status !== "proposed" || consensusReached(after)) return "Everyone agreed; the booking outcome (or a question about calling) was posted to the chat. Reply NO_REPLY.";
       const waiting = voters().filter((p) => !after.votes[p]?.length);
       return waiting.length ? `Noted ${person}'s pick (${plan.options[option_number - 1].name}). Waiting for ${waiting.join(" and ")}.` : "Picks recorded; they differ, the chat was told.";
     },
@@ -111,29 +168,29 @@ const rawTools = [
 
   betaZodTool({
     name: "book_plan_option",
-    description: "Book option N (1-based) from the most recent proposed plan, e.g. when someone says 'book option 2' or 'let's do the second one'.",
-    inputSchema: z.object({ option_number: z.number().int().min(1) }),
-    run: async ({ option_number }) => {
+    description: "Book option N (1-based) from the most recent proposed plan, e.g. when someone says 'book option 2' or 'let's do the second one'. Books only that place.",
+    inputSchema: z.object({ option_number: z.number().int().min(1), call_go_ahead: CALL_GO_AHEAD }),
+    run: async ({ option_number, call_go_ahead }) => {
       const plan = latestProposedPlan();
       if (!plan) return "There is no open proposal to book from.";
       if (option_number > plan.options.length) return `The plan only has ${plan.options.length} options.`;
-      await bookOption(plan.id, option_number - 1);
-      return "Booking attempted; the outcome was posted to the group.";
+      await bookOption(plan.id, option_number - 1, { callApproved: call_go_ahead });
+      return "The outcome (or a question about calling) was posted to the chat. Reply NO_REPLY.";
     },
   }),
 
   betaZodTool({
     name: "book_place",
-    description: "Book a specific named restaurant for a date/time (only when someone explicitly asks to book it). Checks availability first.",
-    inputSchema: z.object({ place_name: z.string(), ...slotFields, notes: z.string().optional() }),
-    run: async ({ place_name, date, time, party_size, notes }) => {
+    description: "Book a specific named restaurant for a date/time (only when someone explicitly asks to book it). Checks availability first. Books only that place.",
+    inputSchema: z.object({ place_name: z.string(), ...slotFields, notes: z.string().optional(), call_go_ahead: CALL_GO_AHEAD }),
+    run: async ({ place_name, date, time, party_size, notes, call_go_ahead }) => {
       const place = await placeByName(place_name);
       if (!place) return `Couldn't find "${place_name}".`;
       const slot = { date, time, partySize: party_size ?? getPrefs().partySize };
       const avail = await checkAvailability(place, slot);
       if (avail.status === "unavailable") return `${place.name} is full at ${time} on ${date}. Free nearby: ${avail.alternatives?.join(", ") || "none"}.`;
-      const out = await bookAndAnnounce(place, slot, { notes });
-      return out.ok ? "Booked/requested; outcome posted to the group." : out.message;
+      await bookAndAnnounce(place, slot, { notes, callApproved: call_go_ahead });
+      return "The outcome (or a question about calling) was posted to the chat. Reply NO_REPLY.";
     },
   }),
 
@@ -209,15 +266,16 @@ const rawTools = [
       date: z.string().optional(),
       time: z.string().optional(),
       party_size: z.number().int().optional(),
+      call_go_ahead: CALL_GO_AHEAD,
     }),
-    run: async ({ reservation_id, date, time, party_size }) => modifyReservation(reservation_id, { date, time, partySize: party_size }),
+    run: async ({ reservation_id, date, time, party_size, call_go_ahead }) => modifyReservation(reservation_id, { date, time, partySize: party_size }, { callApproved: call_go_ahead }),
   }),
 
   betaZodTool({
     name: "cancel_reservation",
     description: "Cancel a reservation. Only when someone in the group clearly asks to cancel it.",
-    inputSchema: z.object({ reservation_id: z.number().int(), reason: z.string().optional() }),
-    run: async ({ reservation_id, reason }) => cancelReservation(reservation_id, reason),
+    inputSchema: z.object({ reservation_id: z.number().int(), reason: z.string().optional(), call_go_ahead: CALL_GO_AHEAD }),
+    run: async ({ reservation_id, reason, call_go_ahead }) => cancelReservation(reservation_id, reason, { callApproved: call_go_ahead }),
   }),
 
   betaZodTool({
@@ -315,6 +373,8 @@ const STATUS: Record<string, string> = {
   cancel_reservation: "Cancelling the booking…",
   update_preferences: "Updating your preferences…",
   add_saved_place: "Adding the place…",
+  place_call: "Getting ready to call…",
+  log_visit: "Noting the visit…",
 };
 
 export const tools = rawTools.map((t) => ({

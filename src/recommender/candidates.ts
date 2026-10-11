@@ -5,12 +5,12 @@ import type { Slot } from "../booking/types";
 import { config } from "../config";
 import { kvGet, kvSet } from "../db";
 import { listPlaces, recentVisits, updatePlace, upsertPlace } from "../db/repo";
-import { cidFromMapsUri, textSearch, toPlaceFields, travelMinutes } from "../places/google";
+import { cidFromMapsUri, placeFeatures, textSearch, toPlaceFields, travelMinutes } from "../places/google";
 import { buildProfile } from "../places/profile";
 import type { Place } from "../types";
 import type { LatLng } from "../util/geo";
 import { isOpenFor, jst, ZONE } from "../util/time";
-import type { Candidate } from "./filters";
+import { FEATURE_INFO, type Candidate } from "./filters";
 import type { Constraints } from "./parseRequest";
 
 const REDETECT_DAYS = 30;
@@ -66,9 +66,12 @@ export async function discover(k: Constraints, anchor: LatLng, slot: Slot, radiu
 
   if (config.google.mapsKey) {
     try {
+      // Must-haves ("live music") get their own searches, so places that have them are in the pool.
+      const featureWords = k.features.map((f) => FEATURE_INFO[f].label);
       const queries = k.cuisines.length
-        ? k.cuisines.map((c) => [c, ...k.vibe, "restaurant"].join(" "))
+        ? k.cuisines.map((c) => [c, ...featureWords, ...k.vibe, "restaurant"].join(" "))
         : [[...k.vibe, "restaurant"].join(" "), "date night restaurant"];
+      for (const f of k.features) queries.push(FEATURE_INFO[f].query);
       for (const q of queries) {
         for (const g of await textSearch(q, anchor, radiusM, limit)) {
           found.push(upsertPlace({ ...toPlaceFields(g), name: g.displayName?.text ?? "?", source: "discovered" }));
@@ -79,6 +82,20 @@ export async function discover(k: Constraints, anchor: LatLng, slot: Slot, radiu
     }
   }
   return found;
+}
+
+/**
+ * Google's yes/no attributes for places looked up before we collected them.
+ * Only fetched when a request needs them (e.g. "live music"), then cached on the place.
+ */
+export async function ensureFeatures(place: Place): Promise<Place> {
+  if (place.features != null || !place.google_place_id || !config.google.mapsKey) return place;
+  try {
+    return updatePlace(place.id, { features: await placeFeatures(place.google_place_id) });
+  } catch (err) {
+    console.warn(`features ${place.name}:`, (err as Error).message);
+    return place;
+  }
 }
 
 /** Map an average spend per person to the same 1–4 scale the filters use (see PRICE_LEVEL_JPY). */
