@@ -33,7 +33,23 @@ import { onVotes } from "../plans/decide";
  * called "planner", replied to, or (bot-number mode) @-mentioned.
  */
 
-const logger = pino({ level: process.env.WA_LOG_LEVEL ?? "warn" });
+const logger = pino({ level: process.env.WA_LOG_LEVEL ?? "fatal" });
+
+/**
+ * The Signal library prints a stack trace for every message it can't decrypt,
+ * mostly backlog from other chats after a restart. It isn't actionable, so
+ * hide it unless WA_LOG_LEVEL is set for debugging.
+ */
+const SIGNAL_NOISE = /^(Session error|Failed to decrypt message with any known session|Closing (open )?session|Removing old closed session|Decrypted message with closed session|Session already)/;
+if (!process.env.WA_LOG_LEVEL) {
+  for (const level of ["log", "info", "warn", "error"] as const) {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      if (typeof args[0] === "string" && SIGNAL_NOISE.test(args[0])) return;
+      original(...args);
+    };
+  }
+}
 
 interface StoredPoll {
   secret: string; // base64 messageSecret
@@ -205,9 +221,14 @@ export async function startWhatsApp(): Promise<void> {
     if (connection === "open") {
       console.log("WhatsApp connected as", sock?.user?.id);
       const groups = await sock!.groupFetchAllParticipating();
-      for (const g of Object.values(groups)) console.log(`  group: ${g.subject} → ${g.id}`);
-      if (!config.wa.groupJid) console.log('Set WA_GROUP_JID to one of the ids above (or "self" for your own 1-1 chat) and restart.');
-      if (config.wa.solo && !isSelfChat()) console.log("Solo test mode: every message in the chat is for the bot; only your vote counts.");
+      if (!config.wa.groupJid) {
+        for (const g of Object.values(groups)) console.log(`  group: ${g.subject} → ${g.id}`);
+        console.log('Set WA_GROUP_JID to one of the ids above (or "self" for your own 1-1 chat) and restart.');
+      } else if (!isSelfChat()) {
+        const g = groups[config.wa.groupJid];
+        console.log(g ? `Listening in "${g.subject}".` : `⚠️ Not a member of WA_GROUP_JID ${config.wa.groupJid}. Unset it to list your groups.`);
+      }
+      if (config.wa.solo && !isSelfChat()) console.log("Solo test mode: every message in the chat is for the bot; only your vote counts.\nReady. Say hello in WhatsApp.");
       if (isSelfChat()) console.log(`Self-chat mode: talk to the bot in WhatsApp's "Message yourself" chat (${chatJid()}).`);
     }
     if (connection === "close") {
