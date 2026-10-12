@@ -61,6 +61,8 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
   2. **Email:** fixed polite template, Japanese first then English, from Advait's Gmail. Replies are read and classified.
   3. **AI phone call:** Vapi (Japanese speech, Claude for the conversation). Says it's an AI assistant, seats only, never agrees to a course or card, asks the cancellation policy. The transcript is read to get the outcome.
 - R15a. **No call without a human go-ahead** (11 Oct). Every call (book, change, cancel, retry, call back for an offered time) is proposed in the chat first ("Shall I call them…? Reply *call* or *no*"). A message that itself says "call X" counts as the go-ahead. Auto-cancel and the Sunday deadline never phone on their own; they ask.
+- R15c. **Time window** (12 Oct). Each booking has the time to ask for and the latest time the bot may take without asking: by default 30 min later (prefs `flexLaterMin`), or the range they gave in chat for that date night ("6 to 7:30 all good"; "exactly 7" = no window). Applies to sites (book the free time inside the window) and calls (the caller may accept it on the call). Earlier times, other dates or conditions always come back to the chat.
+- R15d. **Calls** (12 Oct): book under **Emily (エミリー)** (easy to write in katakana; sites keep the full name); open with "seat reservation" only, mention courses only if they do; know today's date and restate the booking date if they mix it up; don't ask the cancellation policy (looked up online first, else 24h assumed).
 - R15b. **After each call, report and propose the next step** (which again needs a yes):
 
   | Outcome | Message | Proposed next call |

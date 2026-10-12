@@ -7,7 +7,11 @@ export const FEATURES = ["live_music", "outdoor_seating", "cocktails", "wine", "
 
 export const ConstraintsSchema = z.object({
   date: z.string().nullable().describe("YYYY-MM-DD if the request names a day, else null"),
-  time: z.string().nullable().describe("HH:mm 24h if the request names a time, else null"),
+  time: z.string().nullable().describe("HH:mm 24h if the request names a time, else null. For a range ('6 to 7:30 all good') the start."),
+  latestTime: z
+    .string()
+    .nullable()
+    .describe("HH:mm end of a range they're happy with ('6 to 7:30 all good' → 19:30); same as time for 'exactly 7, nothing else'; else null"),
   partySize: z.number().nullable(),
   cuisines: z.array(z.string()).describe("Cuisines wanted, lowercase, e.g. ['italian']; empty if open"),
   avoidCuisines: z.array(z.string()),
@@ -32,6 +36,7 @@ export type Constraints = z.infer<typeof ConstraintsSchema>;
 export const EMPTY_CONSTRAINTS: Constraints = {
   date: null,
   time: null,
+  latestTime: null,
   partySize: null,
   cuisines: [],
   avoidCuisines: [],

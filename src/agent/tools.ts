@@ -15,6 +15,8 @@ import { onboardingLink } from "../web/server";
 import { enrich, savedPool, toCandidate } from "../recommender/candidates";
 import { cuisineOf, similarity } from "../recommender/similarity";
 import type { Place, Plan } from "../types";
+import type { Slot } from "../booking/types";
+import { pickInWindow } from "../booking/window";
 import { fmtDate, now } from "../util/time";
 
 function latestProposedPlan(): Plan | undefined {
@@ -182,13 +184,21 @@ const rawTools = [
   betaZodTool({
     name: "book_place",
     description: "Book a specific named restaurant for a date/time (only when someone explicitly asks to book it). Checks availability first. Books only that place.",
-    inputSchema: z.object({ place_name: z.string(), ...slotFields, notes: z.string().optional(), call_go_ahead: CALL_GO_AHEAD }),
-    run: async ({ place_name, date, time, party_size, notes, call_go_ahead }) => {
+    inputSchema: z.object({
+      place_name: z.string(),
+      ...slotFields,
+      latest_time: z.string().optional().describe("HH:mm end of the range they're happy with ('7 to 8 is fine' → 20:00); leave out to use the default window"),
+      notes: z.string().optional(),
+      call_go_ahead: CALL_GO_AHEAD,
+    }),
+    run: async ({ place_name, date, time, party_size, latest_time, notes, call_go_ahead }) => {
       const place = await placeByName(place_name);
       if (!place) return `Couldn't find "${place_name}".`;
-      const slot = { date, time, partySize: party_size ?? getPrefs().partySize };
+      let slot: Slot = { date, time, partySize: party_size ?? getPrefs().partySize, ...(latest_time ? { latest: latest_time } : {}) };
       const avail = await checkAvailability(place, slot);
-      if (avail.status === "unavailable") return `${place.name} is full at ${time} on ${date}. Free nearby: ${avail.alternatives?.join(", ") || "none"}.`;
+      const inWin = avail.status === "unavailable" ? pickInWindow(avail.alternatives, slot) : null;
+      if (inWin) slot = { ...slot, time: inWin, asked: time };
+      else if (avail.status === "unavailable") return `${place.name} is full at ${time} on ${date}. Free nearby: ${avail.alternatives?.join(", ") || "none"}.`;
       await bookAndAnnounce(place, slot, { notes, callApproved: call_go_ahead });
       return "The outcome (or a question about calling) was posted to the chat. Reply NO_REPLY.";
     },
@@ -303,6 +313,7 @@ const rawTools = [
       budgetPerPersonMaxJpy: z.number().int().nullable().optional(),
       dietary: z.string().optional(),
       autoCancel: z.boolean().optional(),
+      flexLaterMin: z.number().int().min(0).max(120).optional().describe("Minutes after the asked time the bot may accept without asking (default 30)"),
       cuisineCooldownDates: z.number().int().optional(),
       homeAddress: z.string().optional(),
       officeAddress: z.string().optional(),

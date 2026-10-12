@@ -116,7 +116,10 @@ CREATE TABLE IF NOT EXISTS messages (
 `;
 
 /** Columns added after the first release (CREATE TABLE IF NOT EXISTS won't add them). */
-const ADDED_COLUMNS: [table: string, column: string, type: string][] = [["places", "features", "TEXT"]];
+const ADDED_COLUMNS: [table: string, column: string, type: string][] = [
+  ["places", "features", "TEXT"],
+  ["plans", "time_latest", "TEXT"],
+];
 
 function migrate(db: Database.Database): void {
   for (const [table, column, type] of ADDED_COLUMNS) {

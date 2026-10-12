@@ -19,6 +19,7 @@ export const DEFAULT_PREFS: Prefs = {
   dietary: "",
   autoCancel: false,
   skipWeeks: [],
+  flexLaterMin: 30,
 };
 
 export function getPrefs(): Prefs {
@@ -137,10 +138,10 @@ function rowToPlan(row: Record<string, unknown>): Plan {
   return { ...row, options: JSON.parse(row.options as string), votes: JSON.parse(row.votes as string) } as Plan;
 }
 
-export function createPlan(p: Pick<Plan, "date" | "time" | "party_size" | "status" | "request" | "options">): Plan {
+export function createPlan(p: Pick<Plan, "date" | "time" | "party_size" | "status" | "request" | "options"> & { time_latest?: string | null }): Plan {
   const info = db()
-    .prepare("INSERT INTO plans (date, time, party_size, status, request, options) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(p.date, p.time, p.party_size, p.status, p.request, JSON.stringify(p.options));
+    .prepare("INSERT INTO plans (date, time, party_size, status, request, options, time_latest) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(p.date, p.time, p.party_size, p.status, p.request, JSON.stringify(p.options), p.time_latest ?? null);
   return getPlan(Number(info.lastInsertRowid))!;
 }
 

@@ -11,14 +11,14 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
    - stop places rated 👎 from being suggested again;
    - feed the cuisine rotation.
 
-## Dialer QA (Advait, 12 Oct): triaged
+## Dialer QA (Advait, 12 Oct): triaged (D1–D4 done 12 Oct)
 
 | # | Item | Priority | Size | Plan |
 |---|---|---|---|---|
-| D1 | Name on the call is hard to write down ("Advait Alai") | P1 | S | Book under a short name staff can write in katakana: **Emily (エミリー)**. New `CALL_BOOKING_NAME`/`_KANA`; sites keep the full name. |
-| D2 | Shorter opening: "seat reservation" only | P1 | S | Say 席のみ / "just seats". Mention "no set course" only if they bring up courses. |
-| D3 | Don't ask the cancellation policy on the call | P1 | S–M | Look it up first (TableCheck/Tabelog page, website) with Claude. If not found, don't ask; assume 24h and say so (already the fallback). Saves ~15–20 s a call. |
-| D4 | Fix mix-ups on the call (they offered 2 Oct, a past date) | P1 | S–M | Give the caller today's date, the target date with weekday, and an "authority envelope": same date only, never past dates; restate the date if they get it wrong; anything outside → note it and say we'll call back. Plus an optional flexibility window set in chat ("18:30, fine 18:00–19:30") that the caller may accept without a call back. |
+| D1 | ✅ Name on the call is hard to write down ("Advait Alai") | P1 | S | Book under a short name staff can write in katakana: **Emily (エミリー)**. New `CALL_BOOKING_NAME`/`_KANA`; sites keep the full name. |
+| D2 | ✅ Shorter opening: "seat reservation" only | P1 | S | Say 席のみ / "just seats". Mention "no set course" only if they bring up courses. |
+| D3 | ✅ Don't ask the cancellation policy on the call | P1 | S–M | Look it up first (TableCheck/Tabelog page, website) with Claude. If not found, don't ask; assume 24h and say so (already the fallback). Saves ~15–20 s a call. |
+| D4 | ✅ Fix mix-ups on the call (they offered 2 Oct, a past date) | P1 | S–M | Give the caller today's date, the target date with weekday, and an "authority envelope": same date only, never past dates; restate the date if they get it wrong; anything outside → note it and say we'll call back. Plus an optional flexibility window set in chat ("18:30, fine 18:00–19:30") that the caller may accept without a call back. |
 | D5 | Know when they open (and good times to call) | P2 | M | Hours come from Google (cached in SQLite `places.opening_periods`, never refreshed). Refresh if >30 days old; add Google's holiday hours (`currentOpeningHours`); suggest calls just after opening or 15:00–17:00, never at peak dinner. |
 | D6 | Live help mid-call (check facts, ask the couple) | P3 | L | Vapi tools/webhooks need a public URL, so after the VM. Then: a `check_slot` tool, and a WhatsApp ping "they offer 19:00, OK?" with a 30 s timeout. |
 

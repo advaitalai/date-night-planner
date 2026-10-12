@@ -52,13 +52,14 @@ export const config = {
   call: {
     /** Language the AI caller speaks: "ja" for restaurants, "en" for testing. */
     language: (env("CALL_LANGUAGE", "ja") === "en" ? "en" : "ja") as "ja" | "en",
-    /** How the caller says the booking name, if text-to-speech mangles BOOKING_NAME. */
-    nameSpoken: env("BOOKING_NAME_SPOKEN"),
     /**
      * Dry run only: who plays the restaurant. "Emily" / "Advait" (their *_PHONE),
      * or a number. Empty = BOOKING_PHONE (you).
      */
     testTo: env("CALL_TEST_TO"),
+    /** Name phone bookings go under: short and easy to write in katakana. Sites keep BOOKING_NAME. */
+    bookingName: env("CALL_BOOKING_NAME", "Emily"),
+    bookingNameKana: env("CALL_BOOKING_NAME_KANA", "エミリー"),
   },
 
   dryRun: env("DRY_RUN", "1") === "1",

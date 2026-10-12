@@ -4,6 +4,9 @@ import { extract } from "../llm";
 import { status } from "../notify";
 import type { Place, Reservation } from "../types";
 import { jaDate } from "./email";
+import { latestOk } from "./window";
+import { DateTime } from "luxon";
+import { now, ZONE } from "../util/time";
 import type { AvailabilityResult, BookingAdapter, BookResult, ChangeResult, Slot } from "./types";
 
 /**
@@ -46,37 +49,70 @@ export interface CallScript {
   language: CallLanguage;
 }
 
-/** The booking conversation. Seat-only, no courses, no card, honest that it's an AI. */
+/**
+ * The name phone bookings go under: short and easy for staff to write in
+ * katakana (Emily / エミリー by default). Booking sites keep BOOKING_NAME.
+ */
+export function callName(): { name: string; kana: string } {
+  return { name: config.call.bookingName, kana: config.call.bookingNameKana };
+}
+
+/**
+ * The booking conversation: seats only, honest that it's an AI, and an
+ * "authority envelope" instead of a script for every case. It knows today's
+ * date and the booking date, may accept any time inside the couple's window
+ * on that date, and for anything else (other times or dates, conditions)
+ * notes it and says it'll call back. Cancellation policy is looked up online
+ * before the call (calls.ts), so it isn't asked.
+ */
 export function bookingScript(place: Place, slot: Slot, c: Contact, language: CallLanguage, task: "book" | "cancel" = "book", existing?: Reservation): CallScript {
-  const when = jaDate(slot.date, slot.time);
-  const spoken = config.call.nameSpoken || c.name;
+  const { name, kana } = callName();
+  const today = now();
+  const latest = latestOk(slot);
+  const flexible = latest !== slot.time;
   if (language === "en") {
+    const day = (d: string) => DateTime.fromISO(d, { zone: ZONE }).setLocale("en").toFormat("cccc d LLLL");
     return {
       language,
-      firstMessage: `Hello, is this ${place.name}? I'm an AI assistant calling on behalf of ${spoken} ${task === "book" ? "to make a reservation" : "about a reservation"}.`,
-      systemPrompt: `You are a polite AI assistant on a phone call with the restaurant ${place.name}, calling on behalf of ${spoken}.
-Goal: ${task === "book" ? `book a table for ${slot.partySize} on ${slot.date} at ${slot.time}, seats only (no set course).` : `cancel the reservation for ${existing?.party_size} on ${existing?.date} at ${existing?.time} under the name ${c.name}.`}
-Rules:
-- Say you are an AI assistant if asked, and keep it short and friendly.
-- Never agree to a set course, prepayment or giving a credit card. If they require one, thank them and end the call.
-- If the time is full and they offer another time, don't turn it down or ask for more options: thank them, note it, and say you'll check with ${spoken} and call back shortly to confirm. If they don't offer one, ask for the nearest free times within an hour either side. Never book a different time yourself.
-- If they accept, confirm the date, time, number of people, the name ${spoken} and the phone number ${intlPhone(c.phone)}.
-- Ask about the cancellation policy (until when you can cancel for free).
-- When done, thank them and say goodbye.`,
+      firstMessage: `Hello, is this ${place.name}? I'm an AI assistant calling for ${name} ${task === "book" ? "to make a reservation" : "about a reservation"}.`,
+      systemPrompt: `You are a polite AI assistant on a phone call with the restaurant ${place.name}, calling for ${name}. Keep it short and friendly.
+Today is ${today.setLocale("en").toFormat("cccc d LLLL yyyy")}.
+Goal: ${
+        task === "book"
+          ? `a seat reservation for ${slot.partySize} on ${day(slot.date)} at ${slot.time}.`
+          : `cancel the reservation for ${existing?.party_size} on ${existing ? day(existing.date) : ""} at ${existing?.time} under the name ${name}.`
+      }
+What you may agree to:
+- ${flexible ? `Any time from ${slot.time} to ${latest} on ${day(slot.date)}. If ${slot.time} is full, ask whether anything until ${latest} is free and book it.` : `Only ${slot.time} on ${day(slot.date)}.`}
+- Seats only. Don't mention courses unless they bring them up; then say just seats, please. Never agree to a set course, prepayment or a credit card.
+Anything else (another date, a time outside that, a condition): thank them, note it, and say you'll check with ${name} and call back. Don't book it.
+If they seem to mean a different date (or a date that has passed), politely restate: "It's for ${day(slot.date)}."
+If they accept, confirm the date, time, number of people, the name ${name} and the phone number ${intlPhone(c.phone)}.
+Say you are an AI assistant if asked. When done, thank them and say goodbye.`,
     };
   }
+  const jaDay = (d: string) => {
+    const x = DateTime.fromISO(d, { zone: ZONE });
+    return `${x.month}月${x.day}日（${"月火水木金土日"[x.weekday - 1]}）`;
+  };
+  const who = kana || name;
   return {
     language,
-    firstMessage: `お忙しいところ失礼いたします。${place.name}様でしょうか。${c.nameKana || c.name}様の代理で${task === "book" ? "予約" : "予約の件"}のお電話をしております、AIアシスタントです。`,
-    systemPrompt: `あなたは${c.nameKana || c.name}（${c.name}）様の代理でレストラン「${place.name}」に電話している、丁寧なAIアシスタントです。日本語の敬語で、短く自然に話してください。
-目的：${task === "book" ? `${when}から${slot.partySize}名で、席のみ（コースなし）の予約を取ること。` : `${existing ? jaDate(existing.date, existing.time) : ""}${existing?.party_size}名、${c.nameKana || c.name}名義の予約をキャンセルすること。`}
-ルール：
-- AIであることを聞かれたら正直に答える。
-- コース料理、事前決済、クレジットカード情報の提供には同意しない。必須と言われたらお礼を言って電話を終える。
-- 満席で別の時間を提案された場合は、断ったり他の時間を重ねて聞いたりせず、お礼を言ってメモし、「本人に確認して、すぐに折り返しご連絡します」と伝える。提案がなければ、前後1時間以内の空いている時間を伺う。別の時間で勝手に予約しない。
-- 予約できた場合は、日時・人数・お名前（${c.nameKana || c.name}）・電話番号（${domesticPhone(c.phone)}）を確認する。
-- キャンセルポリシー（いつまで無料でキャンセルできるか）を確認する。
-- 最後にお礼を言って電話を終える。`,
+    firstMessage: `お忙しいところ失礼いたします。${place.name}様でしょうか。${who}様の${task === "book" ? "ご予約" : "予約の件"}でお電話しております、AIアシスタントです。`,
+    systemPrompt: `あなたは${who}様の代理でレストラン「${place.name}」に電話している、丁寧なAIアシスタントです。日本語の敬語で、短く自然に話してください。
+今日は${today.year}年${jaDay(today.toISODate()!)}です。
+目的：${
+      task === "book"
+        ? `${jaDay(slot.date)}${slot.time}から${slot.partySize}名、席のみの予約。`
+        : `${existing ? jaDay(existing.date) : ""}${existing?.time}、${existing?.party_size}名、${who}名義の予約のキャンセル。`
+    }
+同意してよいこと：
+- ${flexible ? `${jaDay(slot.date)}の${slot.time}〜${latest}の間ならどの時間でも可。${slot.time}が満席なら${latest}までに空きがないか伺い、あれば予約する。` : `${jaDay(slot.date)}の${slot.time}のみ。`}
+- 席のみ。コースの話は相手から出た場合だけ「席のみでお願いします」と伝える。コース、事前決済、クレジットカードには同意しない。
+それ以外（別の日、範囲外の時間、条件付き）は、お礼を言ってメモし、「本人に確認して折り返しご連絡します」と伝える。予約はしない。
+相手が別の日付（過去の日付など）を言った場合は、「${jaDay(slot.date)}でございます」と丁寧に言い直す。
+予約できたら、日時・人数・お名前（${who}）・電話番号（${domesticPhone(c.phone)}）を確認する。
+AIかと聞かれたら正直に答える。最後にお礼を言って電話を終える。`,
   };
 }
 

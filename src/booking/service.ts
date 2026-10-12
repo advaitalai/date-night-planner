@@ -13,6 +13,7 @@ import { detectChannel } from "./detect";
 import { phone, vapiConfigured } from "./phone";
 import { tablecheck } from "./tablecheck";
 import { askToCall, runCall, type PendingCall } from "./calls";
+import { pickInWindow, windowLabel } from "./window";
 import type { AvailabilityResult, BookingAdapter, BookResult, Slot } from "./types";
 import { clientFor } from "../google/auth";
 import { BOOKER } from "../google/gmail";
@@ -154,6 +155,18 @@ export async function bookPlace(place: Place, slot: Slot, opts: BookOpts = {}): 
     } catch (err) {
       result = { status: "failed", detail: (err as Error).message };
     }
+    // Full at the asked time but free inside their window: book that time, same channel, no need to ask.
+    const inWin = result.status === "failed" && result.full && !slot.asked ? pickInWindow(result.alternatives, slot) : null;
+    if (inWin) {
+      const moved = { ...slot, time: inWin, asked: slot.time };
+      await status(`${slot.time} is full; booking ${inWin} (inside your window)…`);
+      try {
+        const retry = await r.adapter.book(place, moved, config.booking.contact, notes);
+        if (retry.status !== "failed") return recordBooking(place, moved, r.channel, retry, opts.planId);
+      } catch {
+        // fall through to the full message
+      }
+    }
     if (result.status !== "failed") return recordBooking(place, slot, r.channel, result, opts.planId);
     console.log(`[booking] ${place.name} via ${r.channel} failed: ${result.detail}`);
     tried.push(`${CHANNEL_NAME[r.channel]} didn't work (${result.detail ?? "unknown error"})`);
@@ -189,8 +202,8 @@ export async function recordBooking(place: Place, slot: Slot, channel: Route["ch
   const withPolicy = await applyPolicy(reservation.id, result.policyText ?? null);
   if (planId) updatePlan(planId, { status: result.status === "confirmed" ? "booked" : "booking", chosen_place_id: place.id });
 
-  const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people`;
-  const how = { tablecheck: "on TableCheck", tabelog: "on Tabelog", email: "by email", phone: "by phone" }[channel];
+  const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people${slot.asked && slot.asked !== slot.time ? `\n_${slot.asked} was taken; ${slot.time} is inside your ${windowLabel({ ...slot, time: slot.asked })} window._` : ""}`;
+  const how = { tablecheck: "on TableCheck", tabelog: "on Tabelog", email: "by email", phone: `by phone, under *${config.call.bookingName}*` }[channel];
   const mock = config.dryRun && channel === "phone" ? `\n\n_Dry run: the call went to ${testCallee().label}, not the restaurant._` : "";
   const message =
     result.status === "confirmed"

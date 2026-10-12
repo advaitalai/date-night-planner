@@ -118,6 +118,8 @@ export interface Plan {
   poll_msg_id: string | null;
   votes: Record<string, number[]>; // person -> option indexes
   chosen_place_id: number | null;
+  /** Latest acceptable time for this date night (HH:mm), when they gave a range. */
+  time_latest: string | null;
 }
 
 export interface Anchor {
@@ -142,4 +144,6 @@ export interface Prefs {
   dietary: string;
   autoCancel: boolean;
   skipWeeks: string[]; // dates (YYYY-MM-DD) with no date night
+  /** Minutes after the asked time the bot may accept without checking (e.g. 18:30 → up to 19:00). */
+  flexLaterMin: number;
 }

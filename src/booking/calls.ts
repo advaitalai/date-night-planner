@@ -9,6 +9,7 @@ import { fmtDate, isOpenFor, now, ZONE } from "../util/time";
 import { callToBook, callToCancel, callToModify, type CallReport } from "./phone";
 import { applyPolicy, policyLine, recordBooking } from "./service";
 import type { Slot } from "./types";
+import { findPolicyOnline } from "./policy";
 
 /**
  * Phone calls are tightly controlled: the bot never dials on its own. Every
@@ -135,12 +136,14 @@ export async function runCall(call: PendingCall): Promise<{ ok: boolean; message
   await status(`📞 Calling ${place.name}…`);
 
   if (call.kind === "book") {
+    const onlinePolicy = await findPolicyOnline(place);
     const report = await callToBook(place, call.slot, c);
     if (report.outcome.outcome === "booked") {
-      const slot = { ...call.slot, time: report.outcome.bookedTime ?? call.slot.time };
+      const bookedTime = report.outcome.bookedTime ?? call.slot.time;
+      const slot = { ...call.slot, time: bookedTime, ...(bookedTime !== call.slot.time ? { asked: call.slot.time } : {}) };
       const out = await recordBooking(place, slot, "phone", {
         status: "confirmed",
-        policyText: report.outcome.cancellationPolicy ?? undefined,
+        policyText: report.outcome.cancellationPolicy ?? onlinePolicy ?? undefined,
         detail: `${report.outcome.summaryEn}\n\nTranscript:\n${report.transcript.slice(0, 1500)}`,
       }, call.planId);
       return { ok: true, message: out.message };

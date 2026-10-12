@@ -18,6 +18,8 @@ Last updated: 11 Oct 2026.
 
 ## Next steps
 
+**Agreed plan (12 Oct):** dialer QA fixes (done) → Advait's recommender feedback → decide laptop vs cloud → decide whether Emily can join the group → first real booking for Wed 14 Oct.
+
 1. Phase 3c rerun: `git pull`, top up Twilio, optionally add `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` to `.env`. Check: calls only after "call"/"yes"; outcome questions; "live music" and "new options" honest; no dessert places. Then Advait shares his own notes.
 2. Earlier plan for 3c: Advait runs the WhatsApp solo beta with `BOOKING_ONLY=phone`, `CALL_LANGUAGE=en`, `DRY_RUN=1`. Plan, pick, take the call as the restaurant, then try "book the time they offered" and "cancel it" (both call him again). Remove the mock reservation afterwards, or its reminders will fire.
 2. Same run also checks the WhatsApp solo beta (`git pull`, `npm install`, `npm start`). Check:
@@ -30,6 +32,8 @@ Last updated: 11 Oct 2026.
 
 ## Advait's preferences (don't make him repeat these)
 
+- **Time window:** up to 30 min later than asked is fine without checking; anything else, ask in WhatsApp. A range they give in chat ("6 to 7:30") applies to that date night.
+- **Phone bookings under Emily (エミリー)**; sites keep Advait's full name.
 - **Calls are tightly controlled.** Never phone a restaurant without a human go-ahead in the chat, including retries and call-backs. After each call, report the outcome and propose the next step as a question.
 - **Never book a place nobody picked.** If the chosen place fails, ask.
 - **Be honest about misses.** Never say options match a wish ("live music") unless they do.
@@ -72,7 +76,7 @@ Last updated: 11 Oct 2026.
   - `CALL_TEST_TO=Emily` (or `npm run test-call -- ja emily`) sends dry-run calls to Emily instead of Advait. Trial accounts need her number verified in Twilio first.
   - Twilio Japan rates (twilio.com/voice/pricing/jp, Oct 2026): about $0.19/min to mobiles, $0.07/min to landlines, plus Vapi's own per-minute cost. A $2–3 balance lasted about 8 short test calls (to a mobile).
   - `call.start.error-get-transport` = Vapi couldn't place the call through Twilio (here: credit ran out).
-  - TTS read "Advait Alai" as "Advait A Lie". `BOOKING_NAME_SPOKEN` overrides the spoken name.
+  - TTS read "Advait Alai" as "Advait A Lie". Since 12 Oct phone bookings go under **Emily (エミリー)** (`CALL_BOOKING_NAME`), easy for staff to write; sites keep the full name.
 
 ## Beta feedback log
 

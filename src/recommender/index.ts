@@ -70,6 +70,7 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
     date: k.date ?? opts.date ?? nextWeekday(now(), prefs.defaultWeekday),
     time: k.time ?? prefs.defaultTime,
     partySize: k.partySize ?? prefs.partySize,
+    ...(k.latestTime ? { latest: k.latestTime } : {}),
   };
   const anchor = await resolveAnchor(k);
   const maxTravel = k.maxTravelMin ?? prefs.maxTravelMin;
@@ -214,7 +215,7 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
     pitch: `${pitches[i].what}. Why: ${pitches[i].why}`,
     score: o.scored.score,
   }));
-  const plan = createPlan({ date: r.slot.date, time: r.slot.time, party_size: r.slot.partySize, status: "proposed", request: text || null, options });
+  const plan = createPlan({ date: r.slot.date, time: r.slot.time, time_latest: r.slot.latest ?? null, party_size: r.slot.partySize, status: "proposed", request: text || null, options });
 
   const message = formatOptions({
     header: `${fmtDate(r.slot.date)} · ${r.slot.time} · ${r.slot.partySize} people`,

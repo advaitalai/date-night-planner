@@ -3,8 +3,12 @@ import type { BookingChannel, Place, Reservation } from "../types";
 
 export interface Slot {
   date: string; // YYYY-MM-DD
-  time: string; // HH:mm
+  time: string; // HH:mm, the time to ask for
   partySize: number;
+  /** Latest acceptable time (HH:mm) the bot may take without asking. Default: time + prefs.flexLaterMin. */
+  latest?: string;
+  /** The originally asked time, when the booking moved to another time inside the window. */
+  asked?: string;
 }
 
 export interface AvailabilityResult {

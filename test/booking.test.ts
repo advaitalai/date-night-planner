@@ -160,7 +160,11 @@ describe("AI phone calls", () => {
     expect(s.firstMessage).toContain("AIアシスタント");
     expect(s.systemPrompt).toContain("席のみ");
     expect(s.systemPrompt).toContain("クレジットカード");
-    expect(s.systemPrompt).toContain("2026年10月16日（金）18:30");
+    expect(s.systemPrompt).toContain("10月16日（金）18:30から2名");
+    // Booked under a name staff can write, with the 30-minute window, and no policy question.
+    expect(s.firstMessage).toContain("エミリー");
+    expect(s.systemPrompt).toContain("18:30〜19:00");
+    expect(s.systemPrompt).not.toContain("キャンセルポリシー");
   });
 });
 
@@ -202,5 +206,35 @@ describe("test calls", () => {
     expect(toE164("819000000000")).toBe("+819000000000");
     expect(toE164("090-0000-0000")).toBe("+819000000000");
     config.wa.phones = saved;
+  });
+});
+
+describe("time window", () => {
+  it("defaults to 30 minutes later, or the range they gave", async () => {
+    const { latestOk, pickInWindow, windowLabel } = await import("../src/booking/window");
+    const s = { date: "2026-10-16", time: "18:30", partySize: 2 };
+    expect(latestOk(s)).toBe("19:00");
+    expect(windowLabel({ ...s, time: "18:00", latest: "19:30" })).toBe("18:00–19:30");
+    expect(pickInWindow(["18:00", "19:30", "18:45"], s)).toBe("18:45");
+    expect(pickInWindow(["19:30"], s)).toBeNull();
+    expect(windowLabel({ ...s, time: "19:00", latest: "19:00" })).toBe("19:00");
+  });
+
+  it("states the window and the date in the English script", async () => {
+    const { bookingScript } = await import("../src/booking/phone");
+    const s = bookingScript(place({ name: "Test" }), { date: "2026-10-16", time: "18:00", latest: "19:30", partySize: 2 }, { name: "Advait Alai", nameKana: "", phone: "070-0000-0000", email: "a@example.com" }, "en");
+    expect(s.firstMessage).toContain("calling for Emily");
+    expect(s.systemPrompt).toContain("Any time from 18:00 to 19:30 on Friday 16 October");
+    expect(s.systemPrompt).toContain("It's for Friday 16 October");
+  });
+});
+
+describe("cancellation policy lookup", () => {
+  it("pulls the passages about cancelling from a page", async () => {
+    const { policySnippets } = await import("../src/booking/policy");
+    const html = "<html><body><h2>ご予約について</h2><p>キャンセルは前日18時までにご連絡ください。</p><p>当日キャンセルはコース料金の50%</p><script>var cancel=1</script></body></html>";
+    const out = policySnippets(html);
+    expect(out[0]).toContain("前日18時まで");
+    expect(out.join(" ")).not.toContain("var cancel");
   });
 });

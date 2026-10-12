@@ -3,6 +3,8 @@ import { voters } from "../config";
 import { getPlace, getPlan, updatePlan } from "../db/repo";
 import { say, status } from "../notify";
 import type { Plan } from "../types";
+import type { Slot } from "../booking/types";
+import { pickInWindow } from "../booking/window";
 import { fmtDate } from "../util/time";
 
 /** Option indexes ordered by votes, ties broken by the recommender's ranking (lower index). */
@@ -29,10 +31,13 @@ export async function bookOption(planId: number, index: number, opts: { callAppr
   const place = getPlace(plan.options[index]?.placeId);
   if (!place) return;
   updatePlan(planId, { status: "booking" });
-  const slot = { date: plan.date, time: plan.time, partySize: plan.party_size };
+  let slot: Slot = { date: plan.date, time: plan.time, partySize: plan.party_size, ...(plan.time_latest ? { latest: plan.time_latest } : {}) };
   await status(`Checking the table at ${place.name}…`);
   const avail = await checkAvailability(place, slot);
-  if (avail.status === "unavailable") {
+  // Full at the asked time but free inside their window: take it without asking.
+  const inWin = avail.status === "unavailable" ? pickInWindow(avail.alternatives, slot) : null;
+  if (inWin) slot = { ...slot, time: inWin, asked: slot.time };
+  else if (avail.status === "unavailable") {
     updatePlan(planId, { status: "proposed" });
     const alts = avail.alternatives?.length ? `\nFree nearby: *${avail.alternatives.join(", ")}*.` : "";
     await say(`❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.${alts}\n\nWant one of those times, or another option?`);
