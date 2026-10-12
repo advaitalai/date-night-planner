@@ -115,10 +115,31 @@ function isOurChat(remoteJid: string | null | undefined): boolean {
   return isSelfChat() ? botJids().includes(jidNormalizedUser(remoteJid)) : remoteJid === config.wa.groupJid;
 }
 
+/** Whether a quoted message is one of the bot's (🤖 prefix, or sent this run). */
+function quotesBot(ctx: { stanzaId?: string | null; participant?: string | null; quotedMessage?: WAMessage["message"] } | null | undefined): boolean {
+  if (!ctx?.stanzaId) return false;
+  if (sentByBot.has(ctx.stanzaId)) return true;
+  // With its own number, anything the bot's account wrote is the bot's.
+  if (!config.wa.selfMode && ctx.participant && botJids().includes(jidNormalizedUser(ctx.participant))) return true;
+  const q = ctx.quotedMessage;
+  const quoted = q?.conversation ?? q?.extendedTextMessage?.text ?? "";
+  return quoted.startsWith(BOT_PREFIX.trim());
+}
+
+/**
+ * Whether a message is for the bot. In the dedicated group everything is,
+ * except messages clearly between the two of them: an inline reply to the
+ * other person's message, or one that @mentions someone. Those never reach
+ * the bot (so a "yes" to Emily can't approve a pending call), unless they
+ * say "planner".
+ */
 function isAddressed(m: WAMessage, text: string): boolean {
-  if (isSolo() || config.wa.dedicated) return true;
+  if (isSolo()) return true;
   const ctx = m.message?.extendedTextMessage?.contextInfo;
-  if (ctx?.stanzaId && sentByBot.has(ctx.stanzaId)) return true;
+  if (/\bplanner\b/i.test(text)) return true;
+  if (ctx?.stanzaId) return quotesBot(ctx);
+  if (config.wa.selfMode && ctx?.mentionedJid?.length) return false;
+  if (config.wa.dedicated) return true;
   if (!config.wa.selfMode) {
     // In self mode a mention of the bot is a mention of Advait, so only the keyword counts.
     const mine = botJids();
