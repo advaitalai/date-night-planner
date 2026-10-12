@@ -37,6 +37,12 @@ export interface Route {
  * How to book a place, fastest and most predictable first:
  * booking-site automation (TableCheck, Tabelog), then email, then an AI phone call.
  */
+/** "online on TableCheck, else by phone (asks first)" for answers in the chat. */
+export function howBooked(place: Place): string {
+  const routes = bookingRoutes(place).map((r) => ({ tablecheck: "online on TableCheck", tabelog: "online on Tabelog", email: "by email", phone: "by phone (I'd ask before calling)" })[r.channel]);
+  return routes.length ? routes.join(", else ") : "no way for me to book it (walk-in only or no contact found)";
+}
+
 export function bookingRoutes(place: Place): Route[] {
   const routes: Route[] = [];
   if (place.tablecheck_slug) routes.push({ channel: "tablecheck", adapter: tablecheck, doing: `Booking ${place.name} on TableCheck (seats only)…` });
@@ -49,7 +55,7 @@ export function bookingRoutes(place: Place): Route[] {
 }
 
 /** Fill in booking links/emails we haven't looked up yet (done lazily, at booking time). */
-async function ensureDetected(place: Place): Promise<Place> {
+export async function ensureDetected(place: Place): Promise<Place> {
   if (place.tablecheck_slug || place.tabelog_url || place.booking_email || place.booking_channel !== "unknown") return place;
   const d = await detectChannel(place).catch(() => null);
   return d ? updatePlace(place.id, { booking_channel: d.channel, ...d.patch }) : place;

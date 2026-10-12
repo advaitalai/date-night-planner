@@ -1,6 +1,6 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { bookAndAnnounce, cancelReservation, checkAvailability, modifyReservation, policyLine } from "../booking/service";
+import { bookAndAnnounce, cancelReservation, checkAvailability, ensureDetected, howBooked, modifyReservation, policyLine } from "../booking/service";
 import { config, PEOPLE, voters } from "../config";
 import { db, kvSet } from "../db";
 import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, upcomingReservations, updatePrefs, upsertPlace } from "../db/repo";
@@ -127,14 +127,14 @@ const rawTools = [
   betaZodTool({
     name: "option_details",
     description:
-      "Everything known about option N (1-based) of the latest proposal: cuisine, price, rating, highlights, dishes, review snippets, address, travel, booking terms. Use for 'tell me more about option 2' / 'why that one?'.",
+      "Everything known about option N (1-based) of the latest proposal: cuisine, price, rating, highlights, dishes, review snippets, address, travel, and how it would be booked (online, email or phone). Use for 'tell me more about option 2' / 'why that one?'.",
     inputSchema: z.object({ option_number: z.number().int().min(1) }),
     run: async ({ option_number }) => {
       const row = db().prepare("SELECT id FROM plans ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined;
       const plan = row ? getPlan(row.id) : undefined;
       const opt = plan?.options[option_number - 1];
       if (!plan || !opt) return "No such option in the latest proposal.";
-      const place = await enrich(getPlace(opt.placeId)!);
+      const place = await ensureDetected(await enrich(getPlace(opt.placeId)!));
       let reviews: string[] = [];
       if (place.google_place_id && config.google.mapsKey) reviews = reviewSnippets(await placeDetails(place.google_place_id), 4);
       return [
@@ -143,7 +143,7 @@ const rawTools = [
         place.profile ? `Profile: ${place.profile.summary} | vibe: ${place.profile.vibeTags.join(", ")} | dishes: ${place.profile.signatureDishes.join(", ")}` : "",
         place.address ? `Address: ${place.address}` : "",
         place.maps_url ? `Map: ${place.maps_url}` : "",
-        `Booking: ${place.booking_channel}, ${opt.availability === "available" ? "table confirmed free" : "availability unconfirmed"} for ${plan.date} ${plan.time}`,
+        `How I'd book it: ${howBooked(place)}. Availability for ${plan.date} ${plan.time} is checked when booking.`,
         ...reviews,
       ]
         .filter(Boolean)
