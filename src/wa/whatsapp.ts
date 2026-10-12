@@ -2,6 +2,7 @@ import makeWASocket, {
   DisconnectReason,
   decryptPollVote,
   getKeyAuthor,
+  normalizeMessageContent,
   jidNormalizedUser,
   useMultiFileAuthState,
   type WAMessage,
@@ -99,8 +100,13 @@ function identify(jid: string, pushName?: string | null, text?: string, altJid?:
   return name;
 }
 
+/** The message body, unwrapped (disappearing-message, view-once and edit wrappers). */
+function contentOf(m: WAMessage) {
+  return normalizeMessageContent(m.message);
+}
+
 function textOf(m: WAMessage): string {
-  const msg = m.message;
+  const msg = contentOf(m);
   return msg?.conversation ?? msg?.extendedTextMessage?.text ?? msg?.imageMessage?.caption ?? "";
 }
 
@@ -135,7 +141,7 @@ function quotesBot(ctx: { stanzaId?: string | null; participant?: string | null;
  */
 function isAddressed(m: WAMessage, text: string): boolean {
   if (isSolo()) return true;
-  const ctx = m.message?.extendedTextMessage?.contextInfo;
+  const ctx = contentOf(m)?.extendedTextMessage?.contextInfo;
   if (/\bplanner\b/i.test(text)) return true;
   if (ctx?.stanzaId) return quotesBot(ctx);
   if (config.wa.selfMode && ctx?.mentionedJid?.length) return false;
@@ -189,13 +195,23 @@ async function handlePollVote(m: WAMessage): Promise<void> {
 
 async function onMessage(m: WAMessage): Promise<void> {
   if (!isOurChat(m.key.remoteJid)) return;
-  if (m.message?.pollUpdateMessage) return handlePollVote(m);
+  if (contentOf(m)?.pollUpdateMessage) return handlePollVote(m);
   if (m.key.fromMe && (!config.wa.selfMode || sentByBot.has(m.key.id ?? ""))) return;
   const text = textOf(m).trim();
-  if (!text || text.startsWith(BOT_PREFIX.trim())) return;
+  if (!text) {
+    // Every message in our chat is accounted for in the log, so a silent bot can be diagnosed.
+    const kinds = Object.keys(m.message ?? {}).join(",") || "none";
+    if (!m.message) console.log(`[skip] a message from ${m.pushName ?? m.key.participant ?? "?"} couldn't be decrypted (WhatsApp keys); open WhatsApp on your phone and send it again`);
+    else if (!/reactionMessage|protocolMessage|senderKeyDistributionMessage|messageContextInfo/.test(kinds)) console.log(`[skip] non-text message (${kinds})`);
+    return;
+  }
+  if (text.startsWith(BOT_PREFIX.trim())) return;
   const person = m.key.fromMe ? config.wa.selfName : (identify(getKeyAuthor(m.key), m.pushName, text, (m.key as { participantPn?: string }).participantPn) ?? m.pushName ?? "someone");
   logMessage(person, text, m.key.id ?? undefined);
-  if (!isAddressed(m, text)) return;
+  if (!isAddressed(m, text)) {
+    console.log(`[skip] ${person}: "${text.slice(0, 60)}" (an inline reply to a person or an @mention, so not for the bot)`);
+    return;
+  }
 
   console.log(`[in] ${person}: ${text}`);
   // Visible "working on it" signal: ⏳ on their message, ✅ when answered (❌ on error).
@@ -274,7 +290,11 @@ export async function startWhatsApp(): Promise<void> {
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
+    if (type !== "notify") {
+      const ours = messages.filter((m) => isOurChat(m.key.remoteJid)).length;
+      if (ours) console.log(`[skip] ${ours} older message(s) from our chat synced from the phone (not new)`);
+      return;
+    }
     for (const m of messages) await onMessage(m).catch((err) => console.error("message handling failed:", err));
   });
 
