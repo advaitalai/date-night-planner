@@ -20,6 +20,7 @@ Last updated: 11 Oct 2026.
 
 **Handoff for the next session (12 Oct):** Advait is starting a new cloud session with `ANTHROPIC_API_KEY` so Claude can run the P0 tests itself. Do this, in order:
 1. Read this file, `docs/P0_TESTS.md` and `docs/USER_STORIES.md`.
+1a. The key: in Claude Code cloud sessions `ANTHROPIC_API_KEY` from the environment doesn't reach the shell (reserved for Claude Code). Store it as `PLANNER_ANTHROPIC_API_KEY`; `src/llm.ts` reads either.
 2. Run P0-1 to P0-7 (script feeding `handleMessage`, fake calls, TableCheck `DRY_RUN=1`; Chromium in the sandbox: `CHROMIUM_PATH=/opt/pw-browsers/chromium-*/chrome-linux/chrome`; use a valid-looking test phone like 090-1234-5678, never 070-0000-0000). Fix failures, rerun, push.
 3. Report a pass/fail table. Then Advait does the launch checklist (`docs/SETUP.md` §9): solo check, add Emily, `DRY_RUN=0`, real booking for Wed 14 Oct, plus P0-8/9/10 live.
 - Decisions today: launch blockers only, no big test suite; email booking parked; Claude Code effort high for this phase, bot stays at medium; phone calls need an upgraded Twilio, so the first booking should be a TableCheck place.

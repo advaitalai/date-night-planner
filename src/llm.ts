@@ -5,8 +5,14 @@ import { config } from "./config";
 
 let client: Anthropic | undefined;
 
+/**
+ * PLANNER_ANTHROPIC_API_KEY is an alternative name for the key: Claude Code's
+ * cloud sandbox reserves ANTHROPIC_* variables for its own login, so a key
+ * stored there under ANTHROPIC_API_KEY never reaches the app.
+ */
 export function anthropic(): Anthropic {
-  client ??= new Anthropic();
+  const apiKey = process.env.PLANNER_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+  client ??= apiKey ? new Anthropic({ apiKey }) : new Anthropic();
   return client;
 }
 
