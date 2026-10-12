@@ -11,8 +11,11 @@ let client: Anthropic | undefined;
  * stored there under ANTHROPIC_API_KEY never reaches the app.
  */
 export function anthropic(): Anthropic {
-  const apiKey = process.env.PLANNER_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
-  client ??= apiKey ? new Anthropic({ apiKey }) : new Anthropic();
+  const planner = process.env.PLANNER_ANTHROPIC_API_KEY;
+  // The sandbox also sets ANTHROPIC_BASE_URL for Claude Code's own traffic: never send the planner key there.
+  client ??= planner
+    ? new Anthropic({ apiKey: planner, baseURL: process.env.PLANNER_ANTHROPIC_BASE_URL || "https://api.anthropic.com" })
+    : new Anthropic();
   return client;
 }
 

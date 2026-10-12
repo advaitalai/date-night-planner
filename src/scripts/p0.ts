@@ -43,8 +43,8 @@ const { nextWeekday, now } = await import("../util/time");
 const { tools } = await import("../agent/tools");
 type Place = import("../types").Place;
 
-if (!TOOLS_ONLY && !process.env.ANTHROPIC_API_KEY) {
-  console.error("ANTHROPIC_API_KEY is not set. Add it to the environment, or run `npm run p0 -- --tools` for the no-LLM checks.");
+if (!TOOLS_ONLY && !process.env.ANTHROPIC_API_KEY && !process.env.PLANNER_ANTHROPIC_API_KEY) {
+  console.error("No Anthropic key (ANTHROPIC_API_KEY, or PLANNER_ANTHROPIC_API_KEY in cloud sessions). Add it to the environment, or run `npm run p0 -- --tools` for the no-LLM checks.");
   process.exit(2);
 }
 

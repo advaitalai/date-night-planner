@@ -2,7 +2,7 @@
 
 The running log of where the project is. **Update this at the end of every session.** It's what a new session (or a compacted one) relies on to pick up without re-asking Advait.
 
-Last updated: 11 Oct 2026.
+Last updated: 12 Oct 2026.
 
 ## Where we are
 
@@ -17,6 +17,21 @@ Last updated: 11 Oct 2026.
 | 5. Always-on server (Google Cloud e2-micro) | ⏳ After the beta. |
 
 ## Next steps
+
+**12 Oct, P0 session (cloud):** the Anthropic key didn't reach the shell (neither `ANTHROPIC_API_KEY` nor `PLANNER_ANTHROPIC_API_KEY`), so only the no-LLM checks ran.
+- Built `npm run p0` (see `docs/P0_TESTS.md`). `--tools` run: **P0-2, 3, 4, 5, 7 pass**, with a real TableCheck dry run (SMOKEHOUSE, Wed 14 Oct 18:30, stopped at TableCheck's confirmation page). **P0-1 and P0-6 not run** (need the agent).
+- Fixed on the way:
+  - Seat-only detection missed plain table bookings ("Book a Table", "Dining Table", "Bar Counter"), so places like bills and SMOKEHOUSE counted as "courses only".
+  - A TableCheck 403 page was read as "seat-only form" and cached for a week. 403s now retry and are never cached.
+  - New TableCheck layout: date + time dropdowns instead of the grid (SMOKEHOUSE). Now booked in dry run, incl. a required checkbox question.
+  - "Selected time is unavailable" next to other form errors no longer means "full".
+  - The dry-run booking message now says when it moved the time inside the window (P0-4).
+  - "Full" message lists nearby dinner times, not every slot (it offered lunch times).
+  - Dessert filter: `cake_shop`, `pastry_shop`. Detection skips TableCheck pickup slugs.
+  - `PLANNER_ANTHROPIC_API_KEY` always goes to api.anthropic.com (the sandbox's own `ANTHROPIC_BASE_URL` must not get it).
+- Of the 15 TableCheck places on the saved list, the bot can book 2 (SMOKEHOUSE, bills Omotesando); 6 use the newer flow, the rest are courses only or need a card. Discovery near home adds more.
+- **Every TableCheck dry run holds a real table for 10 minutes.** Repeated dry runs on one slot make it look full and block a real table, so keep them few.
+- **Next:** rerun with the key (`npm run p0`), for P0-1/P0-6 and the agent-level P0-2..7. Then the launch checklist.
 
 **Handoff for the next session (12 Oct):** Advait is starting a new cloud session with `ANTHROPIC_API_KEY` so Claude can run the P0 tests itself. Do this, in order:
 1. Read this file, `docs/P0_TESTS.md` and `docs/USER_STORIES.md`.
@@ -67,6 +82,8 @@ Last updated: 11 Oct 2026.
   - `npm install` rewrites `package-lock.json` on his Mac. If `git pull` complains, run `git checkout -- package-lock.json` first.
 - **WhatsApp "Message yourself" chat:** Baileys fails to decrypt later messages there (`Bad MAC`). Use a solo group instead.
 - **Emily in the group (fixed 12 Oct):** senders were matched by exact phone digits, so `EMILY_PHONE=+8109…` never matched WhatsApp's `819…`, and LID senders never matched at all. Now: numbers normalised, `participantPn` checked, and in the two-person group anyone who isn't Advait is Emily. `WA_DEDICATED=1` (default): no "planner" keyword needed.
+- **Anthropic key in cloud sessions (12 Oct):** neither `ANTHROPIC_API_KEY` nor `PLANNER_ANTHROPIC_API_KEY` reached the shell in the P0 session. Check that it's saved in the environment's settings (and that a new session was started after saving it).
+- **TableCheck from the cloud sandbox:** 403s after ~50 requests in a few minutes; clears after a minute or two.
 - **TableCheck dry-run check (12 Oct, from the cloud):** h:armonia Wed 14 Oct 18:30 reached the confirmation page. A fake test phone (070-0000-0000) makes TableCheck say "Phone is invalid / Your selected time is unavailable", which looks like "full". Use a valid-looking number in tests.
 - **Harmless log noise:** Baileys `init queries` timeouts, "Invalid mex newsletter notification", and Bad MAC / "failed to decrypt" for backlog from other chats after a restart. Hidden by default since 11 Oct; `WA_LOG_LEVEL=warn` shows them. The group list only prints when `WA_GROUP_JID` is unset (it listed all of Advait's groups in the terminal).
 - **Old plans fire their jobs on startup.** A plan proposed in an earlier beta run keeps its Sunday nudge and decide jobs. Stale nudges (over 2h late) are now dropped; "decide" still runs. Say "skip this week" or plan again to move on.
