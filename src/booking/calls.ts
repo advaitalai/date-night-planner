@@ -92,7 +92,7 @@ export function askToCall(call: PendingCall, place: Place, tried: string[]): str
   const open = isOpenFor(place.opening_periods, now(), 15);
   const next = open === false ? nextOpening(place) : null;
   if (next) {
-    lines.push(`Heads-up: they're closed right now and open ${next.hasSame(now(), "day") ? "at" : next.toFormat("ccc")} ${next.toFormat("HH:mm")}.\nReply *call at ${next.toFormat("HH:mm")}*, *call now*, or *no*.`);
+    lines.push(`Heads-up: they're closed right now and open ${next.hasSame(now(), "day") ? "at" : next.toFormat("ccc")} ${next.toFormat("HH:mm")}.\nReply *call* to try now anyway, *call at ${next.toFormat("HH:mm")}*, or *no*.`);
   } else {
     lines.push("Reply *call* to go ahead, or *no*.");
   }

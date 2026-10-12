@@ -67,7 +67,7 @@ const rawTools = [
   betaZodTool({
     name: "place_call",
     description:
-      "Place the phone call the bot is waiting on (see 'Pending call' in <state>), after someone in the chat says yes to it: 'yes', 'call', 'go ahead', 'call now', 'call at 17:00', 'try again in 30 min', 'book 19:00 instead'. Never use it without that go-ahead in the latest message.",
+      "Place the phone call the bot is waiting on (see 'Pending call' in <state>), after someone in the chat says yes to it: 'yes', 'call', 'go ahead', 'call now', 'call at 17:00', 'try again in 30 min', 'book 19:00 instead'. Never use it without that go-ahead in the latest message. A bare 'call', 'yes' or 'go ahead' means call NOW: leave at/in_minutes empty. Only schedule when they name a time ('at 17:00') or a delay ('in 30 min'), or say yes to a retry the bot itself suggested ('try again in 30 minutes?' → in_minutes 30).",
     inputSchema: z.object({
       at: z.string().optional().describe("HH:mm (JST) if they said to call at a time"),
       in_minutes: z.number().int().min(1).optional().describe("If they said to call in N minutes; use the suggested delay when they just say yes to it"),
