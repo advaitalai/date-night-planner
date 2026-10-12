@@ -169,6 +169,45 @@ export function isSeatOnly(name: string): boolean {
 
 const TIME_12H = (t: string) => DateTime.fromFormat(t, "HH:mm").toFormat("h:mm a");
 
+async function selectSeatOnlyCategory(page: Page): Promise<void> {
+  const data = page.locator(".menu-item-data");
+  for (let i = 0; i < (await data.count()); i++) {
+    const d = data.nth(i);
+    if (!isSeatOnly((await d.getAttribute("data-name")) ?? "") || ((await d.getAttribute("data-payment-type")) ?? "none") !== "none") continue;
+    const categories = JSON.parse((await d.getAttribute("data-service-categories")) ?? "[]") as string[];
+    if (!categories.length) return;
+    const radio = page.locator(`input[name='reservation[service_category]'][value='${categories[0]}']`);
+    if ((await radio.count()) && !(await radio.isChecked())) {
+      await radio.locator("xpath=..").click();
+      await page.waitForTimeout(2000);
+    }
+    return;
+  }
+}
+
+/** Free times (HH:mm) in the grid's column for one day, read from the page in one go. */
+async function freeTimesInColumn(page: Page, columnX: number): Promise<string[]> {
+  // No named functions inside evaluate (tsx would inject a helper the page doesn't have).
+  const labels = await page
+    .evaluate(
+      (x) =>
+        Array.from(document.querySelectorAll("tr.timetable-row"))
+          .filter((row) =>
+            Array.from(row.querySelectorAll("td")).some((td) => {
+              const r = td.getBoundingClientRect();
+              return Math.abs(r.left + r.width / 2 - x) <= 5 && /available/.test(td.className);
+            }),
+          )
+          .map((row) => (row.querySelector("th.time-left")?.textContent ?? "").trim()),
+      columnX,
+    )
+    .catch(() => [] as string[]);
+  return labels
+    .map((l) => DateTime.fromFormat(l.toUpperCase(), "h:mm a"))
+    .filter((d) => d.isValid)
+    .map((d) => d.toFormat("HH:mm"));
+}
+
 /**
  * TableCheck's classic single-page form (/en/shops/<slug>/reserve):
  * availability grid → seat-only menu item → additional info → guest details →
@@ -177,6 +216,11 @@ const TIME_12H = (t: string) => DateTime.fromFormat(t, "HH:mm").toFormat("h:mm a
  */
 async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: string): Promise<BookResult> {
   await page.waitForTimeout(1500);
+
+  // 0. Seat-only items are tied to seating categories (e.g. Tables/Counters, not Partition).
+  //    Pick that category first, so the grid shows times free for seats only. (TableCheck's
+  //    availability API counts every category, which is why 18:30 could look free but be refused.)
+  await selectSeatOnlyCategory(page);
 
   // 1. Click the slot in the availability grid: day column (by x position, since closed days span rows) × time row.
   const day = Number(slot.date.slice(8));
@@ -189,7 +233,10 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   for (let i = 0; i < (await cells.count()); i++) {
     const bb = await cells.nth(i).boundingBox();
     if (!bb || Math.abs(bb.x + bb.width / 2 - (hb.x + hb.width / 2)) > 5) continue;
-    if (!/available/.test((await cells.nth(i).getAttribute("class")) ?? "")) return { status: "failed", full: true, detail: `${slot.time} on ${slot.date} is full on TableCheck` };
+    if (!/available/.test((await cells.nth(i).getAttribute("class")) ?? "")) {
+      const alternatives = await freeTimesInColumn(page, hb.x + hb.width / 2);
+      return { status: "failed", full: true, alternatives, detail: `${slot.time} on ${slot.date} is full on TableCheck` };
+    }
     await cells.nth(i).locator("a").click();
     picked = true;
     break;
@@ -253,6 +300,7 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   if (!(await confirmBtn.isVisible().catch(() => false))) {
     const errors = (await page.locator(".has-error, .alert-danger, .error, .help-block").allInnerTexts().catch(() => [])).join(" / ");
     const full = /time is unavailable|fully booked|満席/i.test(errors);
+    console.log(`[tablecheck] form not accepted: ${JSON.stringify(errors.slice(0, 500)) || "(no error text)"} @ ${page.url()}`);
     return { status: "failed", full, detail: full ? `${slot.time} is full on TableCheck` : `TableCheck didn't accept the form${errors ? `: ${errors.slice(0, 300)}` : ""}` };
   }
   const summary = (await page.locator("body").innerText()).replace(/\n{2,}/g, "\n");

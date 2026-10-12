@@ -238,3 +238,35 @@ describe("cancellation policy lookup", () => {
     expect(out.join(" ")).not.toContain("var cancel");
   });
 });
+
+describe("recognising people in WhatsApp", () => {
+  it("normalises saved numbers to WhatsApp's digits", async () => {
+    const { waDigits } = await import("../src/config");
+    expect(waDigits("+8109012345678")).toBe("819012345678");
+    expect(waDigits("+81 90-1234-5678")).toBe("819012345678");
+    expect(waDigits("090-1234-5678")).toBe("819012345678");
+    expect(waDigits("819012345678")).toBe("819012345678");
+  });
+});
+
+describe("failure messages", () => {
+  it("never shows stack traces or tool names in the chat", async () => {
+    const { friendlyError } = await import("../src/booking/service");
+    expect(friendlyError("browserType.launchPersistentContext: Executable doesn't exist at /opt/x\n╔══╗")).toBe("the booking browser isn't set up on this machine");
+    expect(friendlyError("locator.click: Timeout 30000ms exceeded")).toBe("the booking page took too long to respond");
+    expect(friendlyError("The selected time is unavailable")).toBe("The selected time is unavailable");
+  });
+});
+
+describe("dry runs", () => {
+  it("never records a booking a site dry run didn't make", async () => {
+    const { freshDb, place } = await import("./helpers");
+    freshDb();
+    const { recordBooking } = await import("../src/booking/service");
+    const { upcomingReservations } = await import("../src/db/repo");
+    const out = await recordBooking(place({ name: "h:armonia" }), { date: "2026-10-14", time: "18:30", partySize: 2 }, "tablecheck", { status: "requested", detail: "DRY_RUN: stopped on the confirmation page." });
+    expect(out.message).toContain("Dry run");
+    expect(out.message).toContain("Nothing is booked");
+    expect(upcomingReservations("2026-10-01")).toHaveLength(0);
+  });
+});

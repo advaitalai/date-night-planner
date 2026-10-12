@@ -18,7 +18,9 @@ Last updated: 11 Oct 2026.
 
 ## Next steps
 
-**Now:** E2E dry run #4 (calls to Advait, `BOOKING_ONLY=phone`) to check dialer QA (D1–D4) and recommender QA (W1–W8) fixes.
+**Launch plan (12 Oct, Advait):** launch today: add Emily to the group, iterate on options, real booking for Wed 14 Oct. Full QA harness postponed; launch blockers only (see "Launch checklist" in docs/SETUP.md §9).
+
+**Earlier plan:** E2E dry run #4 (calls to Advait, `BOOKING_ONLY=phone`) to check dialer QA (D1–D4) and recommender QA (W1–W8) fixes.
 
 **Agreed plan (12 Oct):** dialer QA fixes (done) → Advait's recommender feedback → decide laptop vs cloud → decide whether Emily can join the group → first real booking for Wed 14 Oct.
 
@@ -57,6 +59,8 @@ Last updated: 11 Oct 2026.
 - **Laptop setup:** `.env` has the Anthropic, Google Maps and booking details, plus `WA_SELF_MODE=1`, `WA_GROUP_JID=<solo group id>`, `WA_SOLO=1`, `DRY_RUN=1`.
   - `npm install` rewrites `package-lock.json` on his Mac. If `git pull` complains, run `git checkout -- package-lock.json` first.
 - **WhatsApp "Message yourself" chat:** Baileys fails to decrypt later messages there (`Bad MAC`). Use a solo group instead.
+- **Emily in the group (fixed 12 Oct):** senders were matched by exact phone digits, so `EMILY_PHONE=+8109…` never matched WhatsApp's `819…`, and LID senders never matched at all. Now: numbers normalised, `participantPn` checked, and in the two-person group anyone who isn't Advait is Emily. `WA_DEDICATED=1` (default): no "planner" keyword needed.
+- **TableCheck dry-run check (12 Oct, from the cloud):** h:armonia Wed 14 Oct 18:30 reached the confirmation page. A fake test phone (070-0000-0000) makes TableCheck say "Phone is invalid / Your selected time is unavailable", which looks like "full". Use a valid-looking number in tests.
 - **Harmless log noise:** Baileys `init queries` timeouts, "Invalid mex newsletter notification", and Bad MAC / "failed to decrypt" for backlog from other chats after a restart. Hidden by default since 11 Oct; `WA_LOG_LEVEL=warn` shows them. The group list only prints when `WA_GROUP_JID` is unset (it listed all of Advait's groups in the terminal).
 - **Old plans fire their jobs on startup.** A plan proposed in an earlier beta run keeps its Sunday nudge and decide jobs. Stale nudges (over 2h late) are now dropped; "decide" still runs. Say "skip this week" or plan again to move on.
 - `npm install` reports 2 high vulnerabilities in link-preview-js (via Baileys). No fix upstream. Low risk (only previews links the bot sends). Recheck before the VM deploy; option: turn off link previews.

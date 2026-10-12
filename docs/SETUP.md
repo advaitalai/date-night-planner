@@ -133,3 +133,16 @@ With `DRY_RUN=1` every booking call goes to `BOOKING_PHONE` (you) instead of the
 1. Run `npm run import-csv -- fixtures/Tokyo_food.csv Advait "Tokyo food"`, then `npm run audit`. Read `audit-report.md` to see how your saved places can be booked.
 2. In the group, say "planner plan next Wednesday". Check that the options and poll look right, vote, and check that the dry-run booking reaches the confirm step.
 3. When happy, set `DRY_RUN=0` and restart: `sudo systemctl restart date-night-planner`.
+
+## 9. Launch checklist (first real booking with Emily)
+
+1. `git pull`, `npm install`.
+2. `.env`:
+   - `DRY_RUN=0`
+   - remove `BOOKING_ONLY`, `CALL_TEST_TO`; `CALL_LANGUAGE=ja`
+   - `WA_SOLO=0`, `WA_DEDICATED=1`, `WA_GROUP_JID=<the group with Emily>`
+   - `ADVAIT_PHONE`, `EMILY_PHONE` set (any format)
+   - optional `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` (balance check)
+3. Phone calls to restaurants need an upgraded Twilio account (trial accounts only call verified numbers and play a trial notice). Until then, pick places bookable on TableCheck.
+4. Tell Emily: bot messages show as Advait with 🤖; reply in words or a number; calls book under her name (エミリー); her messages in the group go to Claude.
+5. `npm start`, check the log says `Listening in "<group>"`, say hi.

@@ -37,7 +37,14 @@ export function tidy(text: string): string {
   return text.replace(/\s*—\s*/g, ", ").replace(/ – /g, ", ");
 }
 
+let said = 0;
+/** How many messages the bot has posted (to tell chit-chat it ignored from real answers). */
+export function saidCount(): number {
+  return said;
+}
+
 export async function say(text: string): Promise<string | undefined> {
+  said++;
   text = tidy(text);
   logMessage("planner", text);
   console.log(`[out] ${text.slice(0, 500)}`);

@@ -20,6 +20,8 @@ export const config = {
     selfName: "Advait",
     /** Solo test: only Advait votes and every message is for the bot (any chat, e.g. a group with just him). */
     solo: env("WA_SOLO", "0") === "1",
+    /** The group exists only for date planning: every message is for the bot (no "planner" needed). */
+    dedicated: env("WA_DEDICATED", "1") === "1",
     /** Also post a WhatsApp poll with the options (default off: people reply in words). */
     polls: env("WA_POLLS", "0") === "1",
     phones: { Advait: env("ADVAIT_PHONE"), Emily: env("EMILY_PHONE") } as Record<string, string>,
@@ -90,6 +92,14 @@ export function testCallee(who = config.call.testTo): { label: string; phone: st
   if (name) return { label: name === config.wa.selfName ? "you" : name, phone: config.wa.phones[name] || (name === config.wa.selfName ? config.booking.contact.phone : "") };
   if (who.trim()) return { label: who.trim(), phone: who.trim() };
   return { label: "you", phone: config.booking.contact.phone };
+}
+
+/** Phone number as WhatsApp writes it: country code + number, digits only ("+81 090-1234-5678" → "819012345678"). */
+export function waDigits(phone: string): string {
+  const d = phone.replace(/\D/g, "");
+  if (d.startsWith("810")) return `81${d.slice(3)}`; // drop the domestic trunk 0 after +81
+  if (d.startsWith("0")) return `81${d.slice(1)}`; // domestic Japanese number
+  return d;
 }
 
 /** People in the group. Names are used as identifiers everywhere (saved_by, votes). */

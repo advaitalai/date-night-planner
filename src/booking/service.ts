@@ -169,20 +169,52 @@ export async function bookPlace(place: Place, slot: Slot, opts: BookOpts = {}): 
     }
     if (result.status !== "failed") return recordBooking(place, slot, r.channel, result, opts.planId);
     console.log(`[booking] ${place.name} via ${r.channel} failed: ${result.detail}`);
-    tried.push(`${CHANNEL_NAME[r.channel]} didn't work (${result.detail ?? "unknown error"})`);
+    tried.push(`${CHANNEL_NAME[r.channel]} didn't work (${friendlyError(result.detail)})`);
     // A definite "that time is full" ends the attempt; trying other channels won't free a table.
     if (result.full) {
-      const alts = result.alternatives?.length ? `\nFree nearby: *${result.alternatives.join(", ")}*.` : "";
-      return { ok: false, message: `❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.${alts}\n\nWant one of those times, or another option?` };
+      const near = nearbyTimes(result.alternatives, slot.time);
+      const alts = near.length ? `\nFree that evening: *${near.join(", ")}*.` : "\nNothing free that evening.";
+      const ask = near.length ? "Want one of those times, or another option?" : "Want another option, or another day?";
+      return { ok: false, message: `❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.${alts}\n\n${ask}` };
     }
   }
   return { ok: false, message: `❌ I couldn't book *${place.name}* for ${fmtDate(slot.date)} ${slot.time}.\n\n${tried.map((t) => `• ${t}`).join("\n")}\n\nWant to try another option?` };
+}
+
+/** Up to 4 free times closest to the asked time, in order (dinner hours only). */
+export function nearbyTimes(times: string[] | undefined, asked: string): string[] {
+  const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  return (times ?? [])
+    .filter((t) => /^\d{2}:\d{2}$/.test(t) && m(t) >= 17 * 60 && m(t) <= 21 * 60 + 30)
+    .sort((a, b) => Math.abs(m(a) - m(asked)) - Math.abs(m(b) - m(asked)))
+    .slice(0, 4)
+    .sort();
+}
+
+/**
+ * One short line for the chat from whatever a booking step reported. Site
+ * messages ("selected time is unavailable") pass through; crashes and stack
+ * traces become a plain reason, with the details left in the log.
+ */
+export function friendlyError(detail: string | undefined): string {
+  const first = (detail ?? "").split("\n")[0].trim();
+  if (!first) return "unknown error";
+  if (/executable doesn't exist|launchPersistentContext|browserType|playwright/i.test(first)) return "the booking browser isn't set up on this machine";
+  if (/timeout|timed out/i.test(first)) return "the booking page took too long to respond";
+  if (/net::|ECONN|ENOTFOUND|fetch failed|socket/i.test(first)) return "couldn't reach the booking site";
+  if (/locator|selector|waiting for|strict mode/i.test(first)) return "the booking page looked different from usual";
+  return first.length > 140 ? `${first.slice(0, 137)}…` : first;
 }
 
 const CHANNEL_NAME: Record<Route["channel"], string> = { tablecheck: "TableCheck", tabelog: "Tabelog", email: "Email", phone: "The phone call" };
 
 /** Save a successful booking, schedule its reminders, and write the confirmation. */
 export async function recordBooking(place: Place, slot: Slot, channel: Route["channel"], result: BookResult, planId?: number): Promise<BookOutcome> {
+  // A dry run on a booking site stops before the final confirm: nothing is booked, so nothing is recorded.
+  if (result.detail?.startsWith("DRY_RUN")) {
+    const how = { tablecheck: "TableCheck", tabelog: "Tabelog", email: "email", phone: "phone" }[channel];
+    return { ok: true, message: `🧪 *Dry run: ${place.name} would be booked*\n${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people, on ${how}.\n\n_${how} accepted everything; I stopped before the final confirm. Nothing is booked._` };
+  }
   const reservation = createReservation({
     plan_id: planId ?? null,
     place_id: place.id,

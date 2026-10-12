@@ -13,10 +13,10 @@ import path from "node:path";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
 import { handleMessage } from "../agent/loop";
-import { config, isSelfChat, isSolo, PEOPLE } from "../config";
+import { config, isSelfChat, isSolo, PEOPLE, waDigits } from "../config";
 import { kvGet, kvSet } from "../db";
 import { getPlanByPoll, getUser, logMessage, upsertUser, userByJid } from "../db/repo";
-import { clearStatus, say, setSender, status } from "../notify";
+import { clearStatus, saidCount, say, setSender, status } from "../notify";
 import { onVotes } from "../plans/decide";
 
 /**
@@ -77,15 +77,24 @@ function botJids(): string[] {
   return [me?.id, me?.lid].filter((j): j is string => !!j).map(jidNormalizedUser);
 }
 
-/** Map a sender jid to Advait/Emily: known jid, phone number, push name, or "I'm <name>". */
-function identify(jid: string, pushName?: string | null, text?: string): string | null {
+/**
+ * Map a sender to Advait/Emily: known jid, phone number (the jid or, for LID
+ * senders, WhatsApp's participantPn), push name, or "I'm <name>". In the
+ * couple's group anyone who isn't Advait is Emily.
+ */
+function identify(jid: string, pushName?: string | null, text?: string, altJid?: string | null): string | null {
   const known = userByJid(jid);
   if (known) return known.name;
-  const digits = jid.split("@")[0].split(":")[0];
-  let name = PEOPLE.find((p) => config.wa.phones[p] && digits === config.wa.phones[p]) ?? null;
+  const numbers = [jid, altJid].filter((j): j is string => !!j).map((j) => j.split("@")[0].split(":")[0]);
+  let name = PEOPLE.find((p) => config.wa.phones[p] && numbers.includes(waDigits(config.wa.phones[p]))) ?? null;
   name ??= PEOPLE.find((p) => pushName?.toLowerCase().includes(p.toLowerCase())) ?? null;
   const claim = text?.match(/\bi['’]?m (advait|emily)\b/i)?.[1];
   if (claim) name = PEOPLE.find((p) => p.toLowerCase() === claim.toLowerCase()) ?? name;
+  // Two-person group: Advait's own messages are handled before this, so anyone else is Emily.
+  if (!name && !isSelfChat() && !config.wa.solo && config.wa.selfMode) {
+    name = PEOPLE.find((p) => p !== config.wa.selfName) ?? null;
+    if (name) console.log(`[who] treating ${jid} (${pushName ?? "no name"}) as ${name}`);
+  }
   if (name && !getUser(name)?.wa_jid) upsertUser(name, { wa_jid: jid });
   return name;
 }
@@ -107,7 +116,7 @@ function isOurChat(remoteJid: string | null | undefined): boolean {
 }
 
 function isAddressed(m: WAMessage, text: string): boolean {
-  if (isSolo()) return true;
+  if (isSolo() || config.wa.dedicated) return true;
   const ctx = m.message?.extendedTextMessage?.contextInfo;
   if (ctx?.stanzaId && sentByBot.has(ctx.stanzaId)) return true;
   if (!config.wa.selfMode) {
@@ -151,7 +160,7 @@ async function handlePollVote(m: WAMessage): Promise<void> {
     logger.warn({ pollId }, "couldn't decrypt poll vote");
     return;
   }
-  const person = m.key.fromMe && config.wa.selfMode ? config.wa.selfName : identify(voterJid, m.pushName);
+  const person = m.key.fromMe && config.wa.selfMode ? config.wa.selfName : identify(voterJid, m.pushName, undefined, (m.key as { participantPn?: string }).participantPn);
   if (!person) return;
   const picks = poll.options.map((o, i) => ({ i, h: sha256(o) })).filter(({ h }) => selected!.some((s) => Buffer.from(s).equals(h))).map(({ i }) => i);
   await onVotes(plan.id, { ...plan.votes, [person]: picks });
@@ -163,7 +172,7 @@ async function onMessage(m: WAMessage): Promise<void> {
   if (m.key.fromMe && (!config.wa.selfMode || sentByBot.has(m.key.id ?? ""))) return;
   const text = textOf(m).trim();
   if (!text || text.startsWith(BOT_PREFIX.trim())) return;
-  const person = m.key.fromMe ? config.wa.selfName : (identify(getKeyAuthor(m.key), m.pushName, text) ?? m.pushName ?? "someone");
+  const person = m.key.fromMe ? config.wa.selfName : (identify(getKeyAuthor(m.key), m.pushName, text, (m.key as { participantPn?: string }).participantPn) ?? m.pushName ?? "someone");
   logMessage(person, text, m.key.id ?? undefined);
   if (!isAddressed(m, text)) return;
 
@@ -174,10 +183,12 @@ async function onMessage(m: WAMessage): Promise<void> {
   await react("⏳");
   await status("Reading your message…");
   const typing = setInterval(() => void sock?.sendPresenceUpdate("composing", chatJid()).catch(() => {}), 10_000);
+  const before = saidCount();
   try {
     const reply = await handleMessage(person, text);
     if (reply) await say(reply);
-    await react("✅");
+    // Chit-chat between the two of them that the bot let pass: take the ⏳ back off, no ✅.
+    await react(saidCount() > before ? "✅" : "");
   } catch (err) {
     console.error("agent error:", err);
     await react("❌");
