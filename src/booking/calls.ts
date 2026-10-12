@@ -191,7 +191,7 @@ export function outcomeMessage(call: PendingCall, place: Place, report: CallRepo
     case "full":
       if (o.alternativeTimes.length) {
         const alts = o.alternativeTimes;
-        msg = `❌ ${name} is full at ${call.slot.time}.\nThey offered *${alts.join(", ")}*.\n\n` + ask({ ...call, alternatives: alts }, `Shall I call back and book ${alts[0]}? Reply *yes*, another time, or *no*.`);
+        msg = `❌ ${name} is full at ${call.slot.time}.\nThey offered *${alts.join(", ")}*.\n\n` + ask({ ...call, alternatives: alts }, `Shall I call back and book ${alts[0]}? Reply *call* to do that, another time, or *no*.`);
       } else {
         msg = `❌ ${name} is fully booked around ${call.slot.time} on ${fmtDate(call.slot.date)}.\n\nWant another option, or another day?`;
       }
@@ -200,17 +200,17 @@ export function outcomeMessage(call: PendingCall, place: Place, report: CallRepo
       msg = `🚫 ${name} would only take it with ${o.requirements ?? "conditions we don't accept"}. That breaks our seats-only rule, so I said no thanks.\n\nWant another option?`;
       break;
     case "busy":
-      msg = `📵 ${name}'s line was busy.\n\n` + ask({ ...call, suggestDelayMin: 30 }, "Shall I try again in 30 minutes? Reply *yes* or *no*.");
+      msg = `📵 ${name}'s line was busy.\n\n` + ask({ ...call, suggestDelayMin: 30 }, "Shall I try again in 30 minutes? Reply *call in 30*, *call* (now), or *no*.");
       break;
     case "no_answer": {
       const next = isOpenFor(place.opening_periods, now(), 15) === false ? nextOpening(place) : null;
       msg = next
-        ? `📵 Nobody picked up at ${name}. They're closed right now and open at ${next.toFormat("HH:mm")}.\n\n` + ask(call, `Shall I try at ${next.plus({ minutes: 15 }).toFormat("HH:mm")}? Reply *yes* or *no*.`)
-        : `📵 Nobody picked up at ${name}.\n\n` + ask({ ...call, suggestDelayMin: 60 }, "Shall I try again in an hour? Reply *yes* or *no*.");
+        ? `📵 Nobody picked up at ${name}. They're closed right now and open at ${next.toFormat("HH:mm")}.\n\n` + ask(call, `Shall I try at ${next.plus({ minutes: 15 }).toFormat("HH:mm")}? Reply *call at ${next.plus({ minutes: 15 }).toFormat("HH:mm")}* or *no*.`)
+        : `📵 Nobody picked up at ${name}.\n\n` + ask({ ...call, suggestDelayMin: 60 }, "Shall I try again in an hour? Reply *call in 60*, *call* (now), or *no*.");
       break;
     }
     case "voicemail":
-      msg = `📼 ${name} went to voicemail. I didn't leave a message.\n\n` + ask({ ...call, suggestDelayMin: 60 }, "Shall I try again in an hour? Reply *yes* or *no*.");
+      msg = `📼 ${name} went to voicemail. I didn't leave a message.\n\n` + ask({ ...call, suggestDelayMin: 60 }, "Shall I try again in an hour? Reply *call in 60*, *call* (now), or *no*.");
       break;
     case "closed":
       msg = `🔒 ${name} is closed: ${o.summaryEn}\n\nWant another option, or another day?`;
@@ -227,7 +227,7 @@ export function outcomeMessage(call: PendingCall, place: Place, report: CallRepo
       msg = `⚠️ I couldn't place the call to ${name}.\n${report.failure ?? o.summaryEn}\n\n` + ask(call, "Say *call again* once that's sorted.");
       break;
     default:
-      msg = `🤷 The call to ${name} ended without a clear answer.\n${o.summaryEn}\n\n` + ask(call, "Shall I try again? Reply *yes* or *no*.");
+      msg = `🤷 The call to ${name} ended without a clear answer.\n${o.summaryEn}\n\n` + ask(call, "Shall I try again? Reply *call* or *no*.");
   }
   return msg + (config.dryRun && o.outcome !== "failed" ? `\n\n_Dry run: the call went to ${testCallee().label}, not the restaurant._` : "");
 }

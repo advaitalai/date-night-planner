@@ -102,3 +102,20 @@ describe("debug logs", () => {
     expect((db().prepare("SELECT outcome FROM call_log").get() as { outcome: string }).outcome).toBe("busy");
   });
 });
+
+describe("call go-ahead is a hard rule", () => {
+  it("needs the word 'call' (or 電話 / かけて) in the message", async () => {
+    const { saysCall } = await import("../src/agent/turn");
+    for (const ok of ["call", "Call now", "call at 17:00", "call in 30", "電話して", "かけてください"]) expect(saysCall(ok)).toBe(true);
+    for (const no of ["yes", "sounds good", "ok go", "sure!", "let's do it", "recall that place?"]) expect(saysCall(no)).toBe(false);
+  });
+
+  it("refuses to place a pending call on 'sounds good'", async () => {
+    const { tools } = await import("../src/agent/tools");
+    const { setCurrentMessage } = await import("../src/agent/turn");
+    setCurrentMessage({ sender: "Advait", text: "sounds good" });
+    const placeCall = tools.find((t) => t.name === "place_call")!;
+    const out = await (placeCall.run as (i: unknown) => Promise<string>)({});
+    expect(out).toMatch(/^NOT placed/);
+  });
+});

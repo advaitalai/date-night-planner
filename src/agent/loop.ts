@@ -6,6 +6,7 @@ import type { Plan } from "../types";
 import { fmtDate, now } from "../util/time";
 import { tools } from "./tools";
 import { describePendingCall } from "../booking/calls";
+import { setCurrentMessage } from "./turn";
 
 const SYSTEM = `You are "Planner", the date-night agent in a WhatsApp group with Advait and Emily, a couple living in Tokyo (home near Gotanda/Fudomae, Advait works near Meguro station).
 
@@ -65,6 +66,7 @@ export function handleMessage(sender: string, text: string): Promise<string | nu
 }
 
 async function runAgent(sender: string, text: string): Promise<string | null> {
+  setCurrentMessage({ sender, text });
   const chat = recentMessages(30)
     .map((m) => `[${m.at}] ${m.sender}: ${m.text}`)
     .join("\n");

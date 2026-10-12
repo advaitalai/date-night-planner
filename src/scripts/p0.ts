@@ -75,6 +75,7 @@ async function send(person: "Advait" | "Emily", text: string, step?: Step): Prom
   logMessage(person, text);
   if (TOOLS_ONLY) {
     if (!step) throw new Error(`no tool step for "${text}" in --tools mode`);
+    (await import("../agent/turn")).setCurrentMessage({ sender: person, text });
     const tool = tools.find((t) => t.name === step.tool)!;
     const result = await (tool.run as (i: unknown) => Promise<unknown>)(step.input);
     console.log(`[tool ${step.tool}] ${String(result).slice(0, 300)}`);

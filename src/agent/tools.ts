@@ -6,6 +6,7 @@ import { db, kvSet } from "../db";
 import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, upcomingReservations, updatePrefs, upsertPlace } from "../db/repo";
 import { say, status } from "../notify";
 import { callTime, clearPendingCall, pendingCall, runCall, scheduleCall } from "../booking/calls";
+import { currentMessage, saysCall } from "./turn";
 import { ensureWeeklyJobs, skipDate } from "../jobs/weekly";
 import { cidFromMapsUri, placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
 import { cidFromSavedUrl } from "../places/takeout";
@@ -54,6 +55,9 @@ const slotFields = {
 };
 
 /** A phone call needs a human yes. The model may only pass true when the message itself asks for a call. */
+/** call_go_ahead only counts when the message really says "call". */
+const goAhead = (flag: boolean | undefined) => Boolean(flag) && saysCall(currentMessage()?.text);
+
 const CALL_GO_AHEAD = z
   .boolean()
   .optional()
@@ -67,17 +71,18 @@ const rawTools = [
   betaZodTool({
     name: "place_call",
     description:
-      "Place the phone call the bot is waiting on (see 'Pending call' in <state>), after someone in the chat says yes to it: 'yes', 'call', 'go ahead', 'call now', 'call at 17:00', 'try again in 30 min', 'book 19:00 instead'. Never use it without that go-ahead in the latest message. A bare 'call', 'yes' or 'go ahead' means call NOW: leave at/in_minutes empty. Only schedule when they name a time ('at 17:00') or a delay ('in 30 min'), or say yes to a retry the bot itself suggested ('try again in 30 minutes?' → in_minutes 30).",
+      "Place the phone call the bot is waiting on (see 'Pending call' in <state>) when the latest message says 'call': 'call', 'call now', 'call at 17:00', 'call in 30', 'call and book 19:00'. Messages without the word 'call' are refused by the tool. A bare 'call' means NOW: leave at/in_minutes empty. Schedule only when they name a time ('at 17:00') or a delay ('in 30').",
     inputSchema: z.object({
       at: z.string().optional().describe("HH:mm (JST) if they said to call at a time"),
       in_minutes: z.number().int().min(1).optional().describe("If they said to call in N minutes; use the suggested delay when they just say yes to it"),
       time: z.string().optional().describe("HH:mm to book instead of the original time, e.g. a time the restaurant offered"),
     }),
     run: async ({ at, in_minutes, time }) => {
+      if (!saysCall(currentMessage()?.text)) return "NOT placed: a call needs the word 'call' in their message (e.g. 'call', 'call at 17:00'). Ask them to reply *call* if they want it.";
       const call = pendingCall();
       if (!call) return "There's no call waiting for a go-ahead. If they asked to call a place, use book_place with call_go_ahead.";
       const next = { ...call, slot: time ? { ...call.slot, time } : call.slot, alternatives: undefined, suggestDelayMin: undefined };
-      const when = callTime(at, in_minutes ?? (at ? undefined : call.suggestDelayMin));
+      const when = callTime(at, in_minutes);
       if (when) {
         await say(scheduleCall(next, when));
         return "Scheduled; the chat was told. Reply NO_REPLY.";
@@ -176,7 +181,7 @@ const rawTools = [
       const plan = latestProposedPlan();
       if (!plan) return "There is no open proposal to book from.";
       if (option_number > plan.options.length) return `The plan only has ${plan.options.length} options.`;
-      await bookOption(plan.id, option_number - 1, { callApproved: call_go_ahead });
+      await bookOption(plan.id, option_number - 1, { callApproved: goAhead(call_go_ahead) });
       return "The outcome (or a question about calling) was posted to the chat. Reply NO_REPLY.";
     },
   }),
@@ -199,7 +204,7 @@ const rawTools = [
       const inWin = avail.status === "unavailable" ? pickInWindow(avail.alternatives, slot) : null;
       if (inWin) slot = { ...slot, time: inWin, asked: time };
       else if (avail.status === "unavailable") return `${place.name} is full at ${time} on ${date}. Free nearby: ${avail.alternatives?.join(", ") || "none"}.`;
-      await bookAndAnnounce(place, slot, { notes, callApproved: call_go_ahead });
+      await bookAndAnnounce(place, slot, { notes, callApproved: goAhead(call_go_ahead) });
       return "The outcome (or a question about calling) was posted to the chat. Reply NO_REPLY.";
     },
   }),
@@ -279,14 +284,14 @@ const rawTools = [
       party_size: z.number().int().optional(),
       call_go_ahead: CALL_GO_AHEAD,
     }),
-    run: async ({ reservation_id, date, time, party_size, call_go_ahead }) => modifyReservation(reservation_id, { date, time, partySize: party_size }, { callApproved: call_go_ahead }),
+    run: async ({ reservation_id, date, time, party_size, call_go_ahead }) => modifyReservation(reservation_id, { date, time, partySize: party_size }, { callApproved: goAhead(call_go_ahead) }),
   }),
 
   betaZodTool({
     name: "cancel_reservation",
     description: "Cancel a reservation. Only when someone in the group clearly asks to cancel it.",
     inputSchema: z.object({ reservation_id: z.number().int(), reason: z.string().optional(), call_go_ahead: CALL_GO_AHEAD }),
-    run: async ({ reservation_id, reason, call_go_ahead }) => cancelReservation(reservation_id, reason, { callApproved: call_go_ahead }),
+    run: async ({ reservation_id, reason, call_go_ahead }) => cancelReservation(reservation_id, reason, { callApproved: goAhead(call_go_ahead) }),
   }),
 
   betaZodTool({
