@@ -48,12 +48,21 @@ export function areaOf(address: string | null | undefined): string | null {
   const cityIdx = parts.findIndex((s) => /\b(City|Ward)$|-ku$/i.test(s));
   if (cityIdx >= 0) {
     const ward = parts[cityIdx].replace(/\s*(City|Ward)$|-ku$/i, "");
-    const before = (parts[cityIdx - 1] ?? "")
-      .replace(/\d+\s*Chome[-\d]*/gi, "")
-      .replace(/[\d-]+/g, "")
-      .trim();
-    const area = before.split(/\s+/).filter((w) => /^[A-Z][a-zōū]+$/.test(w)).pop();
-    return area && area.toLowerCase() !== ward.toLowerCase() ? area : ward;
+    // The neighbourhood sits next to the ward: before it ("…Ebisu, Shibuya City, Tokyo") or,
+    // in Japan-first addresses, after it ("Japan, 〒… Tokyo, Shinagawa City, Nishigotanda, 8 Chome…").
+    const japanFirst = /^japan\b|〒/i.test(parts[0]);
+    const near = japanFirst ? [parts[cityIdx + 1]] : [parts[cityIdx - 1], parts[cityIdx + 1]];
+    for (const part of near) {
+      const words = (part ?? "")
+        .replace(/\d+\s*Chome[-−\d]*/gi, "")
+        .replace(/〒?[\d−-]+/g, "")
+        .trim()
+        .split(/\s+/)
+        .filter((w) => /^[A-Z][a-zōū]+$/.test(w) && !/^(Tokyo|Japan)$/.test(w));
+      const area = words.pop();
+      if (area && area.toLowerCase() !== ward.toLowerCase()) return area;
+    }
+    return ward;
   }
   const ja = address.match(/東京都(\S+?区)/);
   return ja ? ja[1] : null;

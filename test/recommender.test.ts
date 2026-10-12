@@ -199,3 +199,12 @@ describe("travel and area labels", () => {
     expect(travelLabel(6, true, false)).toBe("6 min walk");
   });
 });
+
+describe("area from Japan-first addresses", () => {
+  it("finds the neighbourhood after the ward", async () => {
+    const { areaOf } = await import("../src/util/geo");
+    expect(areaOf("Japan, 〒141-0031 Tokyo, Shinagawa City, Nishigotanda, 8 Chome−4−13")).toBe("Nishigotanda");
+    expect(areaOf("Japan, 〒107-0052 Tokyo, Minato City, Akasaka, 3 Chome-12-3")).toBe("Akasaka");
+    expect(areaOf("1 Chome-2-3 Ebisu, Shibuya City, Tokyo 150-0013, Japan")).toBe("Ebisu");
+  });
+});

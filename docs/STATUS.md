@@ -33,6 +33,8 @@ Last updated: 12 Oct 2026.
 - **Every TableCheck dry run holds a real table for 10 minutes.** Repeated dry runs on one slot make it look full and block a real table, so keep them few.
 - **Next:** rerun with the key (`npm run p0`), for P0-1/P0-6 and the agent-level P0-2..7. Then the launch checklist.
 
+**12 Oct, laptop P0 run (agent):** P0-1 ✅, P0-4 ✅. P0-2/3/5/7 crashed in the test script (fixtures: a fresh import has no phone-only or TableCheck places yet, since channel detection is lazy). P0-6 flagged a false fail: the bot found Mexican places with live music 35 min away and said so; the test assumed none existed. Fixed both in the script (P0-6 now checks claims against the data); area names fixed for Japan-first addresses ("Tokyo" was shown). Cloud tools-mode rerun: P0-2/3/4/5/7 ✅ (real TableCheck dry run, SMOKEHOUSE). Next: Advait reruns `npm run p0` on the laptop.
+
 **Handoff for the next session (12 Oct):** Advait is starting a new cloud session with `ANTHROPIC_API_KEY` so Claude can run the P0 tests itself. Do this, in order:
 1. Read this file, `docs/P0_TESTS.md` and `docs/USER_STORIES.md`.
 1a. The key: in Claude Code cloud sessions `ANTHROPIC_API_KEY` from the environment doesn't reach the shell (reserved for Claude Code). Store it as `PLANNER_ANTHROPIC_API_KEY`; `src/llm.ts` reads either.

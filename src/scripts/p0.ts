@@ -32,12 +32,14 @@ const only = args.filter((a) => /^P0-\d+$/i.test(a)).map((a) => a.toUpperCase())
 
 const { config } = await import("../config");
 const { db, kvSet } = await import("../db");
-const { createPlan, getPlace, getPlan, logMessage, listPlaces } = await import("../db/repo");
+const { createPlan, getPlace, getPlan, insertPlace, logMessage, listPlaces, updatePlace } = await import("../db/repo");
 const { setSender } = await import("../notify");
-const { tablecheck } = await import("../booking/tablecheck");
+const { tablecheck, tcAutocomplete } = await import("../booking/tablecheck");
 const { closeBrowsers } = await import("../booking/browser");
 const { importSavedList } = await import("../places/takeout");
 const { formatOptions } = await import("../recommender");
+const { hasFeature } = await import("../recommender/filters");
+const { cuisineMatch, cuisineOf } = await import("../recommender/similarity");
 const { getPrefs } = await import("../db/repo");
 const { nextWeekday, now } = await import("../util/time");
 const { tools } = await import("../agent/tools");
@@ -135,7 +137,18 @@ async function ensureFixtures(): Promise<void> {
   await importSavedList(fs.readFileSync("fixtures/Tokyo_food.csv", "utf8"), "Tokyo food", "Advait", Boolean(config.google.mapsKey));
 }
 
-const phoneOnly = () => listPlaces("booking_channel = 'phone' AND tablecheck_slug IS NULL").filter((p) => !/dessert|cake|pastry|cafe/.test(p.primary_type ?? ""));
+/**
+ * Places the bot can only book by phone. A fresh import hasn't run booking-channel
+ * detection yet (it's lazy, at booking time), so mark two places with a phone
+ * number and no booking site as phone-only for the test.
+ */
+const phoneOnly = (): Place[] => {
+  const ready = listPlaces("booking_channel = 'phone' AND tablecheck_slug IS NULL");
+  const extra = listPlaces("phone IS NOT NULL AND tablecheck_slug IS NULL AND tabelog_url IS NULL AND booking_email IS NULL AND booking_channel = 'unknown'");
+  const picks = [...ready, ...extra].filter((p) => !/dessert|cake|pastry|cafe|bakery/.test(p.primary_type ?? "")).slice(0, 2);
+  if (picks.length < 2) throw new Error("fixture: fewer than 2 places with a phone number and no booking site");
+  return picks.map((p) => (p.booking_channel === "phone" ? p : updatePlace(p.id, { booking_channel: "phone" })));
+};
 /** TableCheck places, the ones known to be bookable (seats only, supported form) first: fewer requests, fewer 403s. */
 const KNOWN_GOOD = (process.env.P0_TABLECHECK || "SMOKEHOUSE,bills Omotesando").split(",").map((s) => s.trim().toLowerCase());
 const rank = (p: Place) => {
@@ -144,11 +157,26 @@ const rank = (p: Place) => {
 };
 const tcPlaces = () => listPlaces("tablecheck_slug IS NOT NULL AND tablecheck_slug NOT LIKE '%pickup%'").sort((a, b) => rank(a) - rank(b) || a.id - b.id);
 
+/** A TableCheck place for tests where TableCheck is stubbed: a real one if known, else any restaurant standing in. */
+const stubTc = (avoid: Place[] = []): Place =>
+  tcPlaces()[0] ??
+  updatePlace(listPlaces("tablecheck_slug IS NULL AND phone IS NULL").find((p) => !avoid.some((a) => a.id === p.id))!.id, { tablecheck_slug: "p0-stub", booking_channel: "tablecheck" });
+
+/** Real TableCheck places to try when none were found yet (tools mode skips discovery). */
+async function seedTableCheck(): Promise<void> {
+  if (tcPlaces().some((p) => p.tablecheck_slug !== "p0-stub")) return;
+  for (const name of KNOWN_GOOD) {
+    const [hit] = await tcAutocomplete(name).catch(() => []);
+    if (hit) insertPlace({ name: hit.name, source: "p0", booking_channel: "tablecheck", tablecheck_slug: hit.slug });
+  }
+}
+
 /** A TableCheck place with a free table on Wednesday (real availability API), and the time. */
 let freeTc: { place: Place; time: string } | null | undefined;
 async function findFreeTableCheck(): Promise<{ place: Place; time: string } | null> {
   if (freeTc !== undefined) return freeTc;
-  for (const place of tcPlaces()) {
+  await seedTableCheck();
+  for (const place of tcPlaces().filter((p) => p.tablecheck_slug !== "p0-stub")) {
     for (const time of ["18:30", "19:00", "18:00", "19:30"]) {
       await new Promise((ok) => setTimeout(ok, 800)); // TableCheck 403s bursts of requests
       const r = await realTc.checkAvailability.call(tablecheck, place, { date: wednesday(), time, partySize: 2 }).catch(() => null);
@@ -221,8 +249,8 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
     // a) availability says full; b) availability says free but the form refuses (TableCheck gotcha).
     for (const variant of ["a", "b"] as const) {
       reset();
-      const [tc] = tcPlaces();
       const [a, b] = phoneOnly();
+      const tc = stubTc([a, b]);
       planWith([tc, a, b], "18:30");
       let books = 0;
       tablecheck.checkAvailability = async () => (variant === "a" ? { status: "unavailable", alternatives: ["12:00", "17:00", "20:30", "21:00"] } : { status: "available" });
@@ -246,7 +274,7 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
 
   async "P0-4"(r) {
     reset();
-    const [tc] = tcPlaces();
+    const tc = stubTc();
     planWith([tc], "18:30");
     let bookedAt = "";
     tablecheck.checkAvailability = async () => ({ status: "unavailable", alternatives: ["17:30", "18:45", "20:00"] });
@@ -287,13 +315,21 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
     const planMax = maxId("plans");
     const out = await send("Advait", "new options, Mexican with live music");
     const msg = out.join("\n\n");
-    check(r, /(couldn'?t find|nothing|no )[^.\n]*(mexican|live music)/i.test(msg) || /Nothing fits/i.test(msg), "says what wasn't found");
-    const claims = msg
-      .split(/\n|(?<=\.)\s/)
-      .filter((l) => /mexican|live music/i.test(l) && !/couldn'?t|can'?t|didn'?t|no |not |nothing|none|isn'?t|without|closest/i.test(l));
-    check(r, claims.length === 0, `never claims a match${claims.length ? `: ${claims.join(" | ")}` : ""}`);
     const plan = db().prepare("SELECT id FROM plans WHERE id > ? ORDER BY id DESC LIMIT 1").get(planMax) as { id: number } | undefined;
     const after = plan ? getPlan(plan.id)!.options.map((o) => o.placeId) : [];
+    if (after.length) {
+      // Options were posted: every claim must be true in the data (Mexican, and live music per Google or reviews).
+      const opts = after.map((id) => getPlace(id)!);
+      const mexican = opts.filter((p) => cuisineMatch(cuisineOf(p), "mexican") > 0);
+      const music = opts.filter((p) => hasFeature(p, "live_music") === true);
+      const claimsMexican = /mexican/i.test(msg) && !/(couldn'?t|no|nothing)[^.\n]*mexican/i.test(msg);
+      const claimsMusic = /live music/i.test(msg) && !/(couldn'?t|no|nothing)[^.\n]*live music/i.test(msg);
+      check(r, !claimsMusic || music.length === opts.length, `live music claim is true (${music.length}/${opts.length} have it)`);
+      check(r, !claimsMexican || mexican.length > 0, `Mexican claim is true (${mexican.map((p) => p.name).join(", ") || "none"})`);
+      check(r, mexican.length === opts.length || /(couldn'?t|no |nothing)[^.\n]*mexican/i.test(msg), "any non-Mexican option is flagged as such");
+    } else {
+      check(r, /(couldn'?t find|nothing|no )[^.\n]*(mexican|live music)/i.test(msg) || /Nothing fits/i.test(msg), "says what wasn't found");
+    }
     check(r, after.every((id) => !before.has(id)), `different places from before (${after.map((id) => getPlace(id)!.name).join(", ") || "no new options"})`);
     check(r, !out.some((m) => EM_DASH.test(m)), "no em dashes");
   },
@@ -308,8 +344,8 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
     reset();
     fakeTc();
     config.wa.solo = false;
-    const free = { place: tcPlaces()[0], time: "18:30" };
     const [a, b] = phoneOnly();
+    const free = { place: stubTc([a, b]), time: "18:30" };
     planWith([free.place, a, b], free.time);
     let logId = maxId("booking_log");
     const out1 = await send("Advait", "1", { tool: "pick_option", input: { option_number: 1, person: "Advait" } });
