@@ -93,6 +93,17 @@ Last updated: 12 Oct 2026.
 - House style: rich WhatsApp formatting, short lines, no em dashes.
 - No call without a yes in the chat. Dry run never books or calls a restaurant.
 
+## I. Logs and debugging
+
+| # | Story | Status |
+|---|---|---|
+| I1 | As Advait, I want every phone call kept (when, place, number dialled, duration, outcome, full transcript, recording link, cost), so that I can see exactly what was said. | ⚠️ partial: first 1,500 characters of the transcript on the booking record; the rest only in the Vapi dashboard |
+| I2 | As Advait, I want every booking attempt kept (place, time, channel tried, result, the site's error text), so that I can see why a booking failed. | ⚠️ partial: terminal log only, lost when the window closes |
+| I3 | As Advait, I want to ask in chat "what happened with Warayaki?" or "show the last call", so that I can check without opening a laptop. | ⏳ |
+| I4 | As Advait, I want logs saved to a file that survives restarts, so that I can look back at a past session. | ⏳ chat messages are saved in the database; the terminal log isn't |
+| I5 | As Advait, I want a weekly cost summary (Claude tokens, call minutes, Google calls), so that I know what it costs. | ⏳ |
+| I6 | As Advait, I want a private alert when something breaks (bot crashed, WhatsApp disconnected, call credit low), so that problems don't go unnoticed. | ⏳ |
+
 ## H. Running it
 
 | # | Story | Status |
