@@ -214,9 +214,10 @@ const CHANNEL_NAME: Record<Route["channel"], string> = { tablecheck: "TableCheck
 /** Save a successful booking, schedule its reminders, and write the confirmation. */
 export async function recordBooking(place: Place, slot: Slot, channel: Route["channel"], result: BookResult, planId?: number): Promise<BookOutcome> {
   // A dry run on a booking site stops before the final confirm: nothing is booked, so nothing is recorded.
+  const moved = slot.asked && slot.asked !== slot.time ? `\n_${slot.asked} was taken; ${slot.time} is inside your ${windowLabel({ ...slot, time: slot.asked })} window._` : "";
   if (result.detail?.startsWith("DRY_RUN")) {
     const how = { tablecheck: "TableCheck", tabelog: "Tabelog", email: "email", phone: "phone" }[channel];
-    return { ok: true, message: `🧪 *Dry run: ${place.name} would be booked*\n${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people, on ${how}.\n\n_${how} accepted everything; I stopped before the final confirm. Nothing is booked._` };
+    return { ok: true, message: `🧪 *Dry run: ${place.name} would be booked*\n${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people, on ${how}.${moved}\n\n_${how} accepted everything; I stopped before the final confirm. Nothing is booked._` };
   }
   const reservation = createReservation({
     plan_id: planId ?? null,
@@ -237,7 +238,7 @@ export async function recordBooking(place: Place, slot: Slot, channel: Route["ch
   const withPolicy = await applyPolicy(reservation.id, result.policyText ?? null);
   if (planId) updatePlan(planId, { status: result.status === "confirmed" ? "booked" : "booking", chosen_place_id: place.id });
 
-  const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people${slot.asked && slot.asked !== slot.time ? `\n_${slot.asked} was taken; ${slot.time} is inside your ${windowLabel({ ...slot, time: slot.asked })} window._` : ""}`;
+  const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people${moved}`;
   const how = { tablecheck: "on TableCheck", tabelog: "on Tabelog", email: "by email", phone: `by phone, under *${config.call.bookingName}*` }[channel];
   const mock = config.dryRun && channel === "phone" ? `\n\n_Dry run: the call went to ${testCallee().label}, not the restaurant._` : "";
   const message =

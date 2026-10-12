@@ -1,4 +1,4 @@
-import { bookAndAnnounce, checkAvailability } from "../booking/service";
+import { bookAndAnnounce, checkAvailability, nearbyTimes } from "../booking/service";
 import { voters } from "../config";
 import { getPlace, getPlan, updatePlan } from "../db/repo";
 import { say, status } from "../notify";
@@ -39,8 +39,9 @@ export async function bookOption(planId: number, index: number, opts: { callAppr
   if (inWin) slot = { ...slot, time: inWin, asked: slot.time };
   else if (avail.status === "unavailable") {
     updatePlan(planId, { status: "proposed" });
-    const alts = avail.alternatives?.length ? `\nFree nearby: *${avail.alternatives.join(", ")}*.` : "";
-    await say(`❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.${alts}\n\nWant one of those times, or another option?`);
+    const near = nearbyTimes(avail.alternatives, slot.time);
+    const alts = near.length ? `\nFree that evening: *${near.join(", ")}*.` : "\nNothing free that evening.";
+    await say(`❌ *${place.name}* is full at ${slot.time} on ${fmtDate(slot.date)}.${alts}\n\n${near.length ? "Want one of those times, or another option?" : "Want another option, or another day?"}`);
     return;
   }
   const out = await bookAndAnnounce(place, slot, { planId, callApproved: opts.callApproved });

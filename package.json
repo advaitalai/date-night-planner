@@ -12,7 +12,8 @@
     "browser-login": "tsx src/scripts/browser-login.ts",
     "chat": "tsx src/scripts/chat.ts",
     "test-call": "tsx src/scripts/test-call.ts",
-    "logs": "tsx src/scripts/logs.ts"
+    "logs": "tsx src/scripts/logs.ts",
+    "p0": "tsx src/scripts/p0.ts"
   },
   "repository": {
     "type": "git",

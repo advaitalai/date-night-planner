@@ -24,7 +24,18 @@ import type { AvailabilityResult, BookingAdapter, BookResult, ChangeResult, Slot
 const API = "https://api.vapi.ai";
 
 export function vapiConfigured(): boolean {
-  return Boolean(process.env.VAPI_API_KEY && process.env.VAPI_PHONE_NUMBER_ID);
+  return Boolean(fakeCallSpec() || (process.env.VAPI_API_KEY && process.env.VAPI_PHONE_NUMBER_ID));
+}
+
+/**
+ * Tests only: CALL_FAKE=<outcome>[:<times>] answers every call without dialing,
+ * e.g. "booked", "booked:19:00", "full:19:30,20:00", "busy". Dry run only.
+ */
+function fakeCallSpec(): { outcome: CallOutcomeKind; times: string[] } | null {
+  const raw = process.env.CALL_FAKE?.trim();
+  if (!raw || !config.dryRun) return null;
+  const [outcome, rest = ""] = raw.split(/:(.*)/s);
+  return { outcome: outcome as CallOutcomeKind, times: rest.split(",").map((t) => t.trim()).filter(Boolean) };
 }
 
 /** "03-6431-8960" / "070-1568-0178" → "+81364318960" (E.164, as Vapi requires). */
@@ -312,6 +323,11 @@ async function runCall(place: Place, c: Contact, script: CallScript, goal: strin
 }
 
 async function placeCall(place: Place, to: string | null, script: CallScript, goal: string): Promise<CallReport & { call?: VapiCall }> {
+  const fake = fakeCallSpec();
+  if (fake) {
+    const outcome = { ...blank(fake.outcome, `Fake call (CALL_FAKE): ${fake.outcome}.`), bookedTime: fake.outcome === "booked" ? (fake.times[0] ?? null) : null, alternativeTimes: fake.outcome === "booked" ? [] : fake.times };
+    return { outcome, transcript: `[fake call: ${goal}]`, endedReason: "fake" };
+  }
   if (!vapiConfigured()) return { outcome: blank("failed", "calls aren't set up"), transcript: "", failure: "Phone calls aren't set up yet (VAPI_API_KEY and VAPI_PHONE_NUMBER_ID in .env)." };
   if (!to) return { outcome: blank("failed", "no phone number"), transcript: "", failure: config.dryRun ? `No number for the test call (CALL_TEST_TO=${config.call.testTo || "BOOKING_PHONE"}). Check .env.` : `I don't have a phone number for ${place.name}.` };
   const balance = await twilioBalance();

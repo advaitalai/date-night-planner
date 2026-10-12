@@ -1,3 +1,4 @@
+import path from "node:path";
 import { DateTime } from "luxon";
 import type { Page } from "playwright-core";
 import { config, domesticPhone, type Contact } from "../config";
@@ -35,8 +36,16 @@ export interface TcShop {
   availableDates: string[];
 }
 
+/** Pause after a 403: TableCheck refuses bursts of requests for a few seconds. */
+const backoff = (attempt: number) => new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+
 async function getJson(url: string, init?: RequestInit): Promise<unknown> {
-  const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+  let res: Response;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+    if (res.status !== 403 || attempt === 2) break;
+    await backoff(attempt);
+  }
   if (!res.ok) throw new Error(`TableCheck ${res.status} for ${url}`);
   return res.json();
 }
@@ -138,8 +147,12 @@ export interface TcShopInfo {
   seatOnly: boolean | null;
 }
 
-/** Seat-only, prepayment-free check on the classic form's server-rendered menu. */
-export function parseClassicMenu(html: string): boolean {
+/**
+ * Seat-only, prepayment-free check on the classic form's server-rendered menu.
+ * null when the page isn't the booking form at all (an error or bot-check page).
+ */
+export function parseClassicMenu(html: string): boolean | null {
+  if (!/id="new_reservation"|reservation_num_people_adult/.test(html)) return null;
   const items = [...html.matchAll(/<div class="menu-item-data"([^>]*)>/g)].map((m) => ({
     name: m[1].match(/data-name="([^"]*)"/)?.[1] ?? "",
     pay: m[1].match(/data-payment-type="([^"]*)"/)?.[1] ?? "none",
@@ -147,13 +160,21 @@ export function parseClassicMenu(html: string): boolean {
   return items.length === 0 || items.some((i) => isSeatOnly(i.name) && i.pay === "none");
 }
 
-/** Which booking flow a shop uses and whether it offers seat-only. Cached for a week. */
+/** Which booking flow a shop uses and whether it offers seat-only. Cached for a week (tcinfo3: since the 12 Oct seat-only and 403 fixes). */
 export async function tcShopInfo(slug: string): Promise<TcShopInfo> {
-  const cached = kvGet<(TcShopInfo & { at: string }) | null>(`tcinfo:${slug}`, null);
+  const cached = kvGet<(TcShopInfo & { at: string }) | null>(`tcinfo3:${slug}`, null);
   if (cached && Date.now() - Date.parse(cached.at) < 7 * 86_400_000) return cached;
-  const res = await fetch(`https://www.tablecheck.com/en/shops/${slug}/reserve`, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0" } });
-  const info: TcShopInfo = res.status >= 300 && res.status < 400 ? { flow: "new", seatOnly: null } : { flow: "classic", seatOnly: parseClassicMenu(await res.text()) };
-  kvSet(`tcinfo:${slug}`, { ...info, at: new Date().toISOString() });
+  let res: Response;
+  // Retry a 403 a little later, and never cache an error.
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(`https://www.tablecheck.com/en/shops/${slug}/reserve`, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0" } });
+    if (res.status !== 403 || attempt === 2) break;
+    await backoff(attempt);
+  }
+  if (res.status >= 400) throw new Error(`TableCheck shop page ${res.status}`);
+  const info: TcShopInfo = res.status >= 300 ? { flow: "new", seatOnly: null } : { flow: "classic", seatOnly: parseClassicMenu(await res.text()) };
+  if (info.seatOnly === null && info.flow === "classic") throw new Error("TableCheck shop page wasn't the booking form");
+  kvSet(`tcinfo3:${slug}`, { ...info, at: new Date().toISOString() });
   return info;
 }
 
@@ -162,9 +183,15 @@ export function isBookedPage(body: string): boolean {
   return /reservation is (accepted|confirmed)|status\s+(accepted|confirmed)|confirmed|thank you|complete|予約が(完了|確定)|予約を受け付け/i.test(body);
 }
 
-/** Menu items the bot will pick: seat-only reservations without prepayment. Never courses. */
+/**
+ * Menu items the bot will pick: a plain table or seat booking for dinner
+ * ("Seats only", "Book a Table", "Dining Table", "Bar Counter", "席のみ").
+ * Never courses, set menus, drink packages, lunch/café-only or takeout items.
+ * (Prepayment is checked separately, on the item's payment type.)
+ */
 export function isSeatOnly(name: string): boolean {
-  return /seats? only|table only|席のみ|お席のみ|座席のみ/i.test(name);
+  if (/course|コース|omakase|おまかせ|plan\b|プラン|\bset\b|セット|package|飲み放題|nomi ?hodai|lunch|ランチ|breakfast|モーニング|caf[eé]|dessert|デザート|take ?out|テイクアウト|pick ?up/i.test(name)) return false;
+  return /seat|table|counter|席/i.test(name);
 }
 
 const TIME_12H = (t: string) => DateTime.fromFormat(t, "HH:mm").toFormat("h:mm a");
@@ -208,21 +235,8 @@ async function freeTimesInColumn(page: Page, columnX: number): Promise<string[]>
     .map((d) => d.toFormat("HH:mm"));
 }
 
-/**
- * TableCheck's classic single-page form (/en/shops/<slug>/reserve):
- * availability grid → seat-only menu item → additional info → guest details →
- * "Next Step" → confirmation page → "Confirm". DRY_RUN stops on the
- * confirmation page, after TableCheck has validated everything.
- */
-async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: string): Promise<BookResult> {
-  await page.waitForTimeout(1500);
-
-  // 0. Seat-only items are tied to seating categories (e.g. Tables/Counters, not Partition).
-  //    Pick that category first, so the grid shows times free for seats only. (TableCheck's
-  //    availability API counts every category, which is why 18:30 could look free but be refused.)
-  await selectSeatOnlyCategory(page);
-
-  // 1. Click the slot in the availability grid: day column (by x position, since closed days span rows) × time row.
+/** Step 1 on the grid layout: click the day column (by x position, since closed days span rows) × time row. */
+async function pickFromGrid(page: Page, slot: Slot): Promise<BookResult | null> {
   const day = Number(slot.date.slice(8));
   const header = page.locator("#timetable-body td.wday").filter({ has: page.locator(".date-num", { hasText: new RegExp(`^${day}$`) }) }).first();
   const hb = await header.boundingBox();
@@ -245,6 +259,61 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   await page.waitForTimeout(2000);
   await page.locator("#reservation_num_people_adult").selectOption(String(slot.partySize));
   await page.waitForTimeout(1000);
+  return null;
+}
+
+/**
+ * Step 1 on the dropdown layout (no grid; e.g. SMOKEHOUSE): party size, then the
+ * date in the calendar pop-up (Mobiscroll; data-full has a 0-based month), then
+ * the time. The time list only offers free times.
+ */
+async function pickFromDropdowns(page: Page, slot: Slot): Promise<BookResult | null> {
+  await page.locator("#reservation_num_people_adult").selectOption(String(slot.partySize));
+  await page.waitForTimeout(1000);
+  await page.locator("#reservation_start_date").click();
+  await page.waitForTimeout(800);
+  const [y, m, d] = slot.date.split("-").map(Number);
+  const day = page.locator(`[data-full='${y}-${m - 1}-${d}']`).first();
+  for (let i = 0; i < 3 && !(await day.isVisible().catch(() => false)); i++) {
+    await page.locator(".dw-cal-next, .dw-cal-next-m").first().click().catch(() => {});
+    await page.waitForTimeout(500);
+  }
+  if (!(await day.isVisible().catch(() => false))) return { status: "failed", detail: `the date picker doesn't offer ${slot.date}` };
+  // Closed or fully booked days can't be picked.
+  if (!/dw-cal-day-v/.test((await day.getAttribute("class")) ?? "")) return { status: "failed", full: true, alternatives: [], detail: `${slot.date} is closed or full on TableCheck` };
+  await day.click();
+  await page.waitForTimeout(2000);
+  const options = await page.locator("#reservation_start_at_epoch option").evaluateAll((os) =>
+    os.filter((o) => (o as HTMLOptionElement).value && !(o as HTMLOptionElement).disabled).map((o) => ({ label: (o.textContent ?? "").trim(), value: (o as HTMLOptionElement).value })),
+  );
+  const times = options.map((o) => ({ ...o, time: DateTime.fromFormat(o.label.toUpperCase(), "h:mm a").toFormat("HH:mm") }));
+  const want = times.find((t) => t.time === slot.time);
+  if (!want) return { status: "failed", full: true, alternatives: times.map((t) => t.time).filter((t) => t !== "Invalid DateTime"), detail: `${slot.time} on ${slot.date} is full on TableCheck` };
+  await page.locator("#reservation_start_at_epoch").selectOption(want.value);
+  // The menu list reloads for the chosen time; let it settle before picking an item.
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(2000);
+  return null;
+}
+
+/**
+ * TableCheck's classic single-page form (/en/shops/<slug>/reserve):
+ * availability grid (or date + time dropdowns) → seat-only menu item → additional info → guest details →
+ * "Next Step" → confirmation page → "Confirm". DRY_RUN stops on the
+ * confirmation page, after TableCheck has validated everything.
+ */
+async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: string): Promise<BookResult> {
+  await page.waitForTimeout(1500);
+
+  // 0. Seat-only items are tied to seating categories (e.g. Tables/Counters, not Partition).
+  //    Pick that category first, so the grid shows times free for seats only. (TableCheck's
+  //    availability API counts every category, which is why 18:30 could look free but be refused.)
+  await selectSeatOnlyCategory(page);
+
+  // 1. Pick the date and time: availability grid, or date + time dropdowns on some shops.
+  const usesGrid = (await page.locator("#timetable-body td.wday").count()) > 0;
+  const stop = usesGrid ? await pickFromGrid(page, slot) : await pickFromDropdowns(page, slot);
+  if (stop) return stop;
 
   // 2. Menu: seat-only, no prepayment. Shops without a menu list are seat-only by default.
   const items = page.locator(".menu-item:has(.menu-item-data)");
@@ -266,8 +335,18 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
           await page.waitForTimeout(1500);
         }
       }
-      await items.nth(i).locator("label.menu-item-order-btn").first().click();
-      chose = name;
+      // A picked item has its checkbox ticked; a click during a menu refresh can be lost, so check and retry.
+      const btn = items.nth(i).locator("label.menu-item-order-btn").first();
+      const box = btn.locator("input[type=checkbox]");
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await btn.click();
+        await page.waitForTimeout(1000);
+        if (!(await box.count()) || (await box.isChecked().catch(() => false))) {
+          chose = name;
+          break;
+        }
+      }
+      if (!chose) return { status: "failed", detail: `couldn't select "${name}" on the booking page` };
       break;
     }
     if (!chose) return { status: "failed", detail: "no seat-only option without prepayment (courses only, or a card is required)" };
@@ -277,6 +356,10 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   const purpose = page.locator("#reservation_objective");
   if (await purpose.count()) await purpose.selectOption("date").catch(() => {});
   for (const q of await page.locator("textarea[name*='enquete_drafts_attributes']").all()) if (await q.isVisible()) await q.fill("None");
+  // Required acknowledgements ("If you are with children aged 6 or younger, enter them separately"): two adults, so tick them.
+  for (const box of await page.locator("input[type=checkbox][name*='enquete_drafts_attributes']").all()) {
+    if (!(await box.isChecked().catch(() => true))) await box.check({ force: true }).catch(() => {});
+  }
   if (notes) await page.locator("#reservation_customer_request").fill(notes).catch(() => {});
 
   // 4. Guest details. Phone in Japanese domestic format (the field defaults to Japan).
@@ -299,8 +382,12 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   const confirmBtn = page.locator("input[type=submit][value='Confirm']");
   if (!(await confirmBtn.isVisible().catch(() => false))) {
     const errors = (await page.locator(".has-error, .alert-danger, .error, .help-block").allInnerTexts().catch(() => [])).join(" / ");
-    const full = /time is unavailable|fully booked|満席/i.test(errors);
-    console.log(`[tablecheck] form not accepted: ${JSON.stringify(errors.slice(0, 500)) || "(no error text)"} @ ${page.url()}`);
+    // TableCheck adds "selected time is unavailable" to other form errors too (a missing answer, an
+    // invalid phone), so it only means full when nothing else is wrong.
+    const full = /time is unavailable|fully booked|満席/i.test(errors) && !/required|invalid|is not valid|must be/i.test(errors);
+    const shot = path.join(config.dataDir, "screens", `tablecheck-refused-${Date.now()}.png`);
+    await page.screenshot({ path: shot, fullPage: true }).catch(() => {});
+    console.log(`[tablecheck] form not accepted: ${JSON.stringify(errors.slice(0, 500)) || "(no error text)"} @ ${page.url()} (screenshot: ${shot})`);
     return { status: "failed", full, detail: full ? `${slot.time} is full on TableCheck` : `TableCheck didn't accept the form${errors ? `: ${errors.slice(0, 300)}` : ""}` };
   }
   const summary = (await page.locator("body").innerText()).replace(/\n{2,}/g, "\n");

@@ -130,6 +130,12 @@ Findings from the 7 Oct 2026 test session:
 
 - **TableCheck has two booking flows.**
   - **Classic form** (`/en/shops/<slug>/reserve`), e.g. h:armonia. **Works end to end in dry run**: grid → seats-only → purpose "Date" → required Q&A "None" → guest details → TableCheck's confirmation page. The page holds the slot for 10 minutes. It reports the cancellation policy and the at-venue total, e.g. ¥500/person coperto.
+    - **Two layouts of the classic form** (12 Oct): an availability **grid** (h:armonia, bills Omotesando), or **date + time dropdowns** with no grid (SMOKEHOUSE): a Mobiscroll calendar (`[data-full='YYYY-M-D']`, month 0-based) and a time `<select>` that only lists free times. Both work in dry run.
+    - Seat-only menu items have many names: "Seats only", "Book a Table", "Dining Table", "Bar Counter", 席のみ. Courses, set menus, drink packages, lunch/café-only items are never picked. Only payment type `none` counts (see the `postpay_optional` question in BACKLOG).
+    - Required Q&A can be a checkbox acknowledgement ("enter children separately"); the bot ticks it.
+    - On any form error TableCheck also shows "selected time is unavailable", so that only means full when it's the only error.
+    - The menu list reloads after the time is picked; the bot waits, and checks the item's checkbox really got ticked.
+  - **403s:** TableCheck answers 403 to bursts of requests (seen from the cloud sandbox after ~50 requests in a few minutes). The bot retries twice (1.5 s, 3 s) and never caches an error. Before 12 Oct a 403 page was read as "classic form, seat-only", which cached wrong verdicts for a week (cache key now `tcinfo3:`).
   - **Newer step-by-step flow** (`/en/<slug>/reserve/message` → landing → menu), e.g. Kuss Daikanyama. Mapped as far as the menu page (stable `data-testid`s: `Landing Date Panel Opener Button`, `[data-testid=day][data-date=…]`, `Landing Time Button`, `Landing Service Category Button`, `Landing Find A Table Button`, then the menu with "Seat only reservation"). Booking isn't implemented yet; the bot reports it as unsupported.
 - **TableCheck availability API:** `hub/availability_calendar` returns about 9 slots around `start_at`, so send the JST date and time. Fixed.
 - **TableCheck search** returns names in `text_translations`. Fixed.

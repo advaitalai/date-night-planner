@@ -59,6 +59,7 @@ describe("booking channel detection", () => {
       <a href="mailto:info@example.jp?subject=予約">mail</a> <a href="https://tabelog.com/tokyo/A1303/A130302/13001234/">食べログ</a>`;
     expect(scanWebsite(html)).toEqual({ tablecheckSlug: "monnalisa-ebisu", tabelogUrl: "https://tabelog.com/tokyo/A1303/A130302/13001234/", email: "info@example.jp" });
     expect(scanWebsite('<a href="https://www.ebica.jp/pages/shop/1234">book</a>').otherOnline).toContain("ebica.jp");
+    expect(scanWebsite('<a href="https://www.tablecheck.com/en/shops/peterluger-pickup/reserve">Order takeout</a>').tablecheckSlug).toBeUndefined();
   });
 
   it("separates dinner places from spas and galleries", () => {
@@ -136,13 +137,21 @@ describe("TableCheck booked page", () => {
 describe("TableCheck classic menu check", () => {
   it("needs a seat-only item without prepayment", async () => {
     const { parseClassicMenu } = await import("../src/booking/tablecheck");
-    const seat = `<div class="menu-item-data" data-id="1" data-name="Reservation for seats only" data-menu-type="main" data-payment-type="none">`;
+    const form = `<form id="new_reservation">`;
+    const seat = `${form}<div class="menu-item-data" data-id="1" data-name="Reservation for seats only" data-menu-type="main" data-payment-type="none">`;
     const course = `<div class="menu-item-data" data-id="2" data-name="Omakase course" data-payment-type="postpay_optional">`;
     const cardSeat = `<div class="menu-item-data" data-id="3" data-name="Seats only" data-payment-type="prepay">`;
     expect(parseClassicMenu(seat + course)).toBe(true);
-    expect(parseClassicMenu(course)).toBe(false);
-    expect(parseClassicMenu(cardSeat + course)).toBe(false);
-    expect(parseClassicMenu("<html>no menu</html>")).toBe(true);
+    expect(parseClassicMenu(form + course)).toBe(false);
+    expect(parseClassicMenu(form + cardSeat + course)).toBe(false);
+    expect(parseClassicMenu(`${form}<html>no menu</html>`)).toBe(true);
+    expect(parseClassicMenu("<html>403 Forbidden</html>")).toBe(null);
+  });
+
+  it("treats plain table bookings as seat-only, never courses, lunch or packages", async () => {
+    const { isSeatOnly } = await import("../src/booking/tablecheck");
+    for (const n of ["Reservation for seats only", "Book a Table", "Dining Table", "Craft Beer Bar Counter", "【DINNER】Seating only (no meal included)", "お席のみのご予約"]) expect(isSeatOnly(n), n).toBe(true);
+    for (const n of ["SMOKEHOUSE Course", "SMOKEHOUSE Course and NOMI HODAI Drink Package", "【LUNCH】Seat-Only Reservation", "【CAFE】Seat-Only Reservation", "Counter omakase", "Regarding Online Reservations", "コース料理", "Anniversary table plan"]) expect(isSeatOnly(n), n).toBe(false);
   });
 });
 

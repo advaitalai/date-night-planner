@@ -29,6 +29,9 @@ const NON_DINING_TYPES = new Set([
 
 const CASUAL_TYPES = new Set(["ramen_restaurant", "fast_food_restaurant", "hamburger_restaurant", "food_court"]);
 
+/** TableCheck pages for takeout, not tables (e.g. "peterluger-pickup"). */
+const TAKEOUT_SLUG = /pickup|takeout|take-out|delivery/i;
+
 export interface WebsiteLinks {
   tablecheckSlug?: string;
   tabelogUrl?: string;
@@ -40,7 +43,7 @@ export interface WebsiteLinks {
 export function scanWebsite(html: string): WebsiteLinks {
   const out: WebsiteLinks = {};
   const tc = html.match(/tablecheck\.com\/(?:[a-z]{2}\/)?(?:shops\/)?([a-z0-9-]+)(?:\/reserve)?/i);
-  if (tc && !["en", "ja", "shops", "images", "assets"].includes(tc[1].toLowerCase())) out.tablecheckSlug = tc[1];
+  if (tc && !["en", "ja", "shops", "images", "assets"].includes(tc[1].toLowerCase()) && !TAKEOUT_SLUG.test(tc[1])) out.tablecheckSlug = tc[1];
   const tl = html.match(/https?:\/\/tabelog\.com\/[a-z]+\/A\d{4}\/A\d{6}\/\d+\/?/);
   if (tl) out.tabelogUrl = tl[0];
   const other = html.match(/https?:\/\/[^"'\s]*(?:ebica\.jp|toreta\.in|omakase\.in|yoyaku\.hotpepper\.jp|resty\.jp|ikyu\.com\/restaurant|autoreserve\.com)[^"'\s]*/i);
@@ -90,7 +93,8 @@ export async function detectChannel(place: Place): Promise<Detection> {
   if (links.tablecheckSlug) return { channel: "tablecheck", patch: { tablecheck_slug: links.tablecheckSlug }, evidence: "TableCheck link on website" };
 
   try {
-    const hit = (await tcAutocomplete(place.name)).find((s) => sameName(s.name, place.name));
+    // Shops often have a separate takeout/pickup page on TableCheck; that's not for tables.
+    const hit = (await tcAutocomplete(place.name)).find((s) => sameName(s.name, place.name) && !TAKEOUT_SLUG.test(s.slug));
     if (hit) return { channel: "tablecheck", patch: { tablecheck_slug: hit.slug }, evidence: `TableCheck search: ${hit.name}` };
   } catch {
     // TableCheck unreachable; fall through
