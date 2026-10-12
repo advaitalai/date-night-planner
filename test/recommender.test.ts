@@ -171,19 +171,31 @@ describe("options message", () => {
         {
           placeId: 1, name: "h:armonia", availability: "available", score: 3, pitch: "",
           what: "Handmade pasta and charcoal-grilled wagyu in a cosy Italian bar",
-          why: "A change from last week's Indian, and practically next door",
-          place: place({ name: "h:armonia", cuisine: "italian", price_level: 2, rating: 4.6, maps_url: "https://maps.google.com/?cid=1" }),
-          travelMin: 6, anchor: "home",
+          why: "Saved by Advait; reviewers rave about the handmade pasta",
+          place: place({ name: "h:armonia", cuisine: "italian", price_level: 2, rating: 4.6, maps_url: "https://maps.google.com/?cid=1", address: "3 Chome-1-1 Nishigotanda, Shinagawa City, Tokyo 141-0031, Japan" }),
+          travelMin: 6, travelWalk: true, anchor: "home",
         },
       ],
       notes: [""],
       solo: true,
     });
     if (process.env.SHOW_SAMPLE) console.log(msg);
-    expect(msg).toContain("1️⃣ *h:armonia*\n_Italian  ·  ¥¥  ·  ★ 4.6  ·  6 min from home_\nHandmade pasta");
-    expect(msg).toContain("*Why:* A change from last week's Indian, and practically next door.");
+    expect(msg).toContain("1️⃣ *h:armonia*\n_Italian  ·  ¥¥  ·  ★ 4.6  ·  Nishigotanda, 6 min walk from home_\nHandmade pasta");
+    expect(msg).toContain("*Why:* Saved by Advait; reviewers rave about the handmade pasta.");
     expect(msg).toContain("📍 https://maps.google.com/?cid=1");
     expect(msg).toContain("Reply with a number");
     expect(msg).not.toContain("—");
+  });
+});
+
+describe("travel and area labels", () => {
+  it("names the neighbourhood and how you'd get there", async () => {
+    const { areaOf, travelLabel } = await import("../src/util/geo");
+    expect(areaOf("1 Chome-2-3 Ebisu, Shibuya City, Tokyo 150-0013, Japan")).toBe("Ebisu");
+    expect(areaOf("Shibuya City, Tokyo, Japan")).toBe("Shibuya");
+    expect(areaOf("日本、〒141-0022 東京都品川区東五反田1-2-3")).toBe("品川区");
+    expect(travelLabel(22, false, false)).toBe("22 min by train");
+    expect(travelLabel(25, false, true)).toBe("~25 min by train");
+    expect(travelLabel(6, true, false)).toBe("6 min walk");
   });
 });

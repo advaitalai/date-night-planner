@@ -6,6 +6,8 @@ export interface Candidate {
   place: Place;
   travelMin: number;
   travelEstimated: boolean;
+  /** Close enough that travelMin is a walk, not transit. */
+  travelWalk?: boolean;
   openAtSlot: boolean | null;
   lastVisitDaysAgo: number | null;
 }

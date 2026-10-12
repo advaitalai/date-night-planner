@@ -44,6 +44,7 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 - R8. Rotate cuisines: rank cuisines from the last ~3 dates lower.
 - R9. **Pick first, then book** (changed 10 Oct 2026, from Advait's beta feedback). Options are chosen for fit: open then, distance, budget, cuisine, rotation. Live availability is not checked up front; the bot books right after the choice and reports quickly if the time is full, with the alternatives.
 - R10. Go beyond the saved lists. Find similar places (by cuisine, vibe and price) and new places near the starting point. Explain the link, e.g. "similar to X on Emily's list".
+- R11a. (12 Oct) Cards show the area and how you'd get there: "Ebisu, 22 min by train from home" or "6 min walk"; "~" marks an estimate. Travel is always public transport or walking, never taxi. The "why" says why it suits *them* (their lists, their request, similar to a saved place, a cuisine they haven't had lately, a standout dish); never distance or booking tips. Every suggestion is posted as cards, never as freeform text.
 - R11. Each option comes with a short pitch saying why: a signature dish, the vibe ("live band"), travel time. Pitches may only use facts from stored reviews or profiles, with nothing invented.
 - R12. Hard filters: open at that time, within the travel limit, bookable by the bot, not visited recently, within budget, matching any requested cuisine. Also (11 Oct):
   - **Dinner places only:** no cafés, dessert bars or bakeries (Google's `servesDinner`, place type, cuisine label), unless they ask for dessert.

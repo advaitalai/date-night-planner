@@ -18,6 +18,8 @@ Last updated: 11 Oct 2026.
 
 ## Next steps
 
+**Now:** E2E dry run #4 (calls to Advait, `BOOKING_ONLY=phone`) to check dialer QA (D1–D4) and recommender QA (W1–W8) fixes.
+
 **Agreed plan (12 Oct):** dialer QA fixes (done) → Advait's recommender feedback → decide laptop vs cloud → decide whether Emily can join the group → first real booking for Wed 14 Oct.
 
 1. Phase 3c rerun: `git pull`, top up Twilio, optionally add `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` to `.env`. Check: calls only after "call"/"yes"; outcome questions; "live music" and "new options" honest; no dessert places. Then Advait shares his own notes.

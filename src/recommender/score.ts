@@ -38,7 +38,7 @@ export function scoreCandidate(c: Candidate, ctx: ScoreContext): Scored {
   const recent = ctx.recentCuisines.slice(0, ctx.cuisineCooldownDates);
   const hit = recent.findIndex((rc) => cuisineMatch(cuisine, rc) > 0);
   if (hit >= 0) score -= 3 - hit * (2 / Math.max(1, ctx.cuisineCooldownDates));
-  else if (cuisine) reasons.push(`a change from recent ${recent.length ? recent.join("/") : "dates"}`);
+  else if (cuisine && recent.length) reasons.push(`no ${cuisine} in your last ${recent.length} date${recent.length > 1 ? "s" : ""}`);
 
   const k = ctx.constraints;
   if (k.cuisines.some((w) => cuisineMatch(cuisine, w) > 0)) score += 2;

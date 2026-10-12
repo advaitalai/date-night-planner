@@ -218,7 +218,8 @@ const rawTools = [
 
   betaZodTool({
     name: "search_places",
-    description: "Look up restaurants (saved or not) to answer questions. Returns facts, travel time and booking channel. Doesn't post anything.",
+    description:
+      "Look up facts about a restaurant someone named, to answer a question ('is Blue Note near home?', 'what's Kuss like?'). Doesn't post anything. NOT for suggesting places: suggestions always go through recommend_options so they get proper cards.",
     inputSchema: z.object({ query: z.string(), from: z.enum(["home", "office"]).optional() }),
     run: async ({ query, from }) => {
       const anchor = getPrefs().anchors[from ?? "home"];

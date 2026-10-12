@@ -8,7 +8,7 @@ import { listPlaces, recentVisits, updatePlace, upsertPlace } from "../db/repo";
 import { cidFromMapsUri, placeFeatures, textSearch, toPlaceFields, travelMinutes } from "../places/google";
 import { buildProfile } from "../places/profile";
 import type { Place } from "../types";
-import type { LatLng } from "../util/geo";
+import { walkMinutes, type LatLng } from "../util/geo";
 import { isOpenFor, jst, ZONE } from "../util/time";
 import { FEATURE_INFO, type Candidate } from "./filters";
 import type { Constraints } from "./parseRequest";
@@ -111,15 +111,34 @@ export function savedPool(): Place[] {
   return listPlaces("booking_channel != 'not_restaurant'");
 }
 
+const TRAVEL_DAYS = 30;
+
+/**
+ * Transit time by public transport (Routes API), cached per place and starting
+ * point for 30 days: a planning run checks 150+ places, and times barely change.
+ * Estimates (no route from Google) aren't cached, so they're retried next time.
+ */
+async function cachedTransit(placeId: number, from: LatLng, to: LatLng, arriveBy: Date): Promise<{ minutes: number; estimated: boolean }> {
+  const key = `travel:${placeId}:${from.lat.toFixed(3)},${from.lng.toFixed(3)}`;
+  const hit = kvGet<{ minutes: number; at: string } | null>(key, null);
+  if (hit && Date.now() - Date.parse(hit.at) < TRAVEL_DAYS * 86_400_000) return { minutes: hit.minutes, estimated: false };
+  const t = await travelMinutes(from, to, arriveBy);
+  if (!t.estimated) kvSet(key, { minutes: t.minutes, at: new Date().toISOString() });
+  return t;
+}
+
 export async function toCandidate(place: Place, anchor: LatLng, slot: Slot): Promise<Candidate | null> {
   if (place.lat == null || place.lng == null) return null;
   const start = jst(slot.date, slot.time);
-  const travel = await travelMinutes(anchor, { lat: place.lat, lng: place.lng }, start.toJSDate());
+  const to = { lat: place.lat, lng: place.lng };
+  const walk = walkMinutes(anchor, to);
+  const travel = walk != null ? { minutes: walk, estimated: false } : await cachedTransit(place.id, anchor, to, start.toJSDate());
   const lastVisit = recentVisits(200).find((v) => v.place_id === place.id);
   return {
     place,
     travelMin: travel.minutes,
     travelEstimated: travel.estimated,
+    travelWalk: walk != null,
     openAtSlot: isOpenFor(place.opening_periods, start),
     lastVisitDaysAgo: lastVisit ? Math.floor(start.diff(DateTime.fromISO(lastVisit.date, { zone: ZONE }), "days").days) : null,
   };

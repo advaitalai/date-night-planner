@@ -6,7 +6,7 @@ import { createPlan, findPlaceByName, getPrefs, getPlace, recentVisits, shownFor
 import { clearStatus, poll, say, status } from "../notify";
 import { geocode } from "../places/google";
 import type { Anchor, Place, Plan, PlanOption } from "../types";
-import { estimateTravelMin } from "../util/geo";
+import { areaOf, estimateTravelMin, travelLabel } from "../util/geo";
 import { fmtDate, nextWeekday, now } from "../util/time";
 import { discover, enrich, ensureFeatures, savedPool, toCandidate } from "./candidates";
 import { applyFilters, FEATURE_INFO, hasFeature, type Candidate, type FilterResult, type RejectReason } from "./filters";
@@ -163,6 +163,14 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   return { slot, anchor, constraints: k, options, rejectedCounts, rejectedExamples, notBookableChannels, relaxed, skippedFavourites: [], unmet: unmetParts(k, options) };
 }
 
+/** The parts of the request a place meets (for the pitch's "why"). */
+export function requestMatches(k: Constraints, p: Place): string[] {
+  return [
+    ...k.cuisines.filter((c) => cuisineMatch(cuisineOf(p), c) > 0),
+    ...k.features.filter((f) => hasFeature(p, f)).map((f) => FEATURE_INFO[f].label),
+  ];
+}
+
 /** Which asked-for cuisines and vibes none of the options has. */
 export function unmetParts(k: Constraints, options: RecommendOption[]): string[] {
   if (!options.length) return [];
@@ -203,7 +211,7 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
 
   await status("Writing up the options…");
   const pitches = await writePitches(
-    r.options.map((o) => ({ option: o.scored, availability: o.availability, anchorLabel: r.anchor.label })),
+    r.options.map((o) => ({ option: o.scored, availability: o.availability, anchorLabel: r.anchor.label, matches: requestMatches(r.constraints, o.scored.place) })),
     savedPool(),
   );
   const options: PlanOption[] = r.options.map((o, i) => ({
@@ -219,7 +227,14 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
 
   const message = formatOptions({
     header: `${fmtDate(r.slot.date)} · ${r.slot.time} · ${r.slot.partySize} people`,
-    options: options.map((o, i) => ({ ...o, place: getPlace(o.placeId)!, travelMin: r.options[i].scored.travelMin, anchor: r.anchor.label })),
+    options: options.map((o, i) => ({
+      ...o,
+      place: getPlace(o.placeId)!,
+      travelMin: r.options[i].scored.travelMin,
+      travelWalk: r.options[i].scored.travelWalk,
+      travelEstimated: r.options[i].scored.travelEstimated,
+      anchor: r.anchor.label,
+    })),
     notes: [
       r.unmet.length ? `I couldn't find anything ${r.unmet.join(" or ")} that fits, so these are the closest matches.` : "",
       r.options.length < 3 ? `Only ${r.options.length} ${r.options.length === 1 ? "place fits" : "places fit"} everything you asked for.` : "",
@@ -252,7 +267,7 @@ const NUM = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
  */
 export function formatOptions(input: {
   header: string;
-  options: (PlanOption & { place: Place; travelMin: number; anchor: string })[];
+  options: (PlanOption & { place: Place; travelMin: number; travelWalk?: boolean; travelEstimated?: boolean; anchor: string })[];
   notes: string[];
   solo: boolean;
 }): string {
@@ -263,7 +278,7 @@ export function formatOptions(input: {
       cuisine ? cuisine.replace(/\b\w/g, (c) => c.toUpperCase()) : null,
       p.price_level ? "¥".repeat(p.price_level) : null,
       p.rating ? `★ ${p.rating}` : null,
-      `${o.travelMin} min from ${o.anchor}`,
+      [areaOf(p.address), `${travelLabel(o.travelMin, !!o.travelWalk, !!o.travelEstimated)} from ${o.anchor}`].filter(Boolean).join(", "),
     ]
       .filter(Boolean)
       .join("  ·  ");

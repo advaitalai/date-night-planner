@@ -8,6 +8,8 @@ export interface PitchInput {
   option: Scored;
   availability: "available" | "unconfirmed" | "unchecked";
   anchorLabel: string;
+  /** Parts of their request this place meets, e.g. ["thai", "live music"]. */
+  matches?: string[];
 }
 
 /** Facts the pitch may use. Everything here comes from stored data. */
@@ -19,7 +21,7 @@ export function factsFor(input: PitchInput, saved: Place[]): Record<string, unkn
     cuisine: p.profile?.cuisine ?? p.cuisine,
     onLists: p.saved_by,
     similarToSaved: similar ? { name: similar.place.name, savedBy: similar.place.saved_by } : null,
-    travel: `${input.option.travelMin} min from ${input.anchorLabel}${input.option.travelEstimated ? " (estimate)" : ""}`,
+    matchesTheirRequest: input.matches ?? [],
     googleRating: p.rating,
     tabelogScore: p.tabelog_score,
     signatureDishes: p.profile?.signatureDishes ?? [],
@@ -27,7 +29,6 @@ export function factsFor(input: PitchInput, saved: Place[]): Record<string, unkn
     vibe: p.profile?.vibeTags ?? [],
     priceBand: p.profile?.priceBand ?? null,
     whyRanked: input.option.reasons,
-    bookingNote: input.availability === "available" ? "table confirmed free at that time" : "availability is checked when booking",
   };
 }
 
@@ -53,7 +54,9 @@ export async function writePitches(inputs: PitchInput[], saved: Place[]): Promis
       `You write date-night options for a couple's WhatsApp chat (Advait and Emily).
 For each option return:
 - what: one short line (max ~12 words) on the food and the feel, e.g. "Handmade pasta and charcoal-grilled wagyu in a cosy counter bar".
-- why: one short line (max ~14 words) on why it fits this week: their lists, a change of cuisine, similar to a place they saved, closeness.
+- why: one short line (max ~14 words) on why it suits *them*, from the strongest of: it matches what they asked for (matchesTheirRequest); it's on their list (onLists); it's like a place they saved (similarToSaved); a cuisine they haven't had lately (whyRanked); the standout dish or vibe reviewers rave about.
+  Good: "Saved by Emily; reviewers rave about the duck confit." / "Live jazz most nights, like the Blue Note you saved."
+  Bad: "29 min from home." / "Book ahead for weekends." / "Highly rated." (Distance, booking tips and bare ratings are never a why; distance is shown separately.)
 Use ONLY the given facts. If a fact is missing, leave it out. No emojis, no em dashes. One entry per option, in order.`,
       JSON.stringify(facts, null, 2),
       "medium",
@@ -70,6 +73,6 @@ export function fallbackPitch(f: Record<string, unknown>): Pitch {
   const highlights = (f.highlights as string[]).slice(0, 1);
   const what = [f.cuisine ? String(f.cuisine).replace(/^\w/, (c) => c.toUpperCase()) : "Restaurant", ...highlights].join(" · ");
   const similar = f.similarToSaved as { name: string; savedBy: string[] } | null;
-  const why = [...(f.whyRanked as string[]), similar ? `similar to ${similar.name} (${similar.savedBy.join(" & ")}'s list)` : null].filter(Boolean).join(", ");
-  return { what, why: why || "free table at your usual time" };
+  const why = [...((f.matchesTheirRequest as string[]) ?? []).map((m) => `has ${m}`), ...(f.whyRanked as string[]), similar ? `similar to ${similar.name} (${similar.savedBy.join(" & ")}'s list)` : null].filter(Boolean).join(", ");
+  return { what, why: why || ((f.highlights as string[])[0] ?? "well reviewed for dinner") };
 }
