@@ -100,7 +100,7 @@ What you may agree to:
 Anything else (another date, a time outside that, a condition): thank them, note it, and say you'll check with ${name} and call back. Don't book it.
 If they seem to mean a different date (or a date that has passed), politely restate: "It's for ${day(slot.date)}."
 If they accept, confirm the date, time, number of people, the name ${name} and the phone number ${intlPhone(c.phone)}.
-Say you are an AI assistant if asked. When done, thank them and say goodbye.`,
+Say you are an AI assistant if asked. When done, thank them and end with "Goodbye." (only then).`,
     };
   }
   const jaDay = (d: string) => {
@@ -110,7 +110,8 @@ Say you are an AI assistant if asked. When done, thank them and say goodbye.`,
   const who = kana || name;
   return {
     language,
-    firstMessage: `お忙しいところ失礼いたします。${place.name}様でしょうか。${who}様の${task === "book" ? "ご予約" : "予約の件"}でお電話しております、AIアシスタントです。`,
+    // No 失礼いたします in the greeting: it's an end-call phrase, and Vapi hung up right after the greeting.
+    firstMessage: `お忙しいところ恐れ入ります。${place.name}様でしょうか。${who}様の${task === "book" ? "ご予約" : "予約の件"}でお電話しております、AIアシスタントです。`,
     systemPrompt: `あなたは${who}様の代理でレストラン「${place.name}」に電話している、丁寧なAIアシスタントです。日本語の敬語で、短く自然に話してください。
 今日は${today.year}年${jaDay(today.toISODate()!)}です。
 目的：${
@@ -124,7 +125,7 @@ Say you are an AI assistant if asked. When done, thank them and say goodbye.`,
 それ以外（別の日、範囲外の時間、条件付き）は、お礼を言ってメモし、「本人に確認して折り返しご連絡します」と伝える。予約はしない。
 相手が別の日付（過去の日付など）を言った場合は、「${jaDay(slot.date)}でございます」と丁寧に言い直す。
 予約できたら、日時・人数・お名前（${who}）・電話番号（${domesticPhone(c.phone)}）を確認する。
-AIかと聞かれたら正直に答える。最後にお礼を言って電話を終える。`,
+AIかと聞かれたら正直に答える。用件が済んだら、最後に必ず「本日はありがとうございました。失礼いたします。」と言って電話を終える（途中では「失礼いたします」と言わない）。`,
   };
 }
 
@@ -158,7 +159,8 @@ export async function startCall(to: string, script: CallScript): Promise<VapiCal
         },
         transcriber: { provider: "deepgram", model: "nova-2", language: script.language },
         voice: { provider: "11labs", voiceId: process.env.VAPI_VOICE_ID || "sarah", model: "eleven_multilingual_v2" },
-        endCallPhrases: script.language === "ja" ? ["失礼いたします", "失礼します"] : ["goodbye", "bye"],
+        // Only the closing line ends the call (a greeting like お忙しいところ失礼いたします used to).
+        endCallPhrases: script.language === "ja" ? ["本日はありがとうございました"] : ["goodbye"],
       },
     }),
   });

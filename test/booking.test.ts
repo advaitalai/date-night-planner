@@ -279,3 +279,13 @@ describe("dry runs", () => {
     expect(upcomingReservations("2026-10-01")).toHaveLength(0);
   });
 });
+
+describe("call endings", () => {
+  it("never puts an end-call phrase in the greeting", async () => {
+    const { bookingScript } = await import("../src/booking/phone");
+    const s = bookingScript(place({ name: "テスト食堂" }), { date: "2026-10-16", time: "18:30", partySize: 2 }, { name: "Advait", nameKana: "", phone: "070-0000-0000", email: "a@example.com" }, "ja");
+    expect(s.firstMessage).not.toContain("失礼");
+    expect(s.firstMessage).not.toContain("ありがとうございました");
+    expect(s.systemPrompt).toContain("本日はありがとうございました");
+  });
+});
