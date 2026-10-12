@@ -13,7 +13,8 @@
     "chat": "tsx src/scripts/chat.ts",
     "test-call": "tsx src/scripts/test-call.ts",
     "logs": "tsx src/scripts/logs.ts",
-    "p0": "tsx src/scripts/p0.ts"
+    "p0": "tsx src/scripts/p0.ts",
+    "fresh-start": "tsx src/scripts/fresh-start.ts"
   },
   "repository": {
     "type": "git",
