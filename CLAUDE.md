@@ -2,7 +2,7 @@
 
 A WhatsApp agent that plans Advait and Emily's weekly date night and books it end to end.
 
-**Read `docs/STATUS.md` first** (where the project is, next steps, Advait's preferences, gotchas), **then `docs/REQUIREMENTS.md`**. It has the requirements, decisions, the MVP success event, known gaps, and how to start a session. Also see `docs/SETUP.md` (accounts and deployment) and `docs/BACKLOG.md` (what's next).
+**Read `docs/STATUS.md` first** (where the project is, next steps, Advait's preferences, gotchas), **then `docs/REQUIREMENTS.md`**. It has the requirements, decisions, the MVP success event, known gaps, and how to start a session. Also see `docs/SETUP.md` (accounts and deployment), `docs/BACKLOG.md` (what's next) and `docs/USER_STORIES.md` (what the build does and how tested each story is).
 
 ## Commands
 
