@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { config, domesticPhone, intlPhone, type Contact } from "../config";
+import { config, domesticPhone, intlPhone, testCallee, type Contact } from "../config";
 import { extract } from "../llm";
 import { status } from "../notify";
 import type { Place, Reservation } from "../types";
@@ -241,9 +241,9 @@ export async function explainCallFailure(raw: string): Promise<string> {
   return `The call service said: ${raw.slice(0, 200)}`;
 }
 
-/** Who to dial: the restaurant, or in DRY_RUN the booking contact (you). */
-function dialTarget(place: Place, c: Contact): string | null {
-  if (config.dryRun) return c.phone || null;
+/** Who to dial: the restaurant, or in DRY_RUN the stand-in (CALL_TEST_TO, default you). */
+function dialTarget(place: Place): string | null {
+  if (config.dryRun) return testCallee().phone || null;
   return place.phone ?? null;
 }
 
@@ -251,8 +251,8 @@ const CALL_STATUS: Record<string, string> = { ringing: "ringing", "in-progress":
 
 async function runCall(place: Place, c: Contact, script: CallScript, goal: string): Promise<CallReport> {
   if (!vapiConfigured()) return { outcome: blank("failed", "calls aren't set up"), transcript: "", failure: "Phone calls aren't set up yet (VAPI_API_KEY and VAPI_PHONE_NUMBER_ID in .env)." };
-  const to = dialTarget(place, c);
-  if (!to) return { outcome: blank("failed", "no phone number"), transcript: "", failure: `I don't have a phone number for ${place.name}.` };
+  const to = dialTarget(place);
+  if (!to) return { outcome: blank("failed", "no phone number"), transcript: "", failure: config.dryRun ? `No number for the test call (CALL_TEST_TO=${config.call.testTo || "BOOKING_PHONE"}). Check .env.` : `I don't have a phone number for ${place.name}.` };
   const balance = await twilioBalance();
   if (balance != null && balance < MIN_TWILIO_BALANCE) {
     return { outcome: blank("failed", "low balance"), transcript: "", failure: `Twilio balance is $${balance.toFixed(2)}, too low for a call. Calls to Japan cost ${TWILIO_JP_RATES}; top up at console.twilio.com → Billing.` };

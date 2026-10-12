@@ -190,3 +190,17 @@ describe("booking order", () => {
     delete process.env.VAPI_PHONE_NUMBER_ID;
   });
 });
+
+describe("test calls", () => {
+  it("sends dry-run calls to the chosen stand-in", async () => {
+    const { config, testCallee } = await import("../src/config");
+    const saved = { ...config.wa.phones };
+    config.wa.phones.Emily = "819000000000";
+    expect(testCallee("emily")).toEqual({ label: "Emily", phone: "819000000000" });
+    expect(testCallee("")).toEqual({ label: "you", phone: config.booking.contact.phone });
+    const { toE164 } = await import("../src/booking/phone");
+    expect(toE164("819000000000")).toBe("+819000000000");
+    expect(toE164("090-0000-0000")).toBe("+819000000000");
+    config.wa.phones = saved;
+  });
+});

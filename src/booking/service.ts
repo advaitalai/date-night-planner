@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { z } from "zod";
-import { config } from "../config";
+import { config, testCallee } from "../config";
 import { createReservation, getPlace, getPrefs, getReservation, updatePlace, updatePlan, updateReservation } from "../db/repo";
 import { cancelJobs, schedule } from "../jobs/scheduler";
 import { extract } from "../llm";
@@ -191,7 +191,7 @@ export async function recordBooking(place: Place, slot: Slot, channel: Route["ch
 
   const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people`;
   const how = { tablecheck: "on TableCheck", tabelog: "on Tabelog", email: "by email", phone: "by phone" }[channel];
-  const mock = config.dryRun && channel === "phone" ? "\n\n_Dry run: the call went to you, not the restaurant._" : "";
+  const mock = config.dryRun && channel === "phone" ? `\n\n_Dry run: the call went to ${testCallee().label}, not the restaurant._` : "";
   const message =
     result.status === "confirmed"
       ? [`✅ *Booked ${place.name}*`, `${when}, ${how}${result.externalRef ? `\nRef ${result.externalRef}` : ""}`, policyLine(withPolicy)].filter(Boolean).join("\n\n") + mock

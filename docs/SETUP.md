@@ -121,6 +121,8 @@ The setup page is only reachable through an SSH tunnel from your laptop, so noth
    - Twilio Console → Voice → Settings → **Geo permissions** → enable **Japan**.
 3. In Vapi: **Phone Numbers → Import → Twilio**, enter the Account SID, Auth Token and the number. Copy the new number's **ID** into `VAPI_PHONE_NUMBER_ID`.
 4. Test with a call to yourself (you play the restaurant): `npm run test-call` (Japanese) or `npm run test-call -- en`.
+   - Someone else can play the restaurant: `npm run test-call -- ja emily` calls `EMILY_PHONE`. For the WhatsApp flow, set `CALL_TEST_TO=Emily`.
+   - On a Twilio trial, add their number under **Verified Caller IDs** first (they get a code by call or SMS), or upgrade the account.
 
 With `DRY_RUN=1` every booking call goes to `BOOKING_PHONE` (you) instead of the restaurant.
 

@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { config, domesticPhone } from "../config";
+import { config, domesticPhone, testCallee } from "../config";
 import { kvGet, kvSet } from "../db";
 import { getPlace, getReservation, updatePlace, updatePlan, updateReservation } from "../db/repo";
 import { cancelJobs, registerJob, schedule } from "../jobs/scheduler";
@@ -95,7 +95,7 @@ export function askToCall(call: PendingCall, place: Place, tried: string[]): str
   } else {
     lines.push("Reply *call* to go ahead, or *no*.");
   }
-  if (config.dryRun) lines.push("_Dry run: the call will come to you._");
+  if (config.dryRun) lines.push(`_Dry run: the call will go to ${testCallee().label}, not the restaurant._`);
   return lines.join("\n\n");
 }
 
@@ -157,7 +157,7 @@ export async function runCall(call: PendingCall): Promise<{ ok: boolean; message
       updateReservation(r.id, { status: "cancelled", notes: [r.notes, call.reason && `cancelled: ${call.reason}`, report.outcome.summaryEn].filter(Boolean).join(" / ") });
       cancelJobs(`res:${r.id}:`);
       if (r.plan_id) updatePlan(r.plan_id, { status: "cancelled" });
-      return { ok: true, message: `❌ *Cancelled ${place.name}* (${fmtDate(r.date)} ${r.time}).\n${report.outcome.summaryEn}${config.dryRun ? "\n\n_Dry run: the call went to you, not the restaurant._" : ""}` };
+      return { ok: true, message: `❌ *Cancelled ${place.name}* (${fmtDate(r.date)} ${r.time}).\n${report.outcome.summaryEn}${config.dryRun ? `\n\n_Dry run: the call went to ${testCallee().label}, not the restaurant._` : ""}` };
     }
     const deadline = policyLine(r);
     return { ok: false, message: `${outcomeMessage(call, place, report)}${deadline ? `\n\n${deadline}` : ""}` };
@@ -226,7 +226,7 @@ export function outcomeMessage(call: PendingCall, place: Place, report: CallRepo
     default:
       msg = `🤷 The call to ${name} ended without a clear answer.\n${o.summaryEn}\n\n` + ask(call, "Shall I try again? Reply *yes* or *no*.");
   }
-  return msg + (config.dryRun && o.outcome !== "failed" ? "\n\n_Dry run: the call went to you, not the restaurant._" : "");
+  return msg + (config.dryRun && o.outcome !== "failed" ? `\n\n_Dry run: the call went to ${testCallee().label}, not the restaurant._` : "");
 }
 
 /** When the chat answers "call at 17:00" / "in 30 min": the moment to call. */

@@ -69,6 +69,7 @@ Last updated: 11 Oct 2026.
   - Restaurants may ignore +1 numbers; a Japanese number is in the backlog.
   - Twilio's "add an emergency address" banner can be ignored: the $75 fee only applies to 911 calls from that number.
   - Use the **private** Vapi key. The phone number **ID** (UUID) is on the number's page in Vapi.
+  - `CALL_TEST_TO=Emily` (or `npm run test-call -- ja emily`) sends dry-run calls to Emily instead of Advait. Trial accounts need her number verified in Twilio first.
   - Twilio Japan rates (twilio.com/voice/pricing/jp, Oct 2026): about $0.19/min to mobiles, $0.07/min to landlines, plus Vapi's own per-minute cost. A $2–3 balance lasted about 8 short test calls (to a mobile).
   - `call.start.error-get-transport` = Vapi couldn't place the call through Twilio (here: credit ran out).
   - TTS read "Advait Alai" as "Advait A Lie". `BOOKING_NAME_SPOKEN` overrides the spoken name.

@@ -54,6 +54,11 @@ export const config = {
     language: (env("CALL_LANGUAGE", "ja") === "en" ? "en" : "ja") as "ja" | "en",
     /** How the caller says the booking name, if text-to-speech mangles BOOKING_NAME. */
     nameSpoken: env("BOOKING_NAME_SPOKEN"),
+    /**
+     * Dry run only: who plays the restaurant. "Emily" / "Advait" (their *_PHONE),
+     * or a number. Empty = BOOKING_PHONE (you).
+     */
+    testTo: env("CALL_TEST_TO"),
   },
 
   dryRun: env("DRY_RUN", "1") === "1",
@@ -73,6 +78,17 @@ export function domesticPhone(phone: string): string {
   const p = phone.trim();
   const m = p.match(/^\+81[\s-]*0?(.*)$/);
   return m ? `0${m[1]}`.replace(/\s+/g, "-") : p;
+}
+
+/**
+ * Dry-run calls go to a stand-in instead of the restaurant. Returns who and
+ * which number, from CALL_TEST_TO (a name or a number) or BOOKING_PHONE.
+ */
+export function testCallee(who = config.call.testTo): { label: string; phone: string } {
+  const name = PEOPLE.find((p) => p.toLowerCase() === who.trim().toLowerCase());
+  if (name) return { label: name === config.wa.selfName ? "you" : name, phone: config.wa.phones[name] || (name === config.wa.selfName ? config.booking.contact.phone : "") };
+  if (who.trim()) return { label: who.trim(), phone: who.trim() };
+  return { label: "you", phone: config.booking.contact.phone };
 }
 
 /** People in the group. Names are used as identifiers everywhere (saved_by, votes). */
