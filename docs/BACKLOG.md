@@ -22,6 +22,19 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 | D5 | Know when they open (and good times to call) | P2 | M | Hours come from Google (cached in SQLite `places.opening_periods`, never refreshed). Refresh if >30 days old; add Google's holiday hours (`currentOpeningHours`); suggest calls just after opening or 15:00–17:00, never at peak dinner. |
 | D6 | Live help mid-call (check facts, ask the couple) | P3 | L | Vapi tools/webhooks need a public URL, so after the VM. Then: a `check_slot` tool, and a WhatsApp ping "they offer 19:00, OK?" with a 30 s timeout. |
 
+## Recommender QA (Advait, 12 Oct): triaged
+
+| # | Item | Status / priority | Size | Plan |
+|---|---|---|---|---|
+| W1 | Dessert places offered for dinner | ✅ fixed 11 Oct (`not_dinner` filter) | | Verify in the next run. |
+| W2 | Say the area (Ebisu, Shibuya…) | P1 | S | Area from the Google address on each card: "Ebisu · 22 min by train". |
+| W3 | Which travel mode is "22 min"? | P1 | S | Already public transport (Routes API, transit incl. walking), but when Routes fails it falls back to a straight-line guess that isn't labelled. Show "by train" / "walk" (walk when ≤ 15 min), "~" for estimates. |
+| W4 | The "why" is weak ("29 min", "book ahead for weekends") | P1 | S–M | Pitch rules: why = why *you two*: on whose list, like a place you saved, matches the ask, a cuisine you haven't had lately, the standout dish/vibe from reviews. Never distance (own line), never booking advice. Good/bad examples in the prompt. |
+| W5 | Already visited a recommended place | P2 | M | Google Places has no "visited". Maps knows from Timeline, now stored on the phone only (not in Takeout). Options: one-off Timeline export from the phone (Maps → Timeline → Export) → visits; scan Gmail for past booking confirmations → visits; `log_visit` in chat (done). |
+| W6 | Live music request didn't change the options | ✅ fixed 11 Oct (must-have filter + searches + honest notes) | | Verify in the next run. |
+| W7 | Live music places came as plain text (no cards, why, maps) | P1 | S | The bot used the `search_places` lookup and wrote freeform text. Rule: every suggestion goes through `recommend_options` cards; `search_places` only answers questions about a named place. |
+| W8 | (found in triage) ~150–230 Routes calls per planning run | P1 | S | One per candidate. Cache travel time per place and starting point (30 days). Keeps Routes inside the free monthly cap during heavy testing. |
+
 ## Booking coverage
 
 - **TableCheck newer flow** (`/reserve/message` → landing → menu): finish the booking steps. The flow is mapped in REQUIREMENTS §7. Kuss Daikanyama, TUITUI and Taro Yamada use it.
