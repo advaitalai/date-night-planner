@@ -11,7 +11,8 @@
     "audit": "tsx src/scripts/audit.ts",
     "browser-login": "tsx src/scripts/browser-login.ts",
     "chat": "tsx src/scripts/chat.ts",
-    "test-call": "tsx src/scripts/test-call.ts"
+    "test-call": "tsx src/scripts/test-call.ts",
+    "logs": "tsx src/scripts/logs.ts"
   },
   "repository": {
     "type": "git",

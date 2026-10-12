@@ -18,6 +18,12 @@ Last updated: 11 Oct 2026.
 
 ## Next steps
 
+**Handoff for the next session (12 Oct):** Advait is starting a new cloud session with `ANTHROPIC_API_KEY` so Claude can run the P0 tests itself. Do this, in order:
+1. Read this file, `docs/P0_TESTS.md` and `docs/USER_STORIES.md`.
+2. Run P0-1 to P0-7 (script feeding `handleMessage`, fake calls, TableCheck `DRY_RUN=1`; Chromium in the sandbox: `CHROMIUM_PATH=/opt/pw-browsers/chromium-*/chrome-linux/chrome`; use a valid-looking test phone like 090-1234-5678, never 070-0000-0000). Fix failures, rerun, push.
+3. Report a pass/fail table. Then Advait does the launch checklist (`docs/SETUP.md` §9): solo check, add Emily, `DRY_RUN=0`, real booking for Wed 14 Oct, plus P0-8/9/10 live.
+- Decisions today: launch blockers only, no big test suite; email booking parked; Claude Code effort high for this phase, bot stays at medium; phone calls need an upgraded Twilio, so the first booking should be a TableCheck place.
+
 **Launch plan (12 Oct, Advait):** launch today: add Emily to the group, iterate on options, real booking for Wed 14 Oct. Full QA harness postponed; launch blockers only (see "Launch checklist" in docs/SETUP.md §9).
 
 **Earlier plan:** E2E dry run #4 (calls to Advait, `BOOKING_ONLY=phone`) to check dialer QA (D1–D4) and recommender QA (W1–W8) fixes.

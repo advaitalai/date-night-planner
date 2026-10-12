@@ -10,6 +10,7 @@ import { registerCallJobs } from "./booking/calls";
 import { MIN_TWILIO_BALANCE, twilioBalance } from "./booking/phone";
 import { geocode } from "./places/google";
 import { startWhatsApp } from "./wa/whatsapp";
+import { logToFile } from "./logbook";
 import { startWebServer } from "./web/server";
 
 function every(ms: number, name: string, fn: () => Promise<void>): void {
@@ -32,6 +33,7 @@ async function geocodeAnchors(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  logToFile();
   console.log(`date-night-planner starting (DRY_RUN=${config.dryRun ? "on" : "off"}, model ${config.anthropicModel})`);
   registerWeeklyJobs();
   registerCallJobs();

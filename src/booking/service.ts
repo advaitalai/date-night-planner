@@ -14,6 +14,7 @@ import { phone, vapiConfigured } from "./phone";
 import { tablecheck } from "./tablecheck";
 import { askToCall, runCall, type PendingCall } from "./calls";
 import { pickInWindow, windowLabel } from "./window";
+import { logAttempt } from "../logbook";
 import type { AvailabilityResult, BookingAdapter, BookResult, Slot } from "./types";
 import { clientFor } from "../google/auth";
 import { BOOKER } from "../google/gmail";
@@ -162,11 +163,13 @@ export async function bookPlace(place: Place, slot: Slot, opts: BookOpts = {}): 
       await status(`${slot.time} is full; booking ${inWin} (inside your window)…`);
       try {
         const retry = await r.adapter.book(place, moved, config.booking.contact, notes);
+        logAttempt({ placeId: place.id, placeName: place.name, date: moved.date, time: moved.time, channel: r.channel, result: retry.status === "failed" ? "failed" : retry.status, detail: retry.detail });
         if (retry.status !== "failed") return recordBooking(place, moved, r.channel, retry, opts.planId);
       } catch {
         // fall through to the full message
       }
     }
+    logAttempt({ placeId: place.id, placeName: place.name, date: slot.date, time: slot.time, channel: r.channel, result: result.status === "failed" ? (result.full ? "full" : "failed") : result.status, detail: result.detail });
     if (result.status !== "failed") return recordBooking(place, slot, r.channel, result, opts.planId);
     console.log(`[booking] ${place.name} via ${r.channel} failed: ${result.detail}`);
     tried.push(`${CHANNEL_NAME[r.channel]} didn't work (${friendlyError(result.detail)})`);

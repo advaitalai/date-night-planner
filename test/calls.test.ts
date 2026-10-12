@@ -91,3 +91,14 @@ describe("reading how a call ended", () => {
     expect(msg).toMatch(/Twilio didn't connect the call/);
   });
 });
+
+describe("debug logs", () => {
+  it("keeps every booking attempt and call in the database", async () => {
+    const { logAttempt, logCall } = await import("../src/logbook");
+    const { db } = await import("../src/db");
+    logAttempt({ placeId: 1, placeName: "h:armonia", date: "2026-10-14", time: "18:30", channel: "tablecheck", result: "full", detail: "18:30 is full" });
+    logCall({ placeId: 1, placeName: "Warayaki", kind: "book", toNumber: "+81...", outcome: "busy", summary: "line busy", dryRun: true });
+    expect((db().prepare("SELECT result FROM booking_log").get() as { result: string }).result).toBe("full");
+    expect((db().prepare("SELECT outcome FROM call_log").get() as { outcome: string }).outcome).toBe("busy");
+  });
+});

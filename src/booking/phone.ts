@@ -2,6 +2,7 @@ import { z } from "zod";
 import { config, domesticPhone, intlPhone, testCallee, type Contact } from "../config";
 import { extract } from "../llm";
 import { status } from "../notify";
+import { logCall } from "../logbook";
 import type { Place, Reservation } from "../types";
 import { jaDate } from "./email";
 import { latestOk } from "./window";
@@ -120,6 +121,9 @@ interface VapiCall {
   id: string;
   status: string;
   endedReason?: string;
+  startedAt?: string;
+  endedAt?: string;
+  cost?: number;
   artifact?: { transcript?: string; recordingUrl?: string };
 }
 
@@ -285,9 +289,30 @@ function dialTarget(place: Place): string | null {
 
 const CALL_STATUS: Record<string, string> = { ringing: "ringing", "in-progress": "on the call" };
 
-async function runCall(place: Place, c: Contact, script: CallScript, goal: string): Promise<CallReport> {
+async function runCall(place: Place, c: Contact, script: CallScript, goal: string, kind = "book"): Promise<CallReport> {
+  const to = config.dryRun ? testCallee().phone || null : (place.phone ?? null);
+  const report = await placeCall(place, to, script, goal);
+  // Every call (or failed attempt to call) goes into the call log, transcript and all.
+  logCall({
+    placeId: place.id ?? null,
+    placeName: place.name,
+    kind,
+    toNumber: to,
+    vapiId: report.call?.id,
+    endedReason: report.endedReason ?? null,
+    durationSec: report.call?.startedAt && report.call?.endedAt ? (Date.parse(report.call.endedAt) - Date.parse(report.call.startedAt)) / 1000 : null,
+    costUsd: report.call?.cost ?? null,
+    outcome: report.outcome.outcome,
+    summary: report.failure ?? report.outcome.summaryEn,
+    transcript: report.transcript || null,
+    recordingUrl: report.call?.artifact?.recordingUrl ?? null,
+    dryRun: config.dryRun,
+  });
+  return report;
+}
+
+async function placeCall(place: Place, to: string | null, script: CallScript, goal: string): Promise<CallReport & { call?: VapiCall }> {
   if (!vapiConfigured()) return { outcome: blank("failed", "calls aren't set up"), transcript: "", failure: "Phone calls aren't set up yet (VAPI_API_KEY and VAPI_PHONE_NUMBER_ID in .env)." };
-  const to = dialTarget(place);
   if (!to) return { outcome: blank("failed", "no phone number"), transcript: "", failure: config.dryRun ? `No number for the test call (CALL_TEST_TO=${config.call.testTo || "BOOKING_PHONE"}). Check .env.` : `I don't have a phone number for ${place.name}.` };
   const balance = await twilioBalance();
   if (balance != null && balance < MIN_TWILIO_BALANCE) {
@@ -306,7 +331,7 @@ async function runCall(place: Place, c: Contact, script: CallScript, goal: strin
   const transcript = done.artifact?.transcript ?? "";
   const outcome = await readOutcome(transcript, done.endedReason, goal);
   const failure = outcome.outcome === "failed" ? await explainCallFailure(done.endedReason ?? "") : undefined;
-  return { outcome, transcript, endedReason: done.endedReason, failure };
+  return { outcome, transcript, endedReason: done.endedReason, failure, call: done };
 }
 
 /** Booking call. Only ever started after someone in the chat said yes (see calls.ts). */
@@ -320,12 +345,12 @@ export function callToModify(r: Reservation, place: Place, slot: Slot, c: Contac
     config.call.language === "en"
       ? `\nThis is about an existing booking (${r.date} ${r.time}, ${r.party_size} people). Ask whether it can be changed to ${slot.date} ${slot.time} for ${slot.partySize}.`
       : `\n既存の予約（${jaDate(r.date, r.time)}、${r.party_size}名）を、${jaDate(slot.date, slot.time)}、${slot.partySize}名に変更できるか伺ってください。`;
-  return runCall(place, c, script, `change booking to ${slot.date} ${slot.time} for ${slot.partySize}`);
+  return runCall(place, c, script, `change booking to ${slot.date} ${slot.time} for ${slot.partySize}`, "modify");
 }
 
 export function callToCancel(r: Reservation, place: Place, c: Contact): Promise<CallReport> {
   const slot = { date: r.date, time: r.time, partySize: r.party_size };
-  return runCall(place, c, bookingScript(place, slot, c, config.call.language, "cancel", r), `cancel the booking on ${r.date} ${r.time}`);
+  return runCall(place, c, bookingScript(place, slot, c, config.call.language, "cancel", r), `cancel the booking on ${r.date} ${r.time}`, "cancel");
 }
 
 /**

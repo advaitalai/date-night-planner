@@ -106,6 +106,37 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 CREATE INDEX IF NOT EXISTS jobs_due ON jobs(status, run_at);
 
+CREATE TABLE IF NOT EXISTS call_log (
+  id INTEGER PRIMARY KEY,
+  at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  place_id INTEGER,
+  place_name TEXT,
+  kind TEXT,
+  to_number TEXT,
+  vapi_id TEXT,
+  ended_reason TEXT,
+  duration_sec REAL,
+  cost_usd REAL,
+  outcome TEXT,
+  summary TEXT,
+  transcript TEXT,
+  recording_url TEXT,
+  dry_run INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS booking_log (
+  id INTEGER PRIMARY KEY,
+  at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  place_id INTEGER,
+  place_name TEXT,
+  date TEXT,
+  time TEXT,
+  channel TEXT,
+  result TEXT,
+  detail TEXT,
+  dry_run INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY,
   at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

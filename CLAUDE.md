@@ -11,6 +11,7 @@ A WhatsApp agent that plans Advait and Emily's weekly date night and books it en
 - `npm run chat`: talk to the agent in the terminal (no WhatsApp needed)
 - `npm run import-csv -- <file> <Advait|Emily> [list]` / `npm run audit`
 - `npm start`: full app (WhatsApp, scheduler, onboarding web page)
+- `npm run logs` / `npm run logs -- call <id>`: recent calls and booking attempts (debugging); full log in `data/logs/`
 
 ## Rules
 
