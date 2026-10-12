@@ -20,24 +20,22 @@ Last updated: 12 Oct 2026.
 | A3 | As a user, I want options as clean cards (bold names, short lines, no em dashes), so that I can scan them on my phone. | ✅ (new area/travel line 🧪) |
 | A4 | As a user, I want a short hello with ideas of what to say, so that I know how to start. | ✅ |
 | A5 | As Emily, I want to pick separately from Advait and have it book once we agree (and ask when we don't), so that neither of us decides alone. | 🧪 never run with two people |
-| A6 | As a user, I want the bot to be honest: never claim a booking, a match ("live music") or a cancellation that didn't happen, so that I can trust it. | ❌ round 3 claimed false matches; fix not yet re-run |
-| A7 | As a user, I want one reply per message, not a repeat of what was just posted, so that the chat stays clean. | ❌ round 3 doubled up; fix not yet re-run |
 
 ## B. Saved places
 
 | # | Story | Status |
 |---|---|---|
-| B1 | As a couple, we want our Google Maps saved places used, so that suggestions start from places we already like. | ✅ Advait's list (CSV) · ⚠️ automatic Takeout import from Drive · ⏳ Emily's list |
-| B2 | As a user, I want to paste a Google Maps link to add a place, so that new finds go straight in. | ⚠️ |
+| B1 | As a couple, we want our Google Maps saved places used, and kept up to date from our scheduled Takeout exports in Drive, so that suggestions start from places we already like. | ✅ Advait's list (CSV, one-off) · ⚠️ Drive pickup (needs Google connected via the setup link) · ⏳ Emily's list |
 | B3 | As a user, I want to say "we went to X" and not have it suggested again soon, so that we don't get repeats. | 🧪 (Timeline import ⏳) |
 
 ## C. Recommendations
 
 | # | Story | Status |
 |---|---|---|
-| C1 | As a couple, we want options for the coming Wednesday on Saturday morning, so that we can book good places in time. | ⚠️ Saturday kickoff never seen live |
+| C1 | As a couple, we want the bot to send options for next Wednesday's date on its own every Saturday at 10:00 (nudge Sunday 10:00, decide Sunday 20:00), so that we book good places in time without asking. | ⚠️ never seen live |
 | C2 | As a couple, we want cuisines to rotate, so that we don't eat the same thing every week. | 🧪 |
 | C3 | As a user, I want loose requests understood ("Thai or Mexican", "near work", "under ¥8,000"), so that I can just say what I feel like. | ✅ cuisines · ⚠️ "near work", budget |
+| C3a | As a user, I want each card to show the rough spend per person ("~¥6,000 pp"), so that I can judge budget at a glance. | ⏳ cards show ¥¥ today |
 | C4 | As a user, I want must-haves like live music treated as must-haves, so that every option has it, or I'm told none do. | ❌ round 3; fix 🧪 |
 | C5 | As a user, I want "new options" to mean places I haven't just seen, so that asking again is worth it. | ❌ round 3; fix 🧪 |
 | C6 | As a couple, we want new places beyond our lists, linked to ones we saved ("like X on Emily's list"), so that we discover more. | ✅ discovery · ⚠️ "similar to X" |
@@ -51,8 +49,8 @@ Last updated: 12 Oct 2026.
 
 | # | Story | Status |
 |---|---|---|
-| D1 | As a couple, we want the bot to book the place we pick by itself, seats only, so that we never deal with booking. | ✅ TableCheck classic (real booking) · ⏳ TableCheck newer flow · ⚠️ Tabelog · ⚠️ email |
-| D2 | As a user, I want it to book only the place we chose, never another without asking, so that there are no surprises. | ❌ round 3 booked Bruna; fix 🧪 |
+| D1 | As a couple, we want the bot to book the place we pick by itself, seats only, trying the fastest sure way first (booking site, then email, then a phone call), so that we get a confirmation as quickly as possible. | ✅ TableCheck classic (real booking) · ⏳ TableCheck newer flow · ⚠️ Tabelog · ⚠️ email · 🧪 phone (asks first) |
+| D2 | As a user, if the place we picked can't be booked, I want to be told and asked what next, not have it book one of the other options on its own, so that there are no surprise bookings. | ❌ round 3 booked Bruna after Warayaki was full; fix 🧪 |
 | D3 | As a user, I want it to take a time up to 30 min later (or within a range I give) without asking, and ask about anything else, so that small changes don't need me. | 🧪 |
 | D4 | As a user, I want a clear confirmation with the time, name and free-cancellation deadline, so that I know exactly what's booked. | ✅ |
 | D5 | As a user, I want failures explained in one plain sentence with the next step, so that I know what to do. | 🧪 rewritten |
@@ -64,7 +62,7 @@ Last updated: 12 Oct 2026.
 | E1 | As Advait, I want the bot to ask before any call (book, change, cancel, retry), so that calls are always under our control. | 🧪 |
 | E2 | As a restaurant, I want a short, polite Japanese call that says it's an AI, asks for seats under a name I can write (エミリー) and handles date mix-ups, so that I can take the booking easily. | ✅ test calls (English to Advait, Japanese to Emily) · 🧪 new script (name, window, date check) |
 | E3 | As Advait, I want the result of each call and a sensible next question (full → book the offered time?, busy → try in 30 min?), so that I just answer yes or no. | ✅ full / wrong number / booked / cancelled (round 3) · 🧪 the rest of the tree |
-| E4 | As Advait, I want to say "call at 17:00" or "try again in 30 min", so that calls happen when the restaurant answers. | ⚠️ |
+| E4 | As Advait, when a place is closed or doesn't pick up, I want to see its opening hours and a suggested time to call (e.g. "they open at 17:00, call at 17:15?") before I decide, and to reply "call at 17:00" or "try in 30 min", so that calls happen when someone will answer. | ⚠️ hours shown only when closed right now |
 | E5 | As Advait, I want a failed call explained (e.g. "Twilio balance is $0.12"), so that I can fix it. | 🧪 |
 | E6 | As Advait, I want the cancellation policy found online rather than asked, so that calls are shorter and cheaper. | 🧪 |
 
@@ -86,6 +84,14 @@ Last updated: 12 Oct 2026.
 | G1 | As a couple, we want to skip a week, so that it doesn't plan when we're away. | ✅ |
 | G2 | As a couple, we want a Sunday nudge and a Sunday-evening decision, so that a table gets booked in time. | ✅ fired (late, after downtime) · 🧪 stale reminders dropped |
 | G3 | As a user, I want to change our usual day, time, budget or travel limit in chat, so that defaults fit us. | ⚠️ |
+
+## Hygiene rules (always true, tested on every scenario, not stories)
+
+- Never claim a booking, change or cancellation unless the site, email or call confirmed it.
+- Never say options match a wish (a cuisine, live music) unless they do; say what wasn't found.
+- One reply per message: don't repeat what a tool just posted.
+- House style: rich WhatsApp formatting, short lines, no em dashes.
+- No call without a yes in the chat. Dry run never books or calls a restaurant.
 
 ## H. Running it
 
