@@ -5,7 +5,7 @@ import { anthropic, FALLBACK } from "../llm";
 import type { Plan } from "../types";
 import { fmtDate, now } from "../util/time";
 import { tools } from "./tools";
-import { describePendingCall } from "../booking/calls";
+import { describePendingCall, scheduledCalls } from "../booking/calls";
 import { setCurrentMessage } from "./turn";
 
 const SYSTEM = `You are "Planner", the date-night agent in a WhatsApp group with Advait and Emily, a couple living in Tokyo (home near Gotanda/Fudomae, Advait works near Meguro station).
@@ -50,6 +50,7 @@ Upcoming reservations:
 ${res || "none"}
 ${planText}
 Pending call: ${describePendingCall() ?? "none"}
+Scheduled calls: ${scheduledCalls().map((c) => `${getPlace(c.call.placeId)?.name} at ${c.runAt} UTC`).join("; ") || "none"}
 </state>`;
 }
 

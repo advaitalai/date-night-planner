@@ -5,7 +5,7 @@ import { config, PEOPLE, voters } from "../config";
 import { db, kvSet } from "../db";
 import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, upcomingReservations, updatePrefs, upsertPlace } from "../db/repo";
 import { say, status } from "../notify";
-import { callTime, clearPendingCall, pendingCall, runCall, scheduleCall } from "../booking/calls";
+import { callTime, clearPendingCall, dropAllCalls, pendingCall, runCall, scheduleCall, scheduledCalls } from "../booking/calls";
 import { currentMessage, saysCall } from "./turn";
 import { ensureWeeklyJobs, skipDate } from "../jobs/weekly";
 import { cidFromMapsUri, placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
@@ -94,12 +94,24 @@ const rawTools = [
   }),
 
   betaZodTool({
+    name: "recent_calls",
+    description: "The last phone calls the bot made (or tried): when, place, outcome, summary and transcript, plus calls scheduled for later. Use for 'recap the call', 'what did they say?', 'any calls planned?'.",
+    inputSchema: z.object({ limit: z.number().int().min(1).max(5).optional() }),
+    run: async ({ limit }) => {
+      const rows = db().prepare("SELECT * FROM call_log ORDER BY id DESC LIMIT ?").all(limit ?? 2) as Record<string, unknown>[];
+      const later = scheduledCalls().map((c) => `Scheduled: ${getPlace(c.call.placeId)?.name} at ${c.runAt} UTC (${c.call.kind} ${c.call.slot.date} ${c.call.slot.time})`);
+      const done = rows.map((r) => `Call #${r.id} at ${r.at} UTC to ${r.place_name} (${r.kind}${r.dry_run ? ", dry run" : ""}): ${r.outcome}. ${r.summary}\nTranscript:\n${String(r.transcript ?? "(none)").slice(0, 2500)}`);
+      return [...later, ...done].join("\n\n") || "No calls yet.";
+    },
+  }),
+
+  betaZodTool({
     name: "decline_call",
-    description: "They said no to the call the bot proposed (or want something else instead). Drops it.",
+    description: "They said no to a call: the one the bot just proposed AND any call scheduled for later ('don't call', 'no', 'cancel the call'). Drops all of them. Only tell them it's dropped using this tool's result.",
     inputSchema: z.object({}),
     run: async () => {
-      clearPendingCall();
-      return "Dropped the pending call. Acknowledge briefly and ask what they'd like instead, if unclear.";
+      const n = dropAllCalls();
+      return n ? `Dropped ${n} call(s) (proposed and/or scheduled). No call will be made.` : "There was no call waiting or scheduled.";
     },
   }),
 
@@ -392,6 +404,7 @@ const STATUS: Record<string, string> = {
   add_saved_place: "Adding the place…",
   place_call: "Getting ready to call…",
   log_visit: "Noting the visit…",
+  recent_calls: "Pulling up the call…",
 };
 
 export const tools = rawTools.map((t) => ({

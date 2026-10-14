@@ -107,7 +107,7 @@ describe("call go-ahead is a hard rule", () => {
   it("needs the word 'call' (or 電話 / かけて) in the message", async () => {
     const { saysCall } = await import("../src/agent/turn");
     for (const ok of ["call", "Call now", "call at 17:00", "call in 30", "電話して", "かけてください"]) expect(saysCall(ok)).toBe(true);
-    for (const no of ["yes", "sounds good", "ok go", "sure!", "let's do it", "recall that place?"]) expect(saysCall(no)).toBe(false);
+    for (const no of ["yes", "sounds good", "ok go", "sure!", "let's do it", "recall that place?", "don't call", "no, don't call them", "cancel the call", "stop the 14:30 call", "電話しないで"]) expect(saysCall(no)).toBe(false);
   });
 
   it("refuses to place a pending call on 'sounds good'", async () => {
@@ -117,5 +117,21 @@ describe("call go-ahead is a hard rule", () => {
     const placeCall = tools.find((t) => t.name === "place_call")!;
     const out = await (placeCall.run as (i: unknown) => Promise<string>)({});
     expect(out).toMatch(/^NOT placed/);
+  });
+});
+
+describe("dropping calls", () => {
+  it("drops calls scheduled for later, not just the one asked about", async () => {
+    const { freshDb, place } = await import("./helpers");
+    freshDb();
+    const { insertPlace } = await import("../src/db/repo");
+    const { scheduleCall, scheduledCalls, dropAllCalls } = await import("../src/booking/calls");
+    const { DateTime } = await import("luxon");
+    const { id: _id, ...rest } = place({ name: "Suan Sawan", booking_channel: "phone", phone: "03-0000-0000" });
+    const p = insertPlace(rest);
+    scheduleCall({ kind: "book", placeId: p.id, slot: { date: "2026-10-15", time: "19:15", partySize: 2 } }, DateTime.now().plus({ hours: 1 }));
+    expect(scheduledCalls()).toHaveLength(1);
+    expect(dropAllCalls()).toBe(1);
+    expect(scheduledCalls()).toHaveLength(0);
   });
 });

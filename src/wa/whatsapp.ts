@@ -268,13 +268,17 @@ export async function startWhatsApp(): Promise<void> {
     }
     if (connection === "open") {
       console.log("WhatsApp connected as", sock?.user?.id);
-      const groups = await sock!.groupFetchAllParticipating();
+      // A slow WhatsApp reply here used to crash the whole app (Timed Out); listening works without it.
+      const groups = await sock!.groupFetchAllParticipating().catch((err: Error) => {
+        console.warn(`couldn't list groups (${err.message}); still listening in ${config.wa.groupJid}`);
+        return {} as Record<string, { id: string; subject: string }>;
+      });
       if (!config.wa.groupJid) {
         for (const g of Object.values(groups)) console.log(`  group: ${g.subject} → ${g.id}`);
         console.log('Set WA_GROUP_JID to one of the ids above (or "self" for your own 1-1 chat) and restart.');
       } else if (!isSelfChat()) {
         const g = groups[config.wa.groupJid];
-        console.log(g ? `Listening in "${g.subject}".` : `⚠️ Not a member of WA_GROUP_JID ${config.wa.groupJid}. Unset it to list your groups.`);
+        console.log(g ? `Listening in "${g.subject}".` : Object.keys(groups).length ? `⚠️ Not a member of WA_GROUP_JID ${config.wa.groupJid}. Unset it to list your groups.` : `Listening in ${config.wa.groupJid}.`);
       }
       if (config.wa.solo && !isSelfChat()) console.log("Solo test mode: every message in the chat is for the bot; only your vote counts.\nReady. Say hello in WhatsApp.");
       if (isSelfChat()) console.log(`Self-chat mode: talk to the bot in WhatsApp's "Message yourself" chat (${chatJid()}).`);

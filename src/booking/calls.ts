@@ -3,6 +3,7 @@ import { config, domesticPhone, testCallee } from "../config";
 import { kvGet, kvSet } from "../db";
 import { getPlace, getReservation, updatePlace, updatePlan, updateReservation } from "../db/repo";
 import { cancelJobs, registerJob, schedule } from "../jobs/scheduler";
+import { db } from "../db";
 import { say, status } from "../notify";
 import type { Place } from "../types";
 import { fmtDate, isOpenFor, now, ZONE } from "../util/time";
@@ -105,7 +106,22 @@ export function scheduleCall(call: PendingCall, at: DateTime): string {
   clearPendingCall();
   const place = getPlace(call.placeId)!;
   schedule("phone_call", at, { call, due: at.toISO() }, `call:${call.placeId}:${call.kind}:${at.toISO()}`);
-  return `⏰ I'll call *${place.name}* at ${at.setZone(ZONE).toFormat("HH:mm")}${at.hasSame(now(), "day") ? "" : ` on ${at.setZone(ZONE).toFormat("ccc d LLL")}`} to ${task(call)}.`;
+  return `⏰ I'll call *${place.name}* at ${at.setZone(ZONE).toFormat("HH:mm")}${at.hasSame(now(), "day") ? "" : ` on ${at.setZone(ZONE).toFormat("ccc d LLL")}`} to ${task(call)}.\nSay *don't call* to stop it.`;
+}
+
+/** Calls scheduled for later ("call at 14:30") that haven't happened yet. */
+export function scheduledCalls(): { runAt: string; call: PendingCall }[] {
+  return (db().prepare("SELECT run_at, payload FROM jobs WHERE status = 'pending' AND type = 'phone_call' ORDER BY run_at").all() as { run_at: string; payload: string }[]).map((j) => ({
+    runAt: j.run_at,
+    call: (JSON.parse(j.payload) as { call: PendingCall }).call,
+  }));
+}
+
+/** Drop every call that's waiting: the one asked about and any scheduled for later. Returns how many. */
+export function dropAllCalls(): number {
+  const pending = pendingCall() ? 1 : 0;
+  clearPendingCall();
+  return pending + cancelJobs("call:");
 }
 
 export function registerCallJobs(): void {
@@ -117,6 +133,17 @@ export function registerCallJobs(): void {
       setPending(call);
       await say(`I missed the planned call to *${place.name}* (the app was off). Reply *call* to try now, or *no*.`);
       return;
+    }
+    // Something changed since it was scheduled (a booking for that date already exists): ask, don't call.
+    if (call.kind === "book") {
+      const existing = db()
+        .prepare("SELECT r.id, p.name, r.time FROM reservations r JOIN places p ON p.id = r.place_id WHERE r.date = ? AND r.status IN ('confirmed', 'requested')")
+        .get(call.slot.date) as { id: number; name: string; time: string } | undefined;
+      if (existing) {
+        await say(`I was about to call *${place.name}*, but you already have *${existing.name}* booked on ${fmtDate(call.slot.date)} at ${existing.time}, so I didn't call. Reply *call* if you still want a second booking.`);
+        setPending(call);
+        return;
+      }
     }
     const out = await runCall(call);
     await say(out.message);

@@ -23,10 +23,10 @@ export function schedule(type: string, runAt: DateTime, payload: object = {}, de
 }
 
 /** Cancel pending jobs whose dedupe key starts with a prefix, e.g. "res:12:". */
-export function cancelJobs(dedupePrefix: string): void {
-  db()
+export function cancelJobs(dedupePrefix: string): number {
+  return db()
     .prepare("UPDATE jobs SET status = 'cancelled' WHERE status = 'pending' AND dedupe_key LIKE ?")
-    .run(`${dedupePrefix}%`);
+    .run(`${dedupePrefix}%`).changes;
 }
 
 export function pendingJobs(): { id: number; run_at: string; type: string; dedupe_key: string | null }[] {

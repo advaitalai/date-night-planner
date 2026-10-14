@@ -48,6 +48,9 @@ async function main(): Promise<void> {
   await startWhatsApp();
 }
 
+// A failed background request (e.g. a WhatsApp timeout) is logged, never fatal: the bot keeps running.
+process.on("unhandledRejection", (err) => console.error("unhandled error (bot keeps running):", err));
+
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, async () => {
     stopScheduler();
