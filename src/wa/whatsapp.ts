@@ -2,6 +2,7 @@ import makeWASocket, {
   DisconnectReason,
   decryptPollVote,
   getKeyAuthor,
+  fetchLatestWaWebVersion,
   normalizeMessageContent,
   jidNormalizedUser,
   useMultiFileAuthState,
@@ -241,7 +242,12 @@ async function onMessage(m: WAMessage): Promise<void> {
 
 export async function startWhatsApp(): Promise<void> {
   const { state, saveCreds } = await useMultiFileAuthState(path.join(config.dataDir, "wa-auth"));
+  // Announce the current WhatsApp Web version: with the library's built-in (older) one,
+  // WhatsApp can keep the connection open but stop delivering messages.
+  const latest = await fetchLatestWaWebVersion({}).catch(() => null);
+  if (latest?.version) console.log(`WhatsApp Web version ${latest.version.join(".")}`);
   sock = makeWASocket({
+    ...(latest?.version ? { version: latest.version } : {}),
     auth: state,
     logger,
     markOnlineOnConnect: false,
@@ -300,6 +306,7 @@ export async function startWhatsApp(): Promise<void> {
     // Handle the recent ones (last 10 min) once each; skip genuinely old history.
     const fresh = (m: WAMessage) => Date.now() / 1000 - Number(m.messageTimestamp ?? 0) < 10 * 60;
     const ours = messages.filter((m) => isOurChat(m.key.remoteJid));
+    if (ours.length) console.log(`[wa] ${ours.length} message(s) in our group (${type})`);
     const todo = type === "notify" ? messages : ours.filter(fresh);
     const old = ours.length - (type === "notify" ? 0 : todo.length);
     if (old) console.log(`[skip] ${old} older message(s) from our chat synced from the phone (not new)`);
