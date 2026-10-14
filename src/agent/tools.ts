@@ -3,7 +3,8 @@ import { z } from "zod";
 import { bookAndAnnounce, cancelReservation, checkAvailability, ensureDetected, howBooked, modifyReservation, policyLine } from "../booking/service";
 import { config, PEOPLE, voters } from "../config";
 import { db, kvSet } from "../db";
-import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, upcomingReservations, updatePrefs, upsertPlace } from "../db/repo";
+import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, getReservation, upcomingReservations, updatePrefs, updateReservation, upsertPlace } from "../db/repo";
+import { cancelJobs } from "../jobs/scheduler";
 import { say, status } from "../notify";
 import { callTime, clearPendingCall, dropAllCalls, pendingCall, runCall, scheduleCall, scheduledCalls } from "../booking/calls";
 import { currentMessage, saysCall } from "./turn";
@@ -301,9 +302,24 @@ const rawTools = [
 
   betaZodTool({
     name: "cancel_reservation",
-    description: "Cancel a reservation. Only when someone in the group clearly asks to cancel it.",
-    inputSchema: z.object({ reservation_id: z.number().int(), reason: z.string().optional(), call_go_ahead: CALL_GO_AHEAD }),
-    run: async ({ reservation_id, reason, call_go_ahead }) => cancelReservation(reservation_id, reason, { callApproved: goAhead(call_go_ahead) }),
+    description:
+      "Cancel a reservation. Only when someone in the group clearly asks to cancel it. If they say they already cancelled it themselves (called the restaurant, used the email link), set already_cancelled: it's then only marked cancelled, nothing is contacted.",
+    inputSchema: z.object({
+      reservation_id: z.number().int(),
+      reason: z.string().optional(),
+      already_cancelled: z.boolean().optional().describe("True when they cancelled it themselves outside the bot"),
+      call_go_ahead: CALL_GO_AHEAD,
+    }),
+    run: async ({ reservation_id, reason, already_cancelled, call_go_ahead }) => {
+      if (already_cancelled) {
+        const r = getReservation(reservation_id);
+        if (!r || (r.status !== "confirmed" && r.status !== "requested")) return `No active reservation #${reservation_id}.`;
+        updateReservation(r.id, { status: "cancelled", notes: [r.notes, `cancelled by them directly${reason ? `: ${reason}` : ""}`].filter(Boolean).join(" / ") });
+        cancelJobs(`res:${r.id}:`);
+        return `Marked #${r.id} ${getPlace(r.place_id)?.name} (${r.date} ${r.time}) as cancelled. Nothing was contacted; reminders for it are off.`;
+      }
+      return cancelReservation(reservation_id, reason, { callApproved: goAhead(call_go_ahead) });
+    },
   }),
 
   betaZodTool({
