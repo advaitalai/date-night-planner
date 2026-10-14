@@ -61,6 +61,8 @@ interface StoredPoll {
 let sock: WASocket | undefined;
 
 const BOT_PREFIX = "🤖 ";
+/** Message ids already handled, so a message delivered twice (notify + sync) is answered once. */
+const seenIds = new Set<string>();
 /** Ids of messages the bot itself sent, so self mode doesn't answer itself. */
 const sentByBot = new Set<string>();
 
@@ -294,12 +296,19 @@ export async function startWhatsApp(): Promise<void> {
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") {
-      const ours = messages.filter((m) => isOurChat(m.key.remoteJid)).length;
-      if (ours) console.log(`[skip] ${ours} older message(s) from our chat synced from the phone (not new)`);
-      return;
+    // After a reconnect WhatsApp can deliver brand-new messages as a sync ("append"), not "notify".
+    // Handle the recent ones (last 10 min) once each; skip genuinely old history.
+    const fresh = (m: WAMessage) => Date.now() / 1000 - Number(m.messageTimestamp ?? 0) < 10 * 60;
+    const ours = messages.filter((m) => isOurChat(m.key.remoteJid));
+    const todo = type === "notify" ? messages : ours.filter(fresh);
+    const old = ours.length - (type === "notify" ? 0 : todo.length);
+    if (old) console.log(`[skip] ${old} older message(s) from our chat synced from the phone (not new)`);
+    for (const m of todo) {
+      if (m.key.id && seenIds.has(m.key.id)) continue;
+      if (m.key.id) seenIds.add(m.key.id);
+      if (seenIds.size > 1000) seenIds.delete(seenIds.values().next().value!);
+      await onMessage(m).catch((err) => console.error("message handling failed:", err));
     }
-    for (const m of messages) await onMessage(m).catch((err) => console.error("message handling failed:", err));
   });
 
   setSender({
