@@ -60,8 +60,16 @@ let queue: Promise<unknown> = Promise.resolve();
  * Handle one incoming group message. Runs are serialized so two quick
  * messages can't race each other into double bookings.
  */
+/** Longest a single message may take (a phone call can take ~8 min) before the chat is freed. */
+const TURN_LIMIT_MS = 10 * 60_000;
+
 export function handleMessage(sender: string, text: string): Promise<string | null> {
-  const run = queue.then(() => runAgent(sender, text));
+  const run = queue.then(() =>
+    Promise.race([
+      runAgent(sender, text),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("that took too long, so I stopped waiting")), TURN_LIMIT_MS)),
+    ]),
+  );
   queue = run.catch(() => undefined);
   return run;
 }

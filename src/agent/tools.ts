@@ -56,6 +56,16 @@ const slotFields = {
 };
 
 /** A phone call needs a human yes. The model may only pass true when the message itself asks for a call. */
+/**
+ * Post a tool's outcome to the chat itself. The agent replies NO_REPLY after tools
+ * that post, so a result it was meant to relay (e.g. "Shall I call to cancel?")
+ * could end up never shown.
+ */
+async function posted(message: string): Promise<string> {
+  await say(message);
+  return `Posted to the chat: ${message.slice(0, 300)}\nReply NO_REPLY.`;
+}
+
 /** call_go_ahead only counts when the message really says "call". */
 const goAhead = (flag: boolean | undefined) => Boolean(flag) && saysCall(currentMessage()?.text);
 
@@ -297,7 +307,8 @@ const rawTools = [
       party_size: z.number().int().optional(),
       call_go_ahead: CALL_GO_AHEAD,
     }),
-    run: async ({ reservation_id, date, time, party_size, call_go_ahead }) => modifyReservation(reservation_id, { date, time, partySize: party_size }, { callApproved: goAhead(call_go_ahead) }),
+    run: async ({ reservation_id, date, time, party_size, call_go_ahead }) =>
+      posted(await modifyReservation(reservation_id, { date, time, partySize: party_size }, { callApproved: goAhead(call_go_ahead) })),
   }),
 
   betaZodTool({
@@ -318,7 +329,7 @@ const rawTools = [
         cancelJobs(`res:${r.id}:`);
         return `Marked #${r.id} ${getPlace(r.place_id)?.name} (${r.date} ${r.time}) as cancelled. Nothing was contacted; reminders for it are off.`;
       }
-      return cancelReservation(reservation_id, reason, { callApproved: goAhead(call_go_ahead) });
+      return posted(await cancelReservation(reservation_id, reason, { callApproved: goAhead(call_go_ahead) }));
     },
   }),
 
