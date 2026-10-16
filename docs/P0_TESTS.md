@@ -8,7 +8,7 @@ The small set that must pass before Emily joins and the first real booking. Agre
 - If your shell has its own `BOOKING_PHONE`, it's used as is: make sure it's a valid-looking number (TableCheck reads a fake one as "time unavailable").
 - TableCheck 403s bursts of requests; the harness tries the known-bookable places first (`P0_TABLECHECK`, default "SMOKEHOUSE,bills Omotesando").
 
-**Results 12 Oct (laptop, through the agent):** P0-1..7 ✅. **16 Oct (lean cut):** P0-5 and P0-7 rewritten for the new rules. Cloud `--tools` run: P0-3, 4, 5 ✅; P0-2 found no free table (the slot was held by an earlier run). P0-7 needs the agent. Next: a laptop run of all.
+**Results 12 Oct (laptop, through the agent):** P0-1..7 ✅. **16 Oct (lean cut):** P0-5 and P0-7 rewritten for the new rules. Cloud `--tools` run: P0-3, 4, 5 ✅. **Laptop run through the agent, 16 Oct: P0-1..7 all ✅** (P0-2 real TableCheck dry run at h:armonia).
 
 | # | Case | Steps | Pass when | Status |
 |---|---|---|---|---|
@@ -16,9 +16,9 @@ The small set that must pass before Emily joins and the first real booking. Agre
 | P0-2 | Books only the pick | Decide on a TableCheck option ("2") | "🧪 would be booked" for that place only; `booking_log` shows only that place | ✅ tools 12 Oct (real TableCheck dry run, SMOKEHOUSE and bills Omotesando); ⬜ agent |
 | P0-3 | Full: nothing else booked | Pick a place whose time is full (or fake `full`) | Says full, lists free times or asks; no other place tried | ✅ tools 12 Oct (full by API, and API-free but form-full); ⬜ agent |
 | P0-4 | Window | Fake full at 18:30 with 18:45 free | Books 18:45 and says it's inside the 18:30–19:00 window | ✅ tools 12 Oct (after a fix: the dry-run message didn't mention the window); ⬜ agent |
-| P0-5 | Calls only with a go-ahead | Decide on a phone-only place ("1"); then "cancel the X booking"; then "ok go ahead" | Deciding → exactly one (fake) call, booked; cancel → asks "Shall I call them to cancel…?", no call; "ok go ahead" → exactly one call, cancelled | ✅ tools 16 Oct; ⬜ agent |
+| P0-5 | Calls only with a go-ahead | Decide on a phone-only place ("1"); then "cancel the X booking"; then "ok go ahead" | Deciding → exactly one (fake) call, booked; cancel → asks "Shall I call them to cancel…?", no call; "ok go ahead" → exactly one call, cancelled | ✅ agent 16 Oct |
 | P0-6 | Honest misses | "new options, Mexican with live music" (none nearby) | Says what wasn't found; never claims a match; different places from before | ⬜ needs the agent |
-| P0-7 | They decide between themselves | Not addressed: Advait "Emily which one do you like?", Emily "X for sure, let's do that one"; then a reply: "yes please" | Question → no reply, nothing booked; decision → "Shall I book X?", nothing booked; "yes please" → books X only, no calls | ⬜ needs the agent (new 16 Oct) |
+| P0-7 | They decide between themselves | Not addressed: Advait "Emily which one do you like?", Emily "X for sure, let's do that one"; then a reply: "yes please" | Question → no reply, nothing booked; decision → "Shall I book X?", nothing booked; "yes please" → books X only, no calls | ✅ agent 16 Oct |
 | P0-8 | Emily recognised | Live, in WhatsApp | Log shows `[in] Emily: …` | ⬜ live check by Advait |
 | P0-9 | Only answers replies to it | Live: "see you at 7" between them; then an inline reply to the bot | First: no reply (log shows `[heard]`); second: answered | ⬜ live check by Advait |
 | P0-10 | Real booking recorded | `DRY_RUN=0`, real pick | ✅ message with deadline; reservation saved; one "still on?" job scheduled | ⬜ at launch |

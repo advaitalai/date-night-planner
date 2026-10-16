@@ -25,7 +25,7 @@ Last updated: 16 Oct 2026.
 - **Cut:** email and Tabelog booking, Gmail/Drive watchers, onboarding web page, polls, auto-cancel, the 48h "still on?", the detailed call outcome tree, the `recent_calls` tool. `fastify` and `googleapis` removed.
 - **Kept:** changing a booking, the visit log, the policy lookup, one "still on?" a day before the free-cancel deadline.
 - **Tests:** 90 unit tests pass (new: who the bot answers, listening and confirming, calling on a decision, closed restaurant, one reminder). P0 updated: P0-5 = decide on a phone-only place → one call; cancel asks; "ok go ahead" → one call. P0-7 = they talk it over, bot confirms, books on "yes please" (needs the agent). Tools-mode run in the cloud: P0-3, 4, 5 ✅; P0-2 found no free table (slot held by the earlier run), not a code change.
-- **Next:** Advait runs `npm run p0` on the laptop (all, through the agent), then uses it for real. **Then: give the bot its own WhatsApp number** (agreed 16 Oct; steps in SETUP §4).
+- **Laptop P0 run through the agent (16 Oct): P0-1..7 all pass.** Next: use it for real (Emily replies inline). **Then: give the bot its own WhatsApp number** (agreed 16 Oct; steps in SETUP §4).
 
 **12 Oct, P0 session (cloud):** the Anthropic key didn't reach the shell (neither `ANTHROPIC_API_KEY` nor `PLANNER_ANTHROPIC_API_KEY`), so only the no-LLM checks ran.
 - Built `npm run p0` (see `docs/P0_TESTS.md`). `--tools` run: **P0-2, 3, 4, 5, 7 pass**, with a real TableCheck dry run (SMOKEHOUSE, Wed 14 Oct 18:30, stopped at TableCheck's confirmation page). **P0-1 and P0-6 not run** (need the agent).

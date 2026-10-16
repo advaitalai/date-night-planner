@@ -7,8 +7,7 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 ## Next up
 
 1. **Give the bot its own WhatsApp number** (agreed 16 Oct). Steps in SETUP §4. Fixes the linked-device outages; @mentions work.
-2. **Laptop P0 run through the agent** (`npm run p0`), after the 16 Oct changes. P0-7 (they talk it over, the bot confirms) only runs with the agent.
-3. **👍 / 👎 rating cards after each date** (phase 2). This could be a message the morning after ("How was X?"), stored in `visits.rating`. Ratings would then:
+2. **👍 / 👎 rating cards after each date** (phase 2). This could be a message the morning after ("How was X?"), stored in `visits.rating`. Ratings would then:
    - boost similar places in scoring;
    - stop places rated 👎 from being suggested again;
    - feed the cuisine rotation.

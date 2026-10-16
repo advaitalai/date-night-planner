@@ -16,7 +16,7 @@ Last updated: 16 Oct 2026, after the lean cut. What was cut, and why: end of thi
 | A2 | As a user, I want to see what the bot is doing (status line, ⏳ then ✅). | No | Worked | |
 | A3 | As a user, I want options as clean cards (area, travel, why, map link). | Yes | Worked | |
 | A4 | As a user, I want a short hello with ideas of what to say. | No | Worked | |
-| A5 | As a couple, we want either of us to decide in our own words, and the bot to check when it isn't sure. | Partly: confirming a decision it heard yes; reading "2" / "let's do it" needs the agent (P0-7) | Changed 16 Oct | P0-7 through the agent |
+| A5 | As a couple, we want either of us to decide in our own words, and the bot to check when it isn't sure. | Yes (P0-7, with the AI, 16 Oct) | Changed 16 Oct | |
 | A6 | As a couple, we want the bot to answer only when we reply to it (or say "planner"), and just listen otherwise. | Yes | Changed 16 Oct | Inline replies on the real WhatsApp |
 | A7 | As a user, I want every request answered, never left hanging. | Partly | Broke (fixed since): "Cancel!" got no reply | |
 
@@ -49,7 +49,7 @@ Last updated: 16 Oct 2026, after the lean cut. What was cut, and why: end of thi
 
 | # | Story | Checked by a test | Used for real | Not checked yet |
 |---|---|---|---|---|
-| E1 | As a couple, we want deciding on a phone-only place to be the go-ahead to call, and any clear yes to count for other calls. | Yes | Changed 16 Oct | P0-5 through the agent ("ok go ahead") |
+| E1 | As a couple, we want deciding on a phone-only place to be the go-ahead to call, and any clear yes to count for other calls. | Yes (P0-5, with the AI, 16 Oct) | Changed 16 Oct | |
 | E2 | As Advait, I want "no" / "don't call" to drop a call the bot asked about. | Yes | Changed 16 Oct (nothing is scheduled any more) | |
 | E4 | As Advait, I want a closed restaurant not called: tell me when they open, and call when I say. | Yes | Changed 16 Oct | |
 | E5 | As a restaurant, I want a short, polite Japanese call under a name I can write (エミリー). | Yes for the script | Worked: booked and cancelled in Japanese | |
