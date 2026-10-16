@@ -92,3 +92,11 @@ export function freeCancelDeadline(date: string, time: string, rule: CancelRule 
 export function fmtDate(date: string): string {
   return DateTime.fromISO(date, { zone: ZONE }).toFormat("ccc d LLL");
 }
+
+const WEEKDAYS_JA = ["月", "火", "水", "木", "金", "土", "日"];
+
+/** "2026年10月21日（水）18:30", for the Japanese call script. */
+export function jaDate(date: string, time: string): string {
+  const d = DateTime.fromISO(date, { zone: ZONE });
+  return `${d.year}年${d.month}月${d.day}日（${WEEKDAYS_JA[d.weekday - 1]}）${time}`;
+}

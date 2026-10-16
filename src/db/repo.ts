@@ -11,13 +11,11 @@ export const DEFAULT_PREFS: Prefs = {
   partySize: 2,
   kickoff: { weekday: 6, time: "10:00" },
   nudge: { weekday: 7, time: "10:00" },
-  decideBy: { weekday: 7, time: "20:00" },
   maxTravelMin: 25,
   cuisineCooldownDates: 3,
   revisitCooldownWeeks: 8,
   budgetPerPersonMaxJpy: 15000,
   dietary: "",
-  autoCancel: false,
   skipWeeks: [],
   flexLaterMin: 30,
 };
@@ -147,11 +145,6 @@ export function createPlan(p: Pick<Plan, "date" | "time" | "party_size" | "statu
 
 export function getPlan(id: number): Plan | undefined {
   const row = db().prepare("SELECT * FROM plans WHERE id = ?").get(id) as Record<string, unknown> | undefined;
-  return row ? rowToPlan(row) : undefined;
-}
-
-export function getPlanByPoll(pollMsgId: string): Plan | undefined {
-  const row = db().prepare("SELECT * FROM plans WHERE poll_msg_id = ?").get(pollMsgId) as Record<string, unknown> | undefined;
   return row ? rowToPlan(row) : undefined;
 }
 

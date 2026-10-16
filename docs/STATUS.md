@@ -2,7 +2,7 @@
 
 The running log of where the project is. **Update this at the end of every session.** It's what a new session (or a compacted one) relies on to pick up without re-asking Advait.
 
-Last updated: 12 Oct 2026.
+Last updated: 16 Oct 2026.
 
 ## Where we are
 
@@ -17,6 +17,15 @@ Last updated: 12 Oct 2026.
 | 5. Always-on server (Google Cloud e2-micro) | ⏳ After the beta. |
 
 ## Next steps
+
+**16 Oct, lean cut (Advait: "run a very lean product so I don't have to keep testing").** Agreed story by story (`docs/USER_STORIES.md`), then built:
+- **Decisions by judgement:** either of you can decide, in any words; the bot asks "Shall I book X?" when unsure. No vote counting, no Sunday auto-book.
+- **Addressing:** the bot answers only inline replies to its messages or "planner". Everything else it just listens to, and only speaks up to confirm a decision it heard ("Sounds like X. Shall I book it?", once per option). `WA_DEDICATED` is gone.
+- **Calls:** deciding on a phone-only place = go-ahead, it calls straight away. Other calls (cancel, change, retry) ask, and any clear yes counts (no "call" keyword). No calls scheduled for later; closed → "they open at 17:00, reply when you'd like me to call".
+- **Cut:** email and Tabelog booking, Gmail/Drive watchers, onboarding web page, polls, auto-cancel, the 48h "still on?", the detailed call outcome tree, the `recent_calls` tool. `fastify` and `googleapis` removed.
+- **Kept:** changing a booking, the visit log, the policy lookup, one "still on?" a day before the free-cancel deadline.
+- **Tests:** 90 unit tests pass (new: who the bot answers, listening and confirming, calling on a decision, closed restaurant, one reminder). P0 updated: P0-5 = decide on a phone-only place → one call; cancel asks; "ok go ahead" → one call. P0-7 = they talk it over, bot confirms, books on "yes please" (needs the agent). Tools-mode run in the cloud: P0-3, 4, 5 ✅; P0-2 found no free table (slot held by the earlier run), not a code change.
+- **Next:** Advait runs `npm run p0` on the laptop (all, through the agent), then uses it for real. **Then: give the bot its own WhatsApp number** (agreed 16 Oct; steps in SETUP §4).
 
 **12 Oct, P0 session (cloud):** the Anthropic key didn't reach the shell (neither `ANTHROPIC_API_KEY` nor `PLANNER_ANTHROPIC_API_KEY`), so only the no-LLM checks ran.
 - Built `npm run p0` (see `docs/P0_TESTS.md`). `--tools` run: **P0-2, 3, 4, 5, 7 pass**, with a real TableCheck dry run (SMOKEHOUSE, Wed 14 Oct 18:30, stopped at TableCheck's confirmation page). **P0-1 and P0-6 not run** (need the agent).
@@ -78,18 +87,21 @@ Last updated: 12 Oct 2026.
 
 - **Time window:** up to 30 min later than asked is fine without checking; anything else, ask in WhatsApp. A range they give in chat ("6 to 7:30") applies to that date night.
 - **Phone bookings under Emily (エミリー)**; sites keep Advait's full name.
-- **Calls are tightly controlled.** Never phone a restaurant without a human go-ahead in the chat, including retries and call-backs. After each call, report the outcome and propose the next step as a question.
+- **Calls need a go-ahead, read like a person would** (16 Oct): deciding on a phone-only place counts; otherwise ask, and any clear yes counts. "No" stops it. No calls scheduled for later. After each call, report what happened and ask what next.
+- **Either of us can decide** (16 Oct). An opinion isn't a decision; when unsure, ask. Don't make us both pick the same number.
+- **Only answer what's addressed to the bot** (inline reply or "planner"); everything else is us talking.
+- **Lean product** (16 Oct): fewer features, fewer things to test. Prefer the agent's judgement over rigid parsing rules ("you're being a dialogue parser rather than an LLM").
 - **Never book a place nobody picked.** If the chosen place fails, ask.
 - **Be honest about misses.** Never say options match a wish ("live music") unless they do.
 
 - **Design matters** ("a big sucker for good design"): rich WhatsApp formatting, short lines, blank lines between items, cards for options. **No em dashes, ever** (he called them out as an AI tell).
 - **Seats only, never set courses**, never prepayment or a card.
 - **Pick the place first, then book.** No availability gate on recommendations.
-- **Booking order:** booking sites, then email, then an AI phone call (fastest and most predictable first).
-- **Reply in words or with a number;** no polls by default.
+- **Booking order:** TableCheck, then an AI phone call (email and Tabelog cut 16 Oct).
+- **Reply in words or with a number;** no polls.
 - **Plan on the weekend** for the following Wednesday (Sat kickoff). Mondays are too late.
 - **Keep costs down:** Anthropic API is the only paid service. Free Google Cloud VM rather than Fly.io. One Anthropic key, reused everywhere.
-- **Privacy:** debug on the laptop, not by linking his WhatsApp to a cloud session. Long-term, the bot may get its own number (povo eSIM plus WhatsApp Business).
+- **Privacy:** debug on the laptop, not by linking his WhatsApp to a cloud session. **The bot gets its own number next** (agreed 16 Oct; e.g. povo eSIM plus WhatsApp Business).
 - **Wants to see progress:** a short phrase for what the bot is doing, plus ⏳/✅ reactions.
 - **Do things in the sequence he asks,** one phase at a time, not in parallel.
 - **Personal details** (name Advait Alai, アドヴァイト アライ, 070 number, Gmail) live only in `.env`. The repo is public.
@@ -99,12 +111,12 @@ Last updated: 12 Oct 2026.
 - **Laptop setup:** `.env` has the Anthropic, Google Maps and booking details, plus `WA_SELF_MODE=1`, `WA_GROUP_JID=<solo group id>`, `WA_SOLO=1`, `DRY_RUN=1`.
   - `npm install` rewrites `package-lock.json` on his Mac. If `git pull` complains, run `git checkout -- package-lock.json` first.
 - **WhatsApp "Message yourself" chat:** Baileys fails to decrypt later messages there (`Bad MAC`). Use a solo group instead.
-- **Emily in the group (fixed 12 Oct):** senders were matched by exact phone digits, so `EMILY_PHONE=+8109…` never matched WhatsApp's `819…`, and LID senders never matched at all. Now: numbers normalised, `participantPn` checked, and in the two-person group anyone who isn't Advait is Emily. `WA_DEDICATED=1` (default): no "planner" keyword needed.
+- **Emily in the group (fixed 12 Oct):** senders were matched by exact phone digits, so `EMILY_PHONE=+8109…` never matched WhatsApp's `819…`, and LID senders never matched at all. Now: numbers normalised, `participantPn` checked, and in the two-person group anyone who isn't Advait is Emily. (`WA_DEDICATED` was removed 16 Oct: the bot now answers inline replies and "planner" only.)
 - **Anthropic key in cloud sessions (12 Oct):** neither `ANTHROPIC_API_KEY` nor `PLANNER_ANTHROPIC_API_KEY` reached the shell in the P0 session. Check that it's saved in the environment's settings (and that a new session was started after saving it).
 - **TableCheck from the cloud sandbox:** 403s after ~50 requests in a few minutes; clears after a minute or two.
 - **TableCheck dry-run check (12 Oct, from the cloud):** h:armonia Wed 14 Oct 18:30 reached the confirmation page. A fake test phone (070-0000-0000) makes TableCheck say "Phone is invalid / Your selected time is unavailable", which looks like "full". Use a valid-looking number in tests.
 - **Harmless log noise:** Baileys `init queries` timeouts, "Invalid mex newsletter notification", and Bad MAC / "failed to decrypt" for backlog from other chats after a restart. Hidden by default since 11 Oct; `WA_LOG_LEVEL=warn` shows them. The group list only prints when `WA_GROUP_JID` is unset (it listed all of Advait's groups in the terminal).
-- **Old plans fire their jobs on startup.** A plan proposed in an earlier beta run keeps its Sunday nudge and decide jobs. Stale nudges (over 2h late) are now dropped; "decide" still runs. Say "skip this week" or plan again to move on.
+- **Old plans fire their jobs on startup.** A plan proposed in an earlier beta run keeps its Sunday nudge. Stale nudges (over 2h late) are dropped. (The "decide" auto-book is gone since 16 Oct; old "decide" jobs in the database have no handler and just fail quietly.)
 - `npm install` reports 2 high vulnerabilities in link-preview-js (via Baileys). No fix upstream. Low risk (only previews links the bot sends). Recheck before the VM deploy; option: turn off link previews.
 - **Cloud sessions:**
   - Tabelog shows a Cloudflare bot check, so it can't be used from there.

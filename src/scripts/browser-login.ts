@@ -2,7 +2,7 @@
  * One-time login for booking sites whose accounts use "Sign in with Google"
  * (the bot can't type a Google password itself).
  *
- *   npm run browser-login -- tabelog      (or tablecheck)
+ *   npm run browser-login -- tablecheck
  *
  * Opens a visible browser with the bot's saved profile. Log in by hand, then
  * close the window: the session is stored under DATA_DIR/browser/<site> and
@@ -15,7 +15,6 @@ import { chromium } from "playwright-core";
 import { config } from "../config";
 
 const SITES: Record<string, string> = {
-  tabelog: "https://tabelog.com/login/",
   tablecheck: "https://www.tablecheck.com/en/login",
 };
 

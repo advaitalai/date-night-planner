@@ -1,10 +1,7 @@
 import { DateTime } from "luxon";
-import { config, voters } from "../config";
-import { kvGet, kvSet } from "../db";
 import { activePlanFor, addVisit, getPlace, getPrefs, getReservation, updatePlan, updatePrefs, updateReservation } from "../db/repo";
-import { cancelReservation, policyLine } from "../booking/service";
+import { policyLine } from "../booking/service";
 import { say } from "../notify";
-import { bookOption, rankByVotes } from "../plans/decide";
 import { proposePlan } from "../recommender";
 import { cuisineOf } from "../recommender/similarity";
 import { fmtDate, nextWeeklyMoment, nextWeekday, now } from "../util/time";
@@ -26,13 +23,8 @@ export function ensureWeeklyJobs(from = now()): void {
   const kickoff = nextWeeklyMoment(from, prefs.kickoff.weekday, prefs.kickoff.time);
   const date = targetDate(kickoff);
   schedule("kickoff", kickoff, { date }, `kickoff:${date}:${kickoff.toISO()}`);
-  for (const [type, when] of [
-    ["nudge", prefs.nudge],
-    ["decide", prefs.decideBy],
-  ] as const) {
-    const at = nextWeeklyMoment(kickoff, when.weekday, when.time);
-    if (at.toISODate()! < date) schedule(type, at, { date }, `${type}:${date}:${at.toISO()}`);
-  }
+  const nudge = nextWeeklyMoment(kickoff, prefs.nudge.weekday, prefs.nudge.time);
+  if (nudge.toISODate()! < date) schedule("nudge", nudge, { date }, `nudge:${date}:${nudge.toISO()}`);
 }
 
 export function registerWeeklyJobs(): void {
@@ -53,41 +45,16 @@ export function registerWeeklyJobs(): void {
   registerJob("nudge", async ({ date }: { date: string }) => {
     const plan = activePlanFor(date);
     if (!plan || plan.status !== "proposed") return;
-    const missing = voters().filter((p) => !plan.votes[p]?.length);
-    if (missing.length) {
-      const how = config.wa.polls ? "vote in the poll above" : "reply with an option number";
-      await say(`⏰ *Reminder:* ${missing.join(" and ")}, ${how} for ${fmtDate(date)} so I can book it 🙏`);
-    }
+    // Nothing is ever booked without a decision: this only reminds.
+    await say(`⏰ *Reminder:* no pick yet for ${fmtDate(date)}.\nReply to the options with the one you want, or tell me what you'd prefer.`);
   });
 
-  registerJob("decide", async ({ date }: { date: string }) => {
-    const plan = activePlanFor(date);
-    if (!plan || plan.status !== "proposed") return;
-    const anyVotes = Object.values(plan.votes).some((v) => v.length);
-    if (!anyVotes) {
-      await say(`No votes for ${fmtDate(date)} yet, so I haven't booked anything. Say "book option 1" (or 2/3), or "skip this week".`);
-      return;
-    }
-    const top = rankByVotes(plan)[0];
-    await say(`Deadline's up. Booking the top-voted option, *${plan.options[top].name}*.`);
-    await bookOption(plan.id, top);
-  });
-
-  registerJob("cancel_guard", async ({ reservationId, hours }: { reservationId: number; hours: number }) => {
+  // A day before free cancellation ends. It never cancels by itself.
+  registerJob("cancel_guard", async ({ reservationId }: { reservationId: number }) => {
     const r = getReservation(reservationId);
     if (!r || (r.status !== "confirmed" && r.status !== "requested")) return;
     const place = getPlace(r.place_id)!;
-    const stillOn = kvGet<boolean>(`still_on:${r.id}`, false);
-    if (hours === 48) {
-      await say(`Still on for *${place.name}* on ${fmtDate(r.date)} at ${r.time}? ${policyLine(r)} Reply "still on", or "cancel" and I'll cancel it in time.`);
-      return;
-    }
-    if (stillOn) return;
-    if (getPrefs().autoCancel) {
-      await say(await cancelReservation(r.id, "nobody confirmed before the free-cancellation deadline"));
-      return;
-    }
-    await say(`⏰ Last call: free cancellation for *${place.name}* ends in about 24 hours. ${policyLine(r)} Reply "cancel" if plans changed.`);
+    await say(`Still on for *${place.name}* on ${fmtDate(r.date)} at ${r.time}?\n\nAbout 24 hours of free cancellation left. ${policyLine(r)}\n\nReply to this message to cancel or change it.`);
   });
 
   registerJob("dayof_reminder", async ({ reservationId }: { reservationId: number }) => {
@@ -104,7 +71,6 @@ export function registerWeeklyJobs(): void {
     updateReservation(r.id, { status: "done" });
     addVisit(place.id, r.date, cuisineOf(place));
     if (r.plan_id) updatePlan(r.plan_id, { status: "done" });
-    kvSet(`still_on:${r.id}`, null);
   });
 }
 

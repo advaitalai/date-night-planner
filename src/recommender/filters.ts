@@ -77,12 +77,12 @@ function nameMatches(place: Place, names: string[]): boolean {
 }
 
 /**
- * Whether the bot has any way to try booking: a booking site, an email
- * address, or a phone number for an AI call. Walk-in-only places don't count.
+ * Whether the bot has any way to try booking: TableCheck, or a phone number
+ * for an AI call. Walk-in-only places don't count.
  */
 export function canAttemptBooking(p: Place): boolean {
   if (p.booking_channel === "walkin" || p.booking_channel === "not_restaurant") return false;
-  return Boolean(p.tablecheck_slug || p.tabelog_url || p.booking_email || p.phone || SELF_BOOKABLE.includes(p.booking_channel));
+  return Boolean(p.tablecheck_slug || p.phone || SELF_BOOKABLE.includes(p.booking_channel));
 }
 
 export function rejectReason(c: Candidate, k: Constraints, s: FilterSettings): RejectReason | null {

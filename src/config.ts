@@ -20,20 +20,12 @@ export const config = {
     selfName: "Advait",
     /** Solo test: only Advait votes and every message is for the bot (any chat, e.g. a group with just him). */
     solo: env("WA_SOLO", "0") === "1",
-    /** The group exists only for date planning: every message is for the bot (no "planner" needed). */
-    dedicated: env("WA_DEDICATED", "1") === "1",
-    /** Also post a WhatsApp poll with the options (default off: people reply in words). */
-    polls: env("WA_POLLS", "0") === "1",
     phones: { Advait: env("ADVAIT_PHONE"), Emily: env("EMILY_PHONE") } as Record<string, string>,
   },
 
   google: {
     mapsKey: env("GOOGLE_MAPS_API_KEY"),
-    clientId: env("GOOGLE_OAUTH_CLIENT_ID"),
-    clientSecret: env("GOOGLE_OAUTH_CLIENT_SECRET"),
   },
-  publicBaseUrl: env("PUBLIC_BASE_URL", "http://localhost:8080"),
-  port: Number(env("PORT", "8080")),
 
   booking: {
     contact: {
@@ -43,7 +35,6 @@ export const config = {
       email: env("BOOKING_EMAIL"),
     },
     tablecheck: { email: env("TABLECHECK_EMAIL"), password: env("TABLECHECK_PASSWORD") },
-    tabelog: { email: env("TABELOG_EMAIL"), password: env("TABELOG_PASSWORD") },
     /**
      * Restrict booking to these channels, e.g. "phone" to test the AI call end to
      * end from WhatsApp (with DRY_RUN=1 the call comes to BOOKING_PHONE). Empty = all.
@@ -119,7 +110,7 @@ export function isSolo(): boolean {
   return isSelfChat() || config.wa.solo;
 }
 
-/** Who has to vote before a poll counts as agreed. */
+/** The people in the chat (just Advait when testing solo). */
 export function voters(): readonly Person[] {
   return isSolo() ? [config.wa.selfName as Person] : PEOPLE;
 }

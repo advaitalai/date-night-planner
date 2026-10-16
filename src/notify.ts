@@ -7,7 +7,6 @@ import { logMessage } from "./db/repo";
 
 type Sender = {
   text(text: string): Promise<string | undefined>;
-  poll(question: string, options: string[]): Promise<string | undefined>;
   /** Replace the text of a message the bot sent earlier. */
   edit(id: string, text: string): Promise<void>;
   remove(id: string): Promise<void>;
@@ -16,10 +15,6 @@ type Sender = {
 let sender: Sender = {
   async text(text) {
     console.log(`[chat] ${text}`);
-    return undefined;
-  },
-  async poll(question, options) {
-    console.log(`[chat poll] ${question}\n${options.map((o, i) => `  ${i + 1}. ${o}`).join("\n")}`);
     return undefined;
   },
   async edit(_id, text) {
@@ -49,12 +44,6 @@ export async function say(text: string): Promise<string | undefined> {
   logMessage("planner", text);
   console.log(`[out] ${text.slice(0, 500)}`);
   return sender.text(text);
-}
-
-/** Post a single-choice poll; returns the WhatsApp message id used to match votes. */
-export async function poll(question: string, options: string[]): Promise<string | undefined> {
-  logMessage("planner", `[poll] ${question} — ${options.join(" | ")}`);
-  return sender.poll(question, options);
 }
 
 // ---------- live status line ----------

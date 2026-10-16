@@ -2,14 +2,26 @@
 
 The MVP covers the items in "Done" below. Everything else is ordered roughly by value. Each entry says what it is, why it matters and any known constraint.
 
+**Lean rule (16 Oct, Advait):** the product stays small so it doesn't need constant testing. Before adding anything, ask whether it's worth testing for as long as it exists, and prefer the agent's judgement over new rules in code.
+
 ## Next up
 
-1. **Verify the booking flows on the live sites.** Do a dry run, then one real booking and cancellation each on TableCheck and Tabelog. The browser steps use text and role locators, but they still need to be tuned against the real pages. Keep `DRY_RUN=1` until each flow has been seen working end to end.
-2. **Run the bookability audit on both lists** (`npm run audit`). Use the result to prioritise the items below: how many places take phone bookings only, and how many use other platforms.
-3. **👍 / 👎 rating cards after each date** (phase 2). This could be a WhatsApp poll the morning after ("How was X?"), stored in `visits.rating`. Ratings would then:
+1. **Give the bot its own WhatsApp number** (agreed 16 Oct). Steps in SETUP §4. Fixes the linked-device outages; @mentions work.
+2. **Laptop P0 run through the agent** (`npm run p0`), after the 16 Oct changes. P0-7 (they talk it over, the bot confirms) only runs with the agent.
+3. **👍 / 👎 rating cards after each date** (phase 2). This could be a message the morning after ("How was X?"), stored in `visits.rating`. Ratings would then:
    - boost similar places in scoring;
    - stop places rated 👎 from being suggested again;
    - feed the cuisine rotation.
+
+## Cut on 16 Oct (don't rebuild without a clear reason)
+
+- Calls scheduled for later ("call at 11", "call in 30") and rescheduling them.
+- Vote counting ("you both picked") and the Sunday auto-book.
+- Email booking and the Gmail reply watcher; Tabelog booking.
+- Automatic Takeout pickup from Drive; the Google onboarding web page.
+- WhatsApp polls.
+- Auto-cancel; the 48h "still on?".
+- The detailed call outcome tree; "recap the last call" in chat.
 
 ## Dialer QA (Advait, 12 Oct): triaged (D1–D4 done 12 Oct)
 
@@ -47,7 +59,6 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
    - real-restaurant trials in dry run, then live;
    - calling back to accept an offered alternative time.
 5. **More booking platforms:** Hot Pepper Gourmet (its search API is free; booking would go through the browser), OMAKASE, ebica, Toreta and Ikyu. `detect.ts` already marks these places as `other_online`.
-6. **Contact forms:** some restaurants offer a web form but no email address. Fill the form with the same Japanese template.
 7. **Watch fully booked places for cancellations.** Poll TableCheck availability for places they both want that are full, and book automatically when a table frees up.
 8. **Book sought-after places further ahead.** For places that fill up weeks in advance, book further out than the Saturday-before rhythm.
 
@@ -66,12 +77,11 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 
 14. **Official WhatsApp Business API,** if Meta's group-chat support becomes generally available. That would remove the risk of the unofficial library getting the bot's number banned.
 15. **Admin page:** reservations, jobs, places and their booking channels, with manual overrides (e.g. fix a wrong TableCheck slug).
-16. **Encrypt the Google tokens** stored in SQLite at rest.
 
 ## Done (MVP)
 
-- WhatsApp group bot with an agent loop, and polls for voting.
-- Saved lists: Takeout CSV import, automatic import of recurring Takeout exports from Drive, and Maps links pasted in chat.
+- WhatsApp group bot with an agent loop. It answers inline replies and "planner", listens to the rest, and either of you can decide (16 Oct).
+- Saved lists: Takeout CSV import and Maps links pasted in chat.
 - Recommender:
   - parses free-text requests;
   - starts from home or the office;
@@ -80,11 +90,10 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
   - discovers places beyond the saved lists;
   - checks availability before proposing;
   - writes pitches using only stored facts.
-- Booking through TableCheck, Tabelog and email: book, change and cancel. Cancellation policies are read from the booking and turned into deadline reminders.
+- Booking through TableCheck, else an AI phone call: book, change and cancel. Cancellation policies are read from the booking, the call or the website, and turned into a deadline reminder.
 - Weekly rhythm:
-  - Saturday kickoff and Sunday nudge;
-  - books the top-voted option on Sunday evening;
-  - "still on?" checks 48h and 24h before the free-cancellation deadline;
+  - Saturday kickoff and a Sunday reminder if nobody picked (never books by itself);
+  - one "still on?" a day before the free-cancellation deadline;
   - reminder on the day;
   - visit log after the date.
 - Bookability audit script.

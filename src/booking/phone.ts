@@ -4,10 +4,9 @@ import { extract } from "../llm";
 import { status } from "../notify";
 import { logCall } from "../logbook";
 import type { Place, Reservation } from "../types";
-import { jaDate } from "./email";
 import { latestOk } from "./window";
 import { DateTime } from "luxon";
-import { now, ZONE } from "../util/time";
+import { jaDate, now, ZONE } from "../util/time";
 import type { AvailabilityResult, BookingAdapter, BookResult, ChangeResult, Slot } from "./types";
 
 /**

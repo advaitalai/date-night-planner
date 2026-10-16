@@ -2,9 +2,8 @@ import { DateTime } from "luxon";
 import { config, domesticPhone, testCallee } from "../config";
 import { kvGet, kvSet } from "../db";
 import { getPlace, getReservation, updatePlace, updatePlan, updateReservation } from "../db/repo";
-import { cancelJobs, registerJob, schedule } from "../jobs/scheduler";
-import { db } from "../db";
-import { say, status } from "../notify";
+import { cancelJobs } from "../jobs/scheduler";
+import { status } from "../notify";
 import type { Place } from "../types";
 import { fmtDate, isOpenFor, now, ZONE } from "../util/time";
 import { callToBook, callToCancel, callToModify, type CallReport } from "./phone";
@@ -13,11 +12,11 @@ import type { Slot } from "./types";
 import { findPolicyOnline } from "./policy";
 
 /**
- * Phone calls are tightly controlled: the bot never dials on its own. Every
- * call (book, change, cancel, retry, call back for another time) is first
- * proposed in the chat, stored here as the pending call, and only placed once
- * someone says yes (the agent's place_call tool). After each call the bot
- * reports what happened and proposes the next step, which again needs a yes.
+ * Phone calls happen only with a go-ahead from the chat: deciding on a
+ * phone-only place counts as one, otherwise the bot asks first and stores
+ * the call here as the pending call; a yes (in any words, judged by the
+ * agent) places it via place_call. Calls are made now or not at all: when
+ * the restaurant is closed the bot says when it opens and waits to be told.
  */
 
 export interface PendingCall {
@@ -27,10 +26,8 @@ export interface PendingCall {
   planId?: number;
   reservationId?: number;
   reason?: string;
-  /** Times the restaurant offered on the last call (for "book 19:00"). */
+  /** Times the restaurant offered on the last call (for "try 19:00"). */
   alternatives?: string[];
-  /** Suggested delay before calling, e.g. 30 when the line was busy. */
-  suggestDelayMin?: number;
 }
 
 const KEY = "pending_call";
@@ -59,7 +56,7 @@ export function describePendingCall(): string | null {
   const p = pendingCall();
   if (!p) return null;
   const place = getPlace(p.placeId);
-  return `Waiting for a go-ahead to call ${place?.name ?? "?"} to ${task(p)}${p.alternatives?.length ? ` (they offered ${p.alternatives.join(", ")})` : ""}${p.suggestDelayMin ? ` (suggested: in ${p.suggestDelayMin} min)` : ""}.`;
+  return `Waiting for a go-ahead to call ${place?.name ?? "?"} to ${task(p)}${p.alternatives?.length ? ` (they offered ${p.alternatives.join(", ")})` : ""}.`;
 }
 
 function task(call: PendingCall): string {
@@ -80,83 +77,34 @@ export function nextOpening(place: Place, from = now()): DateTime | null {
   return null;
 }
 
+/** Known to be closed right now (unknown hours count as open). */
+export function closedNow(place: Place): boolean {
+  return isOpenFor(place.opening_periods, now(), 15) === false;
+}
+
+function opensAt(place: Place): string {
+  const next = nextOpening(place);
+  if (!next) return "They're closed right now.";
+  return `They're closed right now and open ${next.hasSame(now(), "day") ? "at" : next.toFormat("ccc")} ${next.toFormat("HH:mm")}.`;
+}
+
 /** Store the call and ask for a go-ahead. Returns the message to post. */
 export function askToCall(call: PendingCall, place: Place, tried: string[]): string {
   setPending(call);
   const lines: string[] = [];
   if (call.kind === "book") {
-    lines.push(tried.length ? `📞 *${place.name}*: the other ways to book didn't work.\n${tried.map((t) => `• ${t}`).join("\n")}` : `📞 *${place.name}* takes bookings by phone.`);
+    lines.push(tried.length ? `📞 *${place.name}*: booking online didn't work.\n${tried.map((t) => `• ${t}`).join("\n")}` : `📞 *${place.name}* takes bookings by phone.`);
   } else {
     lines.push(`📞 *${place.name}* was booked by phone, so ${call.kind === "cancel" ? "cancelling" : "changing"} it means calling them.`);
   }
-  lines.push(`Shall I call them to ${task(call)}? It takes about 2 minutes.`);
-  const open = isOpenFor(place.opening_periods, now(), 15);
-  const next = open === false ? nextOpening(place) : null;
-  if (next) {
-    lines.push(`Heads-up: they're closed right now and open ${next.hasSame(now(), "day") ? "at" : next.toFormat("ccc")} ${next.toFormat("HH:mm")}.\nReply *call* to try now anyway, *call at ${next.toFormat("HH:mm")}*, or *no*.`);
-  } else {
-    lines.push("Reply *call* to go ahead, or *no*.");
-  }
+  if (closedNow(place)) lines.push(`${opensAt(place)}\nReply to this message when you'd like me to call them to ${task(call)}.`);
+  else lines.push(`Shall I call them to ${task(call)}? It takes about 2 minutes.\nReply to this message to go ahead.`);
   if (config.dryRun) lines.push(`_Dry run: the call will go to ${testCallee().label}, not the restaurant._`);
   return lines.join("\n\n");
 }
 
-/** Schedule an approved call for later ("call at 17:00", "try again in 30 min"). */
-export function scheduleCall(call: PendingCall, at: DateTime): string {
-  clearPendingCall();
-  const place = getPlace(call.placeId)!;
-  // A new time for the same call replaces the old one (Emily moved 18:30 → 19:15 and both calls ran).
-  cancelJobs(`call:${call.placeId}:${call.kind}:`);
-  // Unique key per request: the same place and time asked again (18:30 → 19:15, both "at 11") must not be dropped as a duplicate.
-  schedule("phone_call", at, { call, due: at.toISO() }, `call:${call.placeId}:${call.kind}:${at.toISO()}:${Date.now()}`);
-  return `⏰ I'll call *${place.name}* at ${at.setZone(ZONE).toFormat("HH:mm")}${at.hasSame(now(), "day") ? "" : ` on ${at.setZone(ZONE).toFormat("ccc d LLL")}`} to ${task(call)}.\nSay *don't call* to stop it.`;
-}
-
-/** Calls scheduled for later ("call at 14:30") that haven't happened yet. */
-export function scheduledCalls(): { runAt: string; call: PendingCall }[] {
-  return (db().prepare("SELECT run_at, payload FROM jobs WHERE status = 'pending' AND type = 'phone_call' ORDER BY run_at").all() as { run_at: string; payload: string }[]).map((j) => ({
-    runAt: j.run_at,
-    call: (JSON.parse(j.payload) as { call: PendingCall }).call,
-  }));
-}
-
-/** Drop every call that's waiting: the one asked about and any scheduled for later. Returns how many. */
-export function dropAllCalls(): number {
-  const pending = pendingCall() ? 1 : 0;
-  clearPendingCall();
-  return pending + cancelJobs("call:");
-}
-
-export function registerCallJobs(): void {
-  registerJob("phone_call", async ({ call, due }: { call: PendingCall; due: string }) => {
-    const place = getPlace(call.placeId);
-    if (!place) return;
-    // Missed while the app was off: don't call late without asking again.
-    if (Date.now() - Date.parse(due) > 60 * 60_000) {
-      setPending(call);
-      await say(`I missed the planned call to *${place.name}* (the app was off). Reply *call* to try now, or *no*.`);
-      return;
-    }
-    // Something changed since it was scheduled (a booking for that date already exists): ask, don't call.
-    if (call.kind === "book") {
-      const existing = db()
-        .prepare("SELECT r.id, p.name, r.time FROM reservations r JOIN places p ON p.id = r.place_id WHERE r.date = ? AND r.status IN ('confirmed', 'requested')")
-        .get(call.slot.date) as { id: number; name: string; time: string } | undefined;
-      if (existing) {
-        await say(`I was about to call *${place.name}*, but you already have *${existing.name}* booked on ${fmtDate(call.slot.date)} at ${existing.time}, so I didn't call. Reply *call* if you still want a second booking.`);
-        setPending(call);
-        return;
-      }
-    }
-    const out = await runCall(call);
-    await say(out.message);
-  });
-}
-
 /**
- * Place a call someone approved, then report the outcome and the next step.
- * Only the place_call tool, an explicit "call X" request, or a scheduled call
- * the chat approved may reach this.
+ * Place a call the chat approved, then report the outcome and the next step.
  */
 export async function runCall(call: PendingCall): Promise<{ ok: boolean; message: string }> {
   clearPendingCall();
@@ -206,69 +154,34 @@ export async function runCall(call: PendingCall): Promise<{ ok: boolean; message
 }
 
 /**
- * What to say after a call that didn't get the job done, and the follow-up
- * call to propose (stored as pending, so a "yes" places it).
+ * What to say after a call that didn't get the job done: what happened, what
+ * they said, and an open question. The call stays pending, so "try 19:00" or
+ * "try again" places it again (needs a go-ahead like any call).
  */
 export function outcomeMessage(call: PendingCall, place: Place, report: CallReport): string {
   const o = report.outcome;
   const name = `*${place.name}*`;
-  const ask = (next: PendingCall, question: string) => {
-    setPending(next);
-    return question;
+  const what: Record<string, string> = {
+    full: `${name} is full at ${call.slot.time}.`,
+    declined: `${name} would only take it with ${o.requirements ?? "conditions we don't accept"}, so I said no thanks (seats-only).`,
+    busy: `${name}'s line was busy.`,
+    no_answer: `Nobody picked up at ${name}.`,
+    voicemail: `${name} went to voicemail. I didn't leave a message.`,
+    closed: `${name} is closed then.`,
+    wrong_number: `That number isn't ${name}'s, so I've stopped using it.`,
+    callback: `${name} will call back on ${domesticPhone(config.booking.contact.phone)}. Tell me what they say and I'll note it.`,
+    failed: `I couldn't place the call to ${name}.`,
   };
-  let msg: string;
-  switch (o.outcome) {
-    case "full":
-      if (o.alternativeTimes.length) {
-        const alts = o.alternativeTimes;
-        msg = `❌ ${name} is full at ${call.slot.time}.\nThey offered *${alts.join(", ")}*.\n\n` + ask({ ...call, alternatives: alts }, `Shall I call back and book ${alts[0]}? Reply *call* to do that, another time, or *no*.`);
-      } else {
-        msg = `❌ ${name} is fully booked around ${call.slot.time} on ${fmtDate(call.slot.date)}.\n\nWant another option, or another day?`;
-      }
-      break;
-    case "declined":
-      msg = `🚫 ${name} would only take it with ${o.requirements ?? "conditions we don't accept"}. That breaks our seats-only rule, so I said no thanks.\n\nWant another option?`;
-      break;
-    case "busy":
-      msg = `📵 ${name}'s line was busy.\n\n` + ask({ ...call, suggestDelayMin: 30 }, "Shall I try again in 30 minutes? Reply *call in 30*, *call* (now), or *no*.");
-      break;
-    case "no_answer": {
-      const next = isOpenFor(place.opening_periods, now(), 15) === false ? nextOpening(place) : null;
-      msg = next
-        ? `📵 Nobody picked up at ${name}. They're closed right now and open at ${next.toFormat("HH:mm")}.\n\n` + ask(call, `Shall I try at ${next.plus({ minutes: 15 }).toFormat("HH:mm")}? Reply *call at ${next.plus({ minutes: 15 }).toFormat("HH:mm")}* or *no*.`)
-        : `📵 Nobody picked up at ${name}.\n\n` + ask({ ...call, suggestDelayMin: 60 }, "Shall I try again in an hour? Reply *call in 60*, *call* (now), or *no*.");
-      break;
-    }
-    case "voicemail":
-      msg = `📼 ${name} went to voicemail. I didn't leave a message.\n\n` + ask({ ...call, suggestDelayMin: 60 }, "Shall I try again in an hour? Reply *call in 60*, *call* (now), or *no*.");
-      break;
-    case "closed":
-      msg = `🔒 ${name} is closed: ${o.summaryEn}\n\nWant another option, or another day?`;
-      break;
-    case "wrong_number":
-      // In a dry run the "wrong number" is you, so keep the place's number.
-      if (!config.dryRun) updatePlace(place.id, { phone: null, note: [place.note, `wrong number ${place.phone} (${fmtDate(now().toISODate()!)})`].filter(Boolean).join(" / ") });
-      msg = `☎️ That number isn't ${name}'s, so I've stopped using it.\n\nWant another option?`;
-      break;
-    case "callback":
-      msg = `📞 ${name} will call you back on ${domesticPhone(config.booking.contact.phone)}.\n${o.summaryEn}\n\nTell me what they say and I'll note the booking.`;
-      break;
-    case "failed":
-      msg = `⚠️ I couldn't place the call to ${name}.\n${report.failure ?? o.summaryEn}\n\n` + ask(call, "Say *call again* once that's sorted.");
-      break;
-    default:
-      msg = `🤷 The call to ${name} ended without a clear answer.\n${o.summaryEn}\n\n` + ask(call, "Shall I try again? Reply *call* or *no*.");
-  }
-  return msg + (config.dryRun && o.outcome !== "failed" ? `\n\n_Dry run: the call went to ${testCallee().label}, not the restaurant._` : "");
-}
-
-/** When the chat answers "call at 17:00" / "in 30 min": the moment to call. */
-export function callTime(at: string | undefined, inMinutes: number | undefined): DateTime | null {
-  if (inMinutes) return now().plus({ minutes: inMinutes });
-  if (at && /^\d{1,2}:\d{2}$/.test(at)) {
-    let t = DateTime.fromFormat(at.padStart(5, "0"), "HH:mm", { zone: ZONE }).set({ year: now().year, month: now().month, day: now().day });
-    if (t < now()) t = t.plus({ days: 1 });
-    return t;
-  }
-  return null;
+  // A wrong number is never called again (in a dry run the "wrong number" is you, so keep it).
+  if (o.outcome === "wrong_number" && !config.dryRun) updatePlace(place.id, { phone: null, note: [place.note, `wrong number ${place.phone} (${fmtDate(now().toISODate()!)})`].filter(Boolean).join(" / ") });
+  const retry = !["declined", "wrong_number", "callback"].includes(o.outcome);
+  if (retry) setPending({ ...call, alternatives: o.alternativeTimes.length ? o.alternativeTimes : undefined });
+  const lines = [
+    `❌ ${what[o.outcome] ?? `The call to ${name} ended without a clear answer.`}`,
+    o.outcome === "failed" ? (report.failure ?? o.summaryEn) : o.summaryEn,
+    o.alternativeTimes.length ? `They offered *${o.alternativeTimes.join(", ")}*.` : "",
+    retry ? "Want me to try again, another time, or another option?" : "Want another option?",
+    config.dryRun && o.outcome !== "failed" ? `_Dry run: the call went to ${testCallee().label}, not the restaurant._` : "",
+  ];
+  return lines.filter(Boolean).join("\n\n");
 }

@@ -2,8 +2,8 @@ import { checkAvailability } from "../booking/service";
 import type { Slot } from "../booking/types";
 import { config, voters } from "../config";
 import { tcShopInfo } from "../booking/tablecheck";
-import { createPlan, findPlaceByName, getPrefs, getPlace, recentVisits, shownForDate, updatePlan } from "../db/repo";
-import { clearStatus, poll, say, status } from "../notify";
+import { createPlan, findPlaceByName, getPrefs, getPlace, recentVisits, shownForDate } from "../db/repo";
+import { clearStatus, say, status } from "../notify";
 import { geocode } from "../places/google";
 import type { Anchor, Place, Plan, PlanOption } from "../types";
 import { areaOf, estimateTravelMin, travelLabel } from "../util/geo";
@@ -244,9 +244,7 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
   });
   await say(message);
   await clearStatus();
-  let pollId: string | undefined;
-  if (config.wa.polls) pollId = await poll(`Date night ${fmtDate(r.slot.date)} ${r.slot.time}`, options.map((o, i) => `${i + 1}. ${o.name}`.slice(0, 100)));
-  const saved = updatePlan(plan.id, { poll_msg_id: pollId ?? null });
+  const saved = plan;
   const facts = [
     `Posted ${options.length} options for ${r.slot.date} ${r.slot.time}${asked.length ? ` (asked for: ${asked.join(", ")})` : ""}:`,
     ...optionFacts(r.constraints, r.options),
@@ -294,8 +292,8 @@ export function formatOptions(input: {
   });
   const notes = input.notes.filter(Boolean).map((n) => `_${n}_`);
   const ask = input.solo
-    ? "Reply with a number, or tell me what you'd prefer (\"somewhere closer\", \"something Japanese\")."
-    : "Reply with a number, either of you, or tell me what you'd prefer. I'll book once you both agree.";
+    ? "Reply to this message with a number, or tell me what you'd prefer (\"somewhere closer\", \"something Japanese\")."
+    : "Reply to this message with your pick, or tell me what you'd prefer. Talk it over first if you like; I'll book once one of you decides.";
   return [`🍷 *${input.header}*`, ...cards, ...notes, `${ask}\nI'll book seats only, never a set course.`].join("\n\n");
 }
 

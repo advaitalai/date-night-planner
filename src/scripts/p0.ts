@@ -17,7 +17,6 @@ import path from "node:path";
 process.env.DRY_RUN = "1";
 process.env.DATA_DIR = path.resolve(process.env.P0_DATA_DIR || "data/p0");
 process.env.WA_SOLO = "1";
-process.env.WA_POLLS = "0";
 process.env.BOOKING_ONLY = "";
 process.env.CALL_FAKE = "booked";
 process.env.TWILIO_ACCOUNT_SID = "";
@@ -58,20 +57,19 @@ setSender({
     if (!t.startsWith("⏳")) posts.push(t);
     return `m${Date.now()}`;
   },
-  async poll(q) {
-    posts.push(`[poll] ${q}`);
-    return undefined;
-  },
   async edit() {},
   async remove() {},
 });
 
 type Step = { tool: string; input: Record<string, unknown> };
 
-/** One message in the group. In --tools mode the given tool call stands in for the agent. */
-async function send(person: "Advait" | "Emily", text: string, step?: Step): Promise<string[]> {
+/**
+ * One message in the group. `addressed: false` is the two of them talking to each
+ * other (the bot only listens). In --tools mode the given tool call stands in for the agent.
+ */
+async function send(person: "Advait" | "Emily", text: string, step?: Step, addressed = true): Promise<string[]> {
   posts = [];
-  console.log(`\n[in] ${person}: ${text}`);
+  console.log(`\n[${addressed ? "in" : "heard"}] ${person}: ${text}`);
   logMessage(person, text);
   if (TOOLS_ONLY) {
     if (!step) throw new Error(`no tool step for "${text}" in --tools mode`);
@@ -81,7 +79,7 @@ async function send(person: "Advait" | "Emily", text: string, step?: Step): Prom
     console.log(`[tool ${step.tool}] ${String(result).slice(0, 300)}`);
   } else {
     const { handleMessage } = await import("../agent/loop");
-    const reply = await handleMessage(person, text);
+    const reply = await handleMessage(person, text, { addressed });
     if (reply) {
       logMessage("planner", reply);
       posts.push(reply);
@@ -235,7 +233,7 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
     const [a, b] = phoneOnly();
     const plan = planWith([a, free.place, b], free.time);
     const [logId, callId] = [maxId("booking_log"), maxId("call_log")];
-    const out = await send("Advait", "2", { tool: "pick_option", input: { option_number: 2, person: "Advait" } });
+    const out = await send("Advait", "2", { tool: "book_option", input: { option_number: 2 } });
     const booked = out.find((m) => m.includes("🧪"));
     check(r, !!booked && booked.includes(free.place.name), `"🧪 would be booked" for ${free.place.name} at ${free.time}`);
     check(r, !out.some((m) => m.includes(a.name) || m.includes(b.name)), "no other place mentioned");
@@ -260,7 +258,7 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
         return { status: "failed", full: true, alternatives: ["17:00", "20:30"], detail: "18:30 is full on TableCheck" };
       };
       const [logId, callId] = [maxId("booking_log"), maxId("call_log")];
-      const out = await send("Advait", "1", { tool: "pick_option", input: { option_number: 1, person: "Advait" } });
+      const out = await send("Advait", "1", { tool: "book_option", input: { option_number: 1 } });
       const msg = out.join("\n");
       check(r, /full/i.test(msg) && /17:00/.test(msg) && /20:30/.test(msg), `${variant}: says full and lists free times`);
       check(r, !/12:00/.test(msg), `${variant}: no lunch times offered`);
@@ -283,7 +281,7 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
       bookedAt = slot.time;
       return { status: "requested", detail: "DRY_RUN: stopped on the confirmation page (fake)" };
     };
-    const out = await send("Advait", "1", { tool: "pick_option", input: { option_number: 1, person: "Advait" } });
+    const out = await send("Advait", "1", { tool: "book_option", input: { option_number: 1 } });
     const msg = out.join("\n");
     check(r, bookedAt === "18:45", `booked 18:45 (got ${bookedAt || "nothing"})`);
     check(r, msg.includes("🧪") && msg.includes("18:45"), "says 18:45 would be booked");
@@ -291,18 +289,31 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
   },
 
   async "P0-5"(r) {
+    // Deciding on a phone-only place is the go-ahead; a cancel by phone asks first.
     reset();
     const [ph] = phoneOnly();
+    updatePlace(ph.id, { opening_periods: null }); // hours unknown counts as open: the call goes ahead now
     planWith([ph]);
-    const callId = maxId("call_log");
-    const out1 = await send("Advait", "1", { tool: "pick_option", input: { option_number: 1, person: "Advait" } });
-    check(r, out1.some((m) => /Shall I call/.test(m) && m.includes(ph.name)), `asks "Shall I call ${ph.name}?"`);
-    check(r, rowsAfter("call_log", callId).length === 0, "call_log empty before the yes");
-    const out2 = await send("Advait", "call", { tool: "place_call", input: {} });
-    const calls = rowsAfter("call_log", callId);
-    check(r, calls.length === 1 && calls[0].place_id === ph.id, `exactly one (fake) call, to ${ph.name} (got ${calls.length})`);
-    check(r, out2.some((m) => /Booked/.test(m) && m.includes(ph.name)), "reports the call outcome");
-    check(r, ![...out1, ...out2].some((m) => EM_DASH.test(m)), "no em dashes");
+    let callId = maxId("call_log");
+    process.env.CALL_FAKE = "booked";
+    const out1 = await send("Advait", "1", { tool: "book_option", input: { option_number: 1 } });
+    let calls = rowsAfter("call_log", callId);
+    check(r, calls.length === 1 && calls[0].place_id === ph.id, `deciding calls ${ph.name} once, without asking (got ${calls.length})`);
+    check(r, out1.some((m) => /Booked/.test(m) && m.includes(ph.name)), "reports the booking");
+    const res = db().prepare("SELECT id FROM reservations WHERE place_id = ? AND status = 'confirmed' ORDER BY id DESC LIMIT 1").get(ph.id) as { id: number } | undefined;
+    check(r, !!res, "reservation saved");
+
+    callId = maxId("call_log");
+    const out2 = await send("Advait", `cancel the ${ph.name} booking`, { tool: "cancel_reservation", input: { reservation_id: res?.id ?? 0 } });
+    check(r, out2.some((m) => /Shall I call them to cancel/.test(m)), `asks before calling to cancel`);
+    check(r, rowsAfter("call_log", callId).length === 0, "no call before the go-ahead");
+    process.env.CALL_FAKE = "cancelled";
+    const out3 = await send("Advait", "ok go ahead", { tool: "place_call", input: {} });
+    calls = rowsAfter("call_log", callId);
+    check(r, calls.length === 1, `"ok go ahead" places exactly one call (got ${calls.length})`);
+    check(r, out3.some((m) => /Cancelled/.test(m)), "reports the cancellation");
+    process.env.CALL_FAKE = "booked";
+    check(r, ![...out1, ...out2, ...out3].some((m) => EM_DASH.test(m)), "no em dashes");
   },
 
   async "P0-6"(r) {
@@ -336,35 +347,26 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
   },
 
   async "P0-7"(r) {
-    // About who has to agree, not TableCheck: a stubbed TableCheck, so P0-2 is the only test holding a real table
-    // (each dry run holds the slot for 10 minutes, and a second hold can make it look full).
-    const fakeTc = () => {
-      tablecheck.checkAvailability = async () => ({ status: "available" });
-      tablecheck.book = async () => ({ status: "requested", detail: "DRY_RUN: stopped on the confirmation page (fake)" });
-    };
+    // The two of them talk it over; the bot listens, confirms the decision, and books only on a reply to it.
+    if (TOOLS_ONLY) return void (r.pass = null, r.notes.push("needs the agent (LLM)"));
     reset();
-    fakeTc();
+    tablecheck.checkAvailability = async () => ({ status: "available" });
+    tablecheck.book = async () => ({ status: "requested", detail: "DRY_RUN: stopped on the confirmation page (fake)" });
     config.wa.solo = false;
     const [a, b] = phoneOnly();
-    const free = { place: stubTc([a, b]), time: "18:30" };
-    planWith([free.place, a, b], free.time);
-    let logId = maxId("booking_log");
-    const out1 = await send("Advait", "1", { tool: "pick_option", input: { option_number: 1, person: "Advait" } });
-    check(r, !out1.some((m) => m.includes("🧪")) && rowsAfter("booking_log", logId).length === 0, "Advait's pick alone books nothing");
-    const out2 = await send("Emily", "1", { tool: "pick_option", input: { option_number: 1, person: "Emily" } });
-    check(r, out2.some((m) => m.includes("🧪") && m.includes(free.place.name)), `Emily's matching pick books ${free.place.name}`);
+    const tc = stubTc([a, b]);
+    planWith([a, tc, b], "18:30");
+    const [logId, callId] = [maxId("booking_log"), maxId("call_log")];
+    const nothingYet = () => rowsAfter("booking_log", logId).length === 0 && rowsAfter("call_log", callId).length === 0;
 
-    // Different picks: asks, books nothing.
-    reset();
-    fakeTc();
-    config.wa.solo = false;
-    planWith([free.place, a, b], free.time);
-    logId = maxId("booking_log");
-    const callId = maxId("call_log");
-    await send("Advait", "1", { tool: "pick_option", input: { option_number: 1, person: "Advait" } });
-    const out4 = await send("Emily", "2", { tool: "pick_option", input: { option_number: 2, person: "Emily" } });
-    check(r, out4.some((m) => /split|which one|differ/i.test(m)), "different picks: asks which one");
-    check(r, rowsAfter("booking_log", logId).length === 0 && rowsAfter("call_log", callId).length === 0, "different picks: nothing booked or called");
+    const out1 = await send("Advait", "Emily which one do you like?", undefined, false);
+    check(r, out1.length === 0 && nothingYet(), "a question between them: no reply, nothing booked");
+    const out2 = await send("Emily", `${tc.name} for sure, let's do that one`, undefined, false);
+    check(r, out2.some((m) => m.includes(tc.name) && /Shall I book/.test(m)), `their decision: asks "Shall I book ${tc.name}?"`);
+    check(r, nothingYet(), "still nothing booked or called");
+    const out3 = await send("Advait", "yes please");
+    check(r, out3.some((m) => m.includes("🧪") && m.includes(tc.name)), `a reply "yes please" books ${tc.name}`);
+    check(r, !rowsAfter("booking_log", logId).some((l) => l.place_id !== tc.id) && rowsAfter("call_log", callId).length === 0, "no other place tried, no calls");
     config.wa.solo = true;
   },
 };

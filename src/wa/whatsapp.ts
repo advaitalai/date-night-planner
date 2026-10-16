@@ -1,6 +1,5 @@
 import makeWASocket, {
   DisconnectReason,
-  decryptPollVote,
   getKeyAuthor,
   fetchLatestWaWebVersion,
   normalizeMessageContent,
@@ -10,16 +9,13 @@ import makeWASocket, {
   type WAMessageKey,
   type WASocket,
 } from "@whiskeysockets/baileys";
-import { createHash } from "node:crypto";
 import path from "node:path";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
 import { handleMessage } from "../agent/loop";
 import { config, isSelfChat, isSolo, PEOPLE, waDigits } from "../config";
-import { kvGet, kvSet } from "../db";
-import { getPlanByPoll, getUser, logMessage, upsertUser, userByJid } from "../db/repo";
+import { getUser, logMessage, upsertUser, userByJid } from "../db/repo";
 import { clearStatus, saidCount, say, setSender, status } from "../notify";
-import { onVotes } from "../plans/decide";
 
 /**
  * WhatsApp via Baileys, linked as a device (WhatsApp → Linked devices).
@@ -32,7 +28,9 @@ import { onVotes } from "../plans/decide";
  *   member of the group.
  *
  * Only messages from WA_GROUP_JID are handled. The bot answers when it's
- * called "planner", replied to, or (bot-number mode) @-mentioned.
+ * replied to inline, called "planner", or (bot-number mode) @-mentioned.
+ * Everything else is the two of them talking: the bot reads it as context and
+ * speaks up only to confirm a decision on open options.
  */
 
 const logger = pino({ level: process.env.WA_LOG_LEVEL ?? "fatal" });
@@ -51,12 +49,6 @@ if (!process.env.WA_LOG_LEVEL) {
       original(...args);
     };
   }
-}
-
-interface StoredPoll {
-  secret: string; // base64 messageSecret
-  options: string[];
-  creatorJids: string[];
 }
 
 let sock: WASocket | undefined;
@@ -136,69 +128,23 @@ function quotesBot(ctx: { stanzaId?: string | null; participant?: string | null;
 }
 
 /**
- * Whether a message is for the bot. In the dedicated group everything is,
- * except messages clearly between the two of them: an inline reply to the
- * other person's message, or one that @mentions someone. Those never reach
- * the bot (so a "yes" to Emily can't approve a pending call), unless they
- * say "planner".
+ * Whether a message is for the bot: it says "planner", it's an inline reply to
+ * one of the bot's messages, or (bot's own number) it @mentions the bot.
+ * Anything else is the two of them talking, so a "yes" or "ok go" between them
+ * can never book or call anything.
  */
-function isAddressed(m: WAMessage, text: string): boolean {
+export function isAddressed(m: WAMessage, text: string): boolean {
   if (isSolo()) return true;
-  const ctx = contentOf(m)?.extendedTextMessage?.contextInfo;
   if (/\bplanner\b/i.test(text)) return true;
+  const ctx = contentOf(m)?.extendedTextMessage?.contextInfo;
   if (ctx?.stanzaId) return quotesBot(ctx);
-  if (config.wa.selfMode && ctx?.mentionedJid?.length) return false;
-  if (config.wa.dedicated) return true;
-  if (!config.wa.selfMode) {
-    // In self mode a mention of the bot is a mention of Advait, so only the keyword counts.
-    const mine = botJids();
-    if (ctx?.mentionedJid?.some((j) => mine.includes(jidNormalizedUser(j)))) return true;
-    if (ctx?.participant && mine.includes(jidNormalizedUser(ctx.participant))) return true;
-  }
-  return /\bplanner\b/i.test(text);
-}
-
-const sha256 = (s: string) => createHash("sha256").update(s).digest();
-
-/** Decrypt a poll vote and record it on the matching plan. */
-async function handlePollVote(m: WAMessage): Promise<void> {
-  const upd = m.message?.pollUpdateMessage;
-  const pollId = upd?.pollCreationMessageKey?.id;
-  if (!upd?.vote || !pollId) return;
-  const poll = kvGet<StoredPoll | null>(`poll:${pollId}`, null);
-  const plan = getPlanByPoll(pollId);
-  if (!poll || !plan) return;
-
-  const voterCandidates = [getKeyAuthor(m.key), m.key.participant, ...(m.key.fromMe ? botJids() : [])]
-    .filter((j): j is string => !!j)
-    .map(jidNormalizedUser);
-  let selected: Uint8Array[] | null = null;
-  let voterJid = "";
-  outer: for (const creator of poll.creatorJids) {
-    for (const voter of voterCandidates) {
-      try {
-        const vote = decryptPollVote(upd.vote, { pollEncKey: Buffer.from(poll.secret, "base64"), pollCreatorJid: creator, pollMsgId: pollId, voterJid: voter });
-        selected = (vote.selectedOptions ?? []) as Uint8Array[];
-        voterJid = voter;
-        break outer;
-      } catch {
-        // wrong jid combination (phone vs LID); try the next
-      }
-    }
-  }
-  if (!selected) {
-    logger.warn({ pollId }, "couldn't decrypt poll vote");
-    return;
-  }
-  const person = m.key.fromMe && config.wa.selfMode ? config.wa.selfName : identify(voterJid, m.pushName, undefined, (m.key as { participantPn?: string }).participantPn);
-  if (!person) return;
-  const picks = poll.options.map((o, i) => ({ i, h: sha256(o) })).filter(({ h }) => selected!.some((s) => Buffer.from(s).equals(h))).map(({ i }) => i);
-  await onVotes(plan.id, { ...plan.votes, [person]: picks });
+  // In self mode a mention of the bot is a mention of Advait, so only the keyword and replies count.
+  if (!config.wa.selfMode && ctx?.mentionedJid?.some((j) => botJids().includes(jidNormalizedUser(j)))) return true;
+  return false;
 }
 
 async function onMessage(m: WAMessage): Promise<void> {
   if (!isOurChat(m.key.remoteJid)) return;
-  if (contentOf(m)?.pollUpdateMessage) return handlePollVote(m);
   if (m.key.fromMe && (!config.wa.selfMode || sentByBot.has(m.key.id ?? ""))) return;
   const text = textOf(m).trim();
   if (!text) {
@@ -212,7 +158,14 @@ async function onMessage(m: WAMessage): Promise<void> {
   const person = m.key.fromMe ? config.wa.selfName : (identify(getKeyAuthor(m.key), m.pushName, text, (m.key as { participantPn?: string }).participantPn) ?? m.pushName ?? "someone");
   logMessage(person, text, m.key.id ?? undefined);
   if (!isAddressed(m, text)) {
-    console.log(`[skip] ${person}: "${text.slice(0, 60)}" (an inline reply to a person or an @mention, so not for the bot)`);
+    // Not for the bot: it only listens, and may ask to confirm a decision on open options.
+    console.log(`[heard] ${person}: ${text.slice(0, 200)}`);
+    try {
+      const reply = await handleMessage(person, text, { addressed: false });
+      if (reply) await say(reply);
+    } catch (err) {
+      console.error("agent error (listening):", err);
+    }
     return;
   }
 
@@ -227,7 +180,7 @@ async function onMessage(m: WAMessage): Promise<void> {
   try {
     const reply = await handleMessage(person, text);
     if (reply) await say(reply);
-    // Chit-chat between the two of them that the bot let pass: take the ⏳ back off, no ✅.
+    // Nothing to say (e.g. "thanks"): take the ⏳ back off, no ✅.
     await react(saidCount() > before ? "✅" : "");
   } catch (err) {
     console.error("agent error:", err);
@@ -336,18 +289,6 @@ export async function startWhatsApp(): Promise<void> {
       if (!sock || !key) return;
       await sock.sendMessage(chatJid(), { delete: key });
       sentKeys.delete(id);
-    },
-    async poll(question, options) {
-      if (!sock || !config.wa.groupJid) return undefined;
-      const name = config.wa.selfMode ? BOT_PREFIX + question : question;
-      const sent = await sock.sendMessage(chatJid(), { poll: { name, values: options, selectableCount: 1 } });
-      rememberSent(sent?.key.id);
-      const secret = sent?.message?.messageContextInfo?.messageSecret;
-      if (sent?.key.id && secret) {
-        const stored: StoredPoll = { secret: Buffer.from(secret).toString("base64"), options, creatorJids: botJids() };
-        kvSet(`poll:${sent.key.id}`, stored);
-      }
-      return sent?.key.id ?? undefined;
     },
   });
 }

@@ -41,11 +41,10 @@ export function pendingJobs(): { id: number; run_at: string; type: string; dedup
 const MAX_ATTEMPTS = 3;
 
 /**
- * Jobs that post a message or place a call are not retried: if WhatsApp times
- * out after delivering, a retry sends it twice (the day-of reminder did), and a
- * call must never repeat without a yes.
+ * Jobs that post a message are not retried: if WhatsApp times out after
+ * delivering, a retry sends it twice (the day-of reminder did).
  */
-const NO_RETRY = new Set(["dayof_reminder", "cancel_guard", "nudge", "decide", "kickoff", "phone_call"]);
+const NO_RETRY = new Set(["dayof_reminder", "cancel_guard", "nudge", "kickoff"]);
 
 /**
  * Reminders that are pointless once they're this late (e.g. the app was off

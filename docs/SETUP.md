@@ -23,26 +23,15 @@ Do all of this in **console.cloud.google.com** while signed in as advaitalai@gma
 4. **Enable the APIs.** Go to **APIs & Services → Library** and enable each of these:
    - Places API (New)
    - Routes API
-   - Gmail API
-   - Google Drive API
    - Compute Engine API
 5. **Create the Maps API key.**
    - Go to **APIs & Services → Credentials → Create credentials → API key**.
    - Edit the key: under *API restrictions* choose **Restrict key** and tick **Places API (New)** and **Routes API**.
    - Put it in `GOOGLE_MAPS_API_KEY`.
 6. **Optional: cap the Maps usage.** Go to **APIs & Services → Places API (New) → Quotas** and lower the per-day request limits (e.g. 200/day). The bot uses far less than Google's free monthly allowance, so this is just a safety net.
-7. **Set up the OAuth consent screen.** Go to **Google Auth Platform** (or **APIs & Services → OAuth consent screen**):
-   - App name `Date Night Planner`, user type **External**, your email as the support and developer contact.
-   - **Audience → Publish app** to set it to *In production*. In *Testing*, logins expire every 7 days.
-   - Google will show you and Emily an "unverified app" warning once when you sign in. That's expected for a private app; click *Advanced → Go to Date Night Planner*.
-8. **Create the OAuth client.**
-   - Go to **Credentials → Create credentials → OAuth client ID → Web application**.
-   - Add the authorized redirect URI `http://localhost:8080/oauth/callback`.
-   - Put the client ID and secret in `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`.
-
 ## 3. The server: a free e2-micro VM
 
-The bot has to run all the time, to stay connected to WhatsApp, fire the Saturday and deadline timers, and watch Gmail. Google's always-free tier includes one small VM, but only in some US regions. That's fine for this: the bot mostly waits.
+The bot has to run all the time, to stay connected to WhatsApp and fire the Saturday and deadline timers. Google's always-free tier includes one small VM, but only in some US regions. That's fine for this: the bot mostly waits.
 
 1. Go to **Compute Engine → VM instances → Create instance** and set:
    - Name `date-night`
@@ -75,44 +64,32 @@ By default (`WA_SELF_MODE=1`) the bot links to **your own WhatsApp** as a linked
 
 **How this mode works:**
 - The bot's messages appear as you, starting with 🤖.
-- Talk to it by including "planner" in a message, or by replying to one of its messages.
+- Talk to it by **replying inline to one of its messages** (swipe right on it), or by including "planner". Everything else is you two talking: the bot only listens, and speaks up just to confirm a decision it heard ("Sounds like X. Shall I book it?").
 
 **Risk:** it's an unofficial WhatsApp library, and in this mode it runs on your own number. WhatsApp rarely bans low-volume use like this, but the risk isn't zero.
 
-**To use a separate number instead:**
+**To use a separate number instead (planned, agreed 16 Oct):** this is the fix for the linked-device outages of 12–15 Oct (Bad MAC, missed messages), and @mentions of the bot start working.
 1. Get a free-to-hold Japanese eSIM, e.g. **povo 2.0**. Its base plan is ¥0; you top up occasionally to keep the number alive.
-2. Install **WhatsApp Business** on the same phone and register it with that number.
-3. Add it to the group.
-4. Set `WA_SELF_MODE=0` and link that account instead.
+2. Install **WhatsApp Business** on the same phone and register it with that number. Give it a name and photo (e.g. "Planner 🍷").
+3. Add it to the group with Emily.
+4. On your own phone: **WhatsApp → Settings → Linked devices**, log out the old bot device. Then `rm -rf data/wa-auth`.
+5. `.env`: `WA_SELF_MODE=0`, and `ADVAIT_PHONE` / `EMILY_PHONE` set (in this mode they're how the bot tells you apart).
+6. `npm start` and scan the QR **with the WhatsApp Business app** (its Linked devices).
+7. Bot messages now come from the bot's own name, without the 🤖 prefix. Talk to it by replying inline, "planner", or @Planner.
 
-## 5. Connect Google (Gmail, Drive) for you and Emily
+## 5. Saved places
 
-The setup page is only reachable through an SSH tunnel from your laptop, so nothing is exposed to the internet.
-
-1. On your laptop, install the gcloud CLI and run:
-   ```
-   gcloud compute ssh date-night --zone <your zone> -- -L 8080:localhost:8080
-   ```
-2. In the WhatsApp group, send "planner setup". The bot replies with one link per person.
-3. Open your link in your laptop browser and click **Connect Google**.
-4. Have Emily open her link **on your laptop** while the tunnel is open, and sign in with her Google account. Her link only asks for Drive.
-5. Each of you then does the one-time Takeout export described on the page: *Saved* only, delivered to Drive, every 2 months.
+Import each person's saved Google Maps places from a Takeout export (a couple of times a year):
+1. **takeout.google.com** → deselect all → tick **Saved** → export once, download the zip.
+2. Unzip it and run `npm run import-csv -- "<file>.csv" Advait` (or `Emily`), once per list.
+3. A Google Maps link pasted into the chat is added straight away.
 
 ## 6. Booking-site logins
 
 - **TableCheck:** nothing to do. The bot books as a guest using your name, phone and email, and TableCheck emails the confirmation and the change/cancel link to your Gmail.
-- **Tabelog:** online booking needs a Tabelog login, and yours uses Google sign-in, which the bot can't type itself. Log in once by hand:
-  1. On your laptop (Google Chrome installed), check out the repo and run `npm install && npm run browser-login -- tabelog`.
-  2. Sign in with Google in the window that opens, then close it.
-  3. Copy the saved session to the VM:
-     ```
-     gcloud compute scp --recurse --zone <zone> data/browser/tabelog date-night:~/date-night-planner/data/browser/
-     ```
-  4. Restart the service.
+- Places with only Tabelog or email booking are booked by phone (Tabelog and email booking were cut on 16 Oct).
 
-  If Google refuses the sign-in in that window, Tabelog places fall back to email or manual booking for now.
-
-## 7. AI phone calls (optional, last resort after sites and email)
+## 7. AI phone calls (for places without TableCheck)
 
 1. Sign up at **vapi.ai**. Dashboard → **API Keys** → copy the private key into `VAPI_API_KEY`.
 2. Vapi's free numbers only call the US, so calls to Japan need a **Twilio** number:
@@ -131,7 +108,7 @@ With `DRY_RUN=1` every booking call goes to `BOOKING_PHONE` (you) instead of the
 ## 8. Check and go live
 
 1. Run `npm run import-csv -- fixtures/Tokyo_food.csv Advait "Tokyo food"`, then `npm run audit`. Read `audit-report.md` to see how your saved places can be booked.
-2. In the group, say "planner plan next Wednesday". Check that the options and poll look right, vote, and check that the dry-run booking reaches the confirm step.
+2. In the group, say "planner plan next Wednesday". Check that the options look right, reply to them with a number, and check that the dry-run booking reaches the confirm step.
 3. When happy, set `DRY_RUN=0` and restart: `sudo systemctl restart date-night-planner`.
 
 ## 9. Launch checklist (first real booking with Emily)
@@ -140,9 +117,9 @@ With `DRY_RUN=1` every booking call goes to `BOOKING_PHONE` (you) instead of the
 2. `.env`:
    - `DRY_RUN=0`
    - remove `BOOKING_ONLY`, `CALL_TEST_TO`; `CALL_LANGUAGE=ja`
-   - `WA_SOLO=0`, `WA_DEDICATED=1`, `WA_GROUP_JID=<the group with Emily>`
+   - `WA_SOLO=0`, `WA_GROUP_JID=<the group with Emily>`
    - `ADVAIT_PHONE`, `EMILY_PHONE` set (any format)
    - optional `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` (balance check)
 3. Phone calls to restaurants need an upgraded Twilio account (trial accounts only call verified numbers and play a trial notice). Until then, pick places bookable on TableCheck.
-4. Tell Emily: bot messages show as Advait with 🤖; reply in words or a number; calls book under her name (エミリー); her messages in the group go to Claude.
+4. Tell Emily: bot messages show as Advait with 🤖; to talk to the bot, reply inline to its message (or say "planner"); either of you can decide on an option; calls book under her name (エミリー); messages in the group are read by Claude.
 5. `npm start`, check the log says `Listening in "<group>"`, say hi.

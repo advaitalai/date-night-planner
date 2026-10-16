@@ -15,7 +15,7 @@ export type BookingChannel =
   | "unknown";
 
 /** Channels the bot can complete a booking on by itself. */
-export const SELF_BOOKABLE: BookingChannel[] = ["tablecheck", "tabelog", "email"];
+export const SELF_BOOKABLE: BookingChannel[] = ["tablecheck"];
 
 export interface PlaceProfile {
   cuisine: string;
@@ -138,13 +138,11 @@ export interface Prefs {
   partySize: number;
   kickoff: { weekday: number; time: string };
   nudge: { weekday: number; time: string };
-  decideBy: { weekday: number; time: string };
   maxTravelMin: number;
   cuisineCooldownDates: number;
   revisitCooldownWeeks: number;
   budgetPerPersonMaxJpy: number | null;
   dietary: string;
-  autoCancel: boolean;
   skipWeeks: string[]; // dates (YYYY-MM-DD) with no date night
   /** Minutes after the asked time the bot may accept without checking (e.g. 18:30 → up to 19:00). */
   flexLaterMin: number;

@@ -1,5 +1,8 @@
+import { DateTime } from "luxon";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { freshDb, place } from "./helpers";
+import type { OpeningPeriod } from "../src/types";
+import { ZONE } from "../src/util/time";
 
 beforeEach(() => {
   freshDb();
@@ -9,20 +12,33 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.VAPI_API_KEY;
   delete process.env.VAPI_PHONE_NUMBER_ID;
+  delete process.env.CALL_FAKE;
   vi.restoreAllMocks();
 });
 
 const slot = { date: "2026-10-21", time: "18:30", partySize: 2 };
 
-async function savedPhonePlace() {
+/** Open in a few hours, closed right now. */
+function closedNowHours(): OpeningPeriod[] {
+  const o = DateTime.now().setZone(ZONE).plus({ hours: 3 });
+  const c = o.plus({ hours: 3 });
+  return [{ open: { day: o.weekday % 7, hour: o.hour, minute: 0 }, close: { day: c.weekday % 7, hour: c.hour, minute: 0 } }];
+}
+
+async function savedPhonePlace(overrides: Parameters<typeof place>[0] = {}) {
   const { insertPlace } = await import("../src/db/repo");
-  const p = place({ name: "Warayaki", booking_channel: "phone", tablecheck_slug: null, phone: "03-1111-2222" });
+  const p = place({ name: "Warayaki", booking_channel: "phone", tablecheck_slug: null, phone: "03-1111-2222", ...overrides });
   const { id: _id, ...rest } = p;
   return insertPlace(rest);
 }
 
+const callCount = async () => {
+  const { db } = await import("../src/db");
+  return (db().prepare("SELECT COUNT(*) AS n FROM call_log").get() as { n: number }).n;
+};
+
 describe("phone calls need a go-ahead", () => {
-  it("asks instead of calling when phoning is the only way", async () => {
+  it("asks instead of calling when nobody has decided on the place", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const { bookPlace } = await import("../src/booking/service");
     const { pendingCall } = await import("../src/booking/calls");
@@ -31,32 +47,74 @@ describe("phone calls need a go-ahead", () => {
     expect(out.ok).toBe(false);
     expect(out.awaitingCall).toBe(true);
     expect(out.message).toContain("Shall I call them");
+    expect(out.message).toContain("Reply to this message");
     expect(pendingCall()).toMatchObject({ kind: "book", placeId: p.id, slot });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("calls straight away once they've decided on a phone-only place", async () => {
+    process.env.CALL_FAKE = "booked";
+    const { bookPlace } = await import("../src/booking/service");
+    const p = await savedPhonePlace();
+    const out = await bookPlace(p, slot, { callApproved: true });
+    expect(await callCount()).toBe(1);
+    expect(out.message).toContain("Booked Warayaki");
+  });
+
+  it("doesn't call a closed restaurant: says when they open and waits to be told", async () => {
+    process.env.CALL_FAKE = "booked";
+    const { bookPlace } = await import("../src/booking/service");
+    const { pendingCall } = await import("../src/booking/calls");
+    const p = await savedPhonePlace({ opening_periods: closedNowHours() });
+    const out = await bookPlace(p, slot, { callApproved: true });
+    expect(await callCount()).toBe(0);
+    expect(out.message).toMatch(/closed right now and open/);
+    expect(out.message).toContain("Reply to this message when you'd like me to call");
+    expect(pendingCall()?.placeId).toBe(p.id);
+  });
+
+  it("place_call does nothing when no call is waiting", async () => {
+    process.env.CALL_FAKE = "booked";
+    const { tools } = await import("../src/agent/tools");
+    const placeCall = tools.find((t) => t.name === "place_call")!;
+    const out = await (placeCall.run as (i: unknown) => Promise<string>)({});
+    expect(out).toMatch(/no call waiting/);
+    expect(await callCount()).toBe(0);
+  });
+
+  it("'no' drops the waiting call", async () => {
+    const { bookPlace } = await import("../src/booking/service");
+    const { pendingCall } = await import("../src/booking/calls");
+    const { tools } = await import("../src/agent/tools");
+    await bookPlace(await savedPhonePlace(), slot);
+    const decline = tools.find((t) => t.name === "decline_call")!;
+    expect(await (decline.run as (i: unknown) => Promise<string>)({})).toMatch(/Dropped/);
+    expect(pendingCall()).toBeNull();
+  });
 });
 
-describe("call outcome tree", () => {
+describe("after a call", () => {
   const report = (outcome: string, extra: Record<string, unknown> = {}) => ({
-    outcome: { outcome, bookedTime: null, alternativeTimes: [], cancellationPolicy: null, requirements: null, summaryEn: "summary", ...extra },
+    outcome: { outcome, bookedTime: null, alternativeTimes: [], cancellationPolicy: null, requirements: null, summaryEn: "They said hello.", ...extra },
     transcript: "",
   });
 
-  it("offers to call back for a time the restaurant offered", async () => {
+  it("says what happened, what they said, and the times they offered", async () => {
     const { outcomeMessage, pendingCall } = await import("../src/booking/calls");
     const p = await savedPhonePlace();
     const msg = outcomeMessage({ kind: "book", placeId: p.id, slot }, p, report("full", { alternativeTimes: ["19:00"] }) as never);
+    expect(msg).toContain("full at 18:30");
+    expect(msg).toContain("They said hello.");
     expect(msg).toContain("They offered *19:00*");
-    expect(msg).toContain("call back and book 19:00");
+    expect(msg).toContain("try again");
     expect(pendingCall()?.alternatives).toEqual(["19:00"]);
   });
 
-  it("suggests retrying a busy line in 30 minutes", async () => {
+  it("keeps the call ready to retry when the line was busy", async () => {
     const { outcomeMessage, pendingCall } = await import("../src/booking/calls");
     const p = await savedPhonePlace();
-    const msg = outcomeMessage({ kind: "book", placeId: p.id, slot }, p, report("busy") as never);
-    expect(msg).toContain("busy");
-    expect(pendingCall()?.suggestDelayMin).toBe(30);
+    expect(outcomeMessage({ kind: "book", placeId: p.id, slot }, p, report("busy") as never)).toContain("busy");
+    expect(pendingCall()?.placeId).toBe(p.id);
   });
 
   it("refuses course or card conditions without proposing another call", async () => {
@@ -103,62 +161,28 @@ describe("debug logs", () => {
   });
 });
 
-describe("call go-ahead is a hard rule", () => {
-  it("needs the word 'call' (or 電話 / かけて) in the message", async () => {
-    const { saysCall } = await import("../src/agent/turn");
-    for (const ok of ["call", "Call now", "call at 17:00", "call in 30", "電話して", "かけてください"]) expect(saysCall(ok)).toBe(true);
-    for (const no of ["yes", "sounds good", "ok go", "sure!", "let's do it", "recall that place?", "don't call", "no, don't call them", "cancel the call", "stop the 14:30 call", "電話しないで"]) expect(saysCall(no)).toBe(false);
-  });
-
-  it("refuses to place a pending call on 'sounds good'", async () => {
-    const { tools } = await import("../src/agent/tools");
-    const { setCurrentMessage } = await import("../src/agent/turn");
-    setCurrentMessage({ sender: "Advait", text: "sounds good" });
-    const placeCall = tools.find((t) => t.name === "place_call")!;
-    const out = await (placeCall.run as (i: unknown) => Promise<string>)({});
-    expect(out).toMatch(/^NOT placed/);
-  });
-});
-
-describe("dropping calls", () => {
-  it("drops calls scheduled for later, not just the one asked about", async () => {
-    const { freshDb, place } = await import("./helpers");
-    freshDb();
-    const { insertPlace } = await import("../src/db/repo");
-    const { scheduleCall, scheduledCalls, dropAllCalls } = await import("../src/booking/calls");
-    const { DateTime } = await import("luxon");
-    const { id: _id, ...rest } = place({ name: "Suan Sawan", booking_channel: "phone", phone: "03-0000-0000" });
-    const p = insertPlace(rest);
-    scheduleCall({ kind: "book", placeId: p.id, slot: { date: "2026-10-15", time: "19:15", partySize: 2 } }, DateTime.now().plus({ hours: 1 }));
-    expect(scheduledCalls()).toHaveLength(1);
-    expect(dropAllCalls()).toBe(1);
-    expect(scheduledCalls()).toHaveLength(0);
+describe("reminders", () => {
+  it("schedules one 'still on?' a day before free cancellation ends, plus the day-of reminder", async () => {
+    const { createReservation, getPlace } = await import("../src/db/repo");
+    const { scheduleReservationJobs } = await import("../src/booking/service");
+    const { pendingJobs } = await import("../src/jobs/scheduler");
+    const p = await savedPhonePlace();
+    const date = DateTime.now().setZone(ZONE).plus({ days: 5 }).toISODate()!;
+    const r = createReservation({
+      plan_id: null, place_id: getPlace(p.id)!.id, channel: "phone", status: "confirmed", date, time: "19:00", party_size: 2,
+      external_ref: null, manage_url: null, gmail_thread_id: null, policy_text: null, free_cancel_deadline: DateTime.fromISO(`${date}T19:00`, { zone: ZONE }).minus({ hours: 24 }).toISO(), cancel_fee: null, notes: null,
+    });
+    scheduleReservationJobs(r);
+    const types = pendingJobs().map((j) => j.type);
+    expect(types.filter((t) => t === "cancel_guard")).toHaveLength(1);
+    expect(types).toContain("dayof_reminder");
   });
 });
 
 describe("incidents from the 12–15 Oct retro", () => {
-  it("a new time for a scheduled call replaces the old one (18:30 → 19:15 ran both)", async () => {
-    const { freshDb, place } = await import("./helpers");
-    freshDb();
-    const { insertPlace } = await import("../src/db/repo");
-    const { scheduleCall, scheduledCalls } = await import("../src/booking/calls");
-    const { DateTime } = await import("luxon");
-    const { id: _id, ...rest } = place({ name: "Suan Sawan", booking_channel: "phone", phone: "03-0000-0000" });
-    const p = insertPlace(rest);
-    const at = DateTime.now().plus({ hours: 2 });
-    scheduleCall({ kind: "book", placeId: p.id, slot: { date: "2026-10-15", time: "18:30", partySize: 2 } }, at);
-    scheduleCall({ kind: "book", placeId: p.id, slot: { date: "2026-10-15", time: "19:15", partySize: 2 } }, at);
-    const calls = scheduledCalls();
-    expect(calls).toHaveLength(1);
-    expect(calls[0].call.slot.time).toBe("19:15");
-  });
-
-  it("never retries a reminder or call job (a delivered-but-timed-out send went out twice)", async () => {
-    const { freshDb } = await import("./helpers");
-    freshDb();
+  it("never retries a reminder job (a delivered-but-timed-out send went out twice)", async () => {
     const { registerJob, schedule, runDueJobs } = await import("../src/jobs/scheduler");
     const { db } = await import("../src/db");
-    const { DateTime } = await import("luxon");
     registerJob("dayof_reminder", async () => {
       throw new Error("Timed Out");
     });
@@ -170,7 +194,6 @@ describe("incidents from the 12–15 Oct retro", () => {
   it("leaves out places Google marks as temporarily closed", async () => {
     const { applyFilters } = await import("../src/recommender/filters");
     const { EMPTY_CONSTRAINTS } = await import("../src/recommender/parseRequest");
-    const { place } = await import("./helpers");
     const c = { place: place({ features: { notOperating: "CLOSED_TEMPORARILY" } }), travelMin: 10, travelEstimated: false, openAtSlot: true, lastVisitDaysAgo: null };
     expect(applyFilters([c], EMPTY_CONSTRAINTS, { maxTravelMin: 25, revisitCooldownWeeks: 8, budgetPerPersonMaxJpy: 15000 }).rejected[0].reason).toBe("closed");
   });

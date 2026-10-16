@@ -1,19 +1,17 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { bookAndAnnounce, cancelReservation, checkAvailability, ensureDetected, howBooked, modifyReservation, policyLine } from "../booking/service";
-import { config, PEOPLE, voters } from "../config";
-import { db, kvSet } from "../db";
+import { config, PEOPLE } from "../config";
+import { db } from "../db";
 import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, getReservation, upcomingReservations, updatePrefs, updateReservation, upsertPlace } from "../db/repo";
 import { cancelJobs } from "../jobs/scheduler";
 import { say, status } from "../notify";
-import { callTime, clearPendingCall, dropAllCalls, pendingCall, runCall, scheduleCall, scheduledCalls } from "../booking/calls";
-import { currentMessage, saysCall } from "./turn";
+import { clearPendingCall, pendingCall, runCall } from "../booking/calls";
 import { ensureWeeklyJobs, skipDate } from "../jobs/weekly";
 import { cidFromMapsUri, placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
 import { cidFromSavedUrl } from "../places/takeout";
-import { bookOption, onVotes } from "../plans/decide";
+import { bookOption } from "../plans/decide";
 import { proposePlan } from "../recommender";
-import { onboardingLink } from "../web/server";
 import { enrich, savedPool, toCandidate } from "../recommender/candidates";
 import { cuisineOf, similarity } from "../recommender/similarity";
 import type { Place, Plan } from "../types";
@@ -21,7 +19,8 @@ import type { Slot } from "../booking/types";
 import { pickInWindow } from "../booking/window";
 import { fmtDate, now } from "../util/time";
 
-function latestProposedPlan(): Plan | undefined {
+/** The options waiting for a decision, if any. */
+export function openProposal(): Plan | undefined {
   const row = db().prepare("SELECT id FROM plans WHERE status = 'proposed' ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined;
   return row ? getPlan(row.id) : undefined;
 }
@@ -55,7 +54,6 @@ const slotFields = {
   party_size: z.number().int().min(1).max(12).optional(),
 };
 
-/** A phone call needs a human yes. The model may only pass true when the message itself asks for a call. */
 /**
  * Post a tool's outcome to the chat itself. The agent replies NO_REPLY after tools
  * that post, so a result it was meant to relay (e.g. "Shall I call to cancel?")
@@ -66,63 +64,38 @@ async function posted(message: string): Promise<string> {
   return `Posted to the chat: ${message.slice(0, 300)}\nReply NO_REPLY.`;
 }
 
-/** call_go_ahead only counts when the message really says "call". */
-const goAhead = (flag: boolean | undefined) => Boolean(flag) && saysCall(currentMessage()?.text);
+const goAhead = (flag: boolean | undefined) => Boolean(flag);
 
 const CALL_GO_AHEAD = z
   .boolean()
   .optional()
-  .describe("True ONLY if the latest message explicitly tells you to phone/call (e.g. 'call Time Out to book'). Otherwise leave it out: if a call is needed, the bot asks first.");
-
-function consensusReached(plan: Plan): boolean {
-  return voters().every((p) => plan.votes[p]?.length === 1 && plan.votes[p][0] === plan.votes[voters()[0]]?.[0]);
-}
+  .describe("True only if the latest message clearly says to go ahead and contact the restaurant (e.g. 'cancel it, call them', 'ring them and move it to 8'). Otherwise leave it out: if a call is needed, the bot asks first.");
 
 const rawTools = [
   betaZodTool({
     name: "place_call",
     description:
-      "Place the phone call the bot is waiting on (see 'Pending call' in <state>) when the latest message says 'call': 'call', 'call now', 'call at 17:00', 'call in 30', 'call and book 19:00'. Messages without the word 'call' are refused by the tool. A bare 'call' means NOW: leave at/in_minutes empty. Schedule only when they name a time ('at 17:00') or a delay ('in 30').",
+      "Place the phone call the bot is waiting on (see 'Pending call' in <state>) when they say go ahead, in any words: 'call', 'ok call then', 'go for it', 'sure', 'try 19:00'. Calls right away (there are no calls for later; if they want a later time, tell them to reply when they're ready). If you're unsure they mean yes, ask instead.",
     inputSchema: z.object({
-      at: z.string().optional().describe("HH:mm (JST) if they said to call at a time"),
-      in_minutes: z.number().int().min(1).optional().describe("If they said to call in N minutes; use the suggested delay when they just say yes to it"),
       time: z.string().optional().describe("HH:mm to book instead of the original time, e.g. a time the restaurant offered"),
     }),
-    run: async ({ at, in_minutes, time }) => {
-      if (!saysCall(currentMessage()?.text)) return "NOT placed: a call needs the word 'call' in their message (e.g. 'call', 'call at 17:00'). Ask them to reply *call* if they want it.";
+    run: async ({ time }) => {
       const call = pendingCall();
-      if (!call) return "There's no call waiting for a go-ahead. If they asked to call a place, use book_place with call_go_ahead.";
-      const next = { ...call, slot: time ? { ...call.slot, time } : call.slot, alternatives: undefined, suggestDelayMin: undefined };
-      const when = callTime(at, in_minutes);
-      if (when) {
-        await say(scheduleCall(next, when));
-        return "Scheduled; the chat was told. Reply NO_REPLY.";
-      }
-      const out = await runCall(next);
+      if (!call) return "There's no call waiting for a go-ahead. If they asked to call a place, use book_place, cancel_reservation or modify_reservation with call_go_ahead.";
+      const out = await runCall({ ...call, slot: time ? { ...call.slot, time } : call.slot, alternatives: undefined });
       await say(out.message);
       return "Called; the outcome was posted to the chat. Reply NO_REPLY.";
     },
   }),
 
   betaZodTool({
-    name: "recent_calls",
-    description: "The last phone calls the bot made (or tried): when, place, outcome, summary and transcript, plus calls scheduled for later. Use for 'recap the call', 'what did they say?', 'any calls planned?'.",
-    inputSchema: z.object({ limit: z.number().int().min(1).max(5).optional() }),
-    run: async ({ limit }) => {
-      const rows = db().prepare("SELECT * FROM call_log ORDER BY id DESC LIMIT ?").all(limit ?? 2) as Record<string, unknown>[];
-      const later = scheduledCalls().map((c) => `Scheduled: ${getPlace(c.call.placeId)?.name} at ${c.runAt} UTC (${c.call.kind} ${c.call.slot.date} ${c.call.slot.time})`);
-      const done = rows.map((r) => `Call #${r.id} at ${r.at} UTC to ${r.place_name} (${r.kind}${r.dry_run ? ", dry run" : ""}): ${r.outcome}. ${r.summary}\nTranscript:\n${String(r.transcript ?? "(none)").slice(0, 2500)}`);
-      return [...later, ...done].join("\n\n") || "No calls yet.";
-    },
-  }),
-
-  betaZodTool({
     name: "decline_call",
-    description: "They said no to a call: the one the bot just proposed AND any call scheduled for later ('don't call', 'no', 'cancel the call'). Drops all of them. Only tell them it's dropped using this tool's result.",
+    description: "They said no to the call the bot asked about ('no', 'don't call', 'leave it'). Drops it. Only tell them it's dropped using this tool's result.",
     inputSchema: z.object({}),
     run: async () => {
-      const n = dropAllCalls();
-      return n ? `Dropped ${n} call(s) (proposed and/or scheduled). No call will be made.` : "There was no call waiting or scheduled.";
+      const had = Boolean(pendingCall());
+      clearPendingCall();
+      return had ? "Dropped. No call will be made." : "There was no call waiting.";
     },
   }),
 
@@ -155,7 +128,7 @@ const rawTools = [
   betaZodTool({
     name: "option_details",
     description:
-      "Everything known about option N (1-based) of the latest proposal: cuisine, price, rating, highlights, dishes, review snippets, address, travel, and how it would be booked (online, email or phone). Use for 'tell me more about option 2' / 'why that one?'.",
+      "Everything known about option N (1-based) of the latest proposal: cuisine, price, rating, highlights, dishes, review snippets, address, travel, and how it would be booked (TableCheck or phone). Use for 'tell me more about option 2' / 'why that one?'.",
     inputSchema: z.object({ option_number: z.number().int().min(1) }),
     run: async ({ option_number }) => {
       const row = db().prepare("SELECT id FROM plans ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined;
@@ -180,32 +153,16 @@ const rawTools = [
   }),
 
   betaZodTool({
-    name: "pick_option",
+    name: "book_option",
     description:
-      "Record that a person picked option N (1-based) of the open proposal, e.g. they replied '2', 'the Italian one' or 'armonia please'. Once everyone who needs to agree has picked it, books that place (and only that place) by booking site or email; if it needs a phone call it asks for a go-ahead first. Use the sender of the message as `person`.",
-    inputSchema: z.object({ option_number: z.number().int().min(1), person: z.enum(PEOPLE) }),
-    run: async ({ option_number, person }) => {
-      const plan = latestProposedPlan();
-      if (!plan) return "There is no open proposal right now.";
-      if (option_number > plan.options.length) return `The proposal only has ${plan.options.length} options.`;
-      await onVotes(plan.id, { ...plan.votes, [person]: [option_number - 1] });
-      const after = getPlan(plan.id)!;
-      if (after.status !== "proposed" || consensusReached(after)) return "Everyone agreed; the booking outcome (or a question about calling) was posted to the chat. Reply NO_REPLY.";
-      const waiting = voters().filter((p) => !after.votes[p]?.length);
-      return waiting.length ? `Noted ${person}'s pick (${plan.options[option_number - 1].name}). Waiting for ${waiting.join(" and ")}.` : "Picks recorded; they differ, the chat was told.";
-    },
-  }),
-
-  betaZodTool({
-    name: "book_plan_option",
-    description: "Book option N (1-based) from the most recent proposed plan, e.g. when someone says 'book option 2' or 'let's do the second one'. Books only that place.",
-    inputSchema: z.object({ option_number: z.number().int().min(1), call_go_ahead: CALL_GO_AHEAD }),
-    run: async ({ option_number, call_go_ahead }) => {
-      const plan = latestProposedPlan();
+      "Book option N (1-based) of the open proposal once either of them has decided on it ('2', 'let's do the Thai one', a yes to 'Shall I book X?'). Books only that place: TableCheck if it has it, else it phones them straight away (deciding is the go-ahead; if they're closed it says when they open and waits).",
+    inputSchema: z.object({ option_number: z.number().int().min(1) }),
+    run: async ({ option_number }) => {
+      const plan = openProposal();
       if (!plan) return "There is no open proposal to book from.";
-      if (option_number > plan.options.length) return `The plan only has ${plan.options.length} options.`;
-      await bookOption(plan.id, option_number - 1, { callApproved: goAhead(call_go_ahead) });
-      return "The outcome (or a question about calling) was posted to the chat. Reply NO_REPLY.";
+      if (option_number > plan.options.length) return `The proposal only has ${plan.options.length} options.`;
+      await bookOption(plan.id, option_number - 1);
+      return "The outcome (or a question) was posted to the chat. Reply NO_REPLY.";
     },
   }),
 
@@ -234,7 +191,7 @@ const rawTools = [
 
   betaZodTool({
     name: "check_availability",
-    description: "Check whether a restaurant has a table at a date/time (TableCheck/Tabelog places only; email-only places can't be checked in advance).",
+    description: "Check whether a restaurant has a table at a date/time (TableCheck places only; phone-only places are checked on the call).",
     inputSchema: z.object({ place_name: z.string(), ...slotFields }),
     run: async ({ place_name, date, time, party_size }) => {
       const place = await placeByName(place_name);
@@ -314,7 +271,7 @@ const rawTools = [
   betaZodTool({
     name: "cancel_reservation",
     description:
-      "Cancel a reservation. Only when someone in the group clearly asks to cancel it. If they say they already cancelled it themselves (called the restaurant, used the email link), set already_cancelled: it's then only marked cancelled, nothing is contacted.",
+      "Cancel a reservation. Only when someone in the group clearly asks to cancel it. If they say they already cancelled it themselves (called the restaurant, used the TableCheck link), set already_cancelled: it's then only marked cancelled, nothing is contacted.",
     inputSchema: z.object({
       reservation_id: z.number().int(),
       reason: z.string().optional(),
@@ -334,30 +291,18 @@ const rawTools = [
   }),
 
   betaZodTool({
-    name: "confirm_still_on",
-    description: "Record that the couple confirmed a reservation is still on (answers the 'still on?' check, prevents auto-cancel).",
-    inputSchema: z.object({ reservation_id: z.number().int() }),
-    run: async ({ reservation_id }) => {
-      kvSet(`still_on:${reservation_id}`, true);
-      return "Noted.";
-    },
-  }),
-
-  betaZodTool({
     name: "update_preferences",
     description:
-      "Change standing preferences: usual weekday (1=Mon..7=Sun) and time, kickoff/nudge/decide schedule, max travel minutes, budget per person (JPY), dietary notes, auto-cancel, cuisine cooldown.",
+      "Change standing preferences: usual weekday (1=Mon..7=Sun) and time, when options are posted (kickoff) and the reminder if nobody picked (nudge), max travel minutes, budget per person (JPY), dietary notes, cuisine cooldown.",
     inputSchema: z.object({
       defaultWeekday: z.number().int().min(1).max(7).optional(),
       defaultTime: z.string().optional(),
       partySize: z.number().int().optional(),
       kickoff: z.object({ weekday: z.number().int().min(1).max(7), time: z.string() }).optional(),
       nudge: z.object({ weekday: z.number().int().min(1).max(7), time: z.string() }).optional(),
-      decideBy: z.object({ weekday: z.number().int().min(1).max(7), time: z.string() }).optional(),
       maxTravelMin: z.number().int().optional(),
       budgetPerPersonMaxJpy: z.number().int().nullable().optional(),
       dietary: z.string().optional(),
-      autoCancel: z.boolean().optional(),
       flexLaterMin: z.number().int().min(0).max(120).optional().describe("Minutes after the asked time the bot may accept without asking (default 30)"),
       cuisineCooldownDates: z.number().int().optional(),
       homeAddress: z.string().optional(),
@@ -407,19 +352,13 @@ const rawTools = [
     },
   }),
 
-  betaZodTool({
-    name: "onboarding_links",
-    description: "Links for each person to connect Google (Drive for saved-list exports; Gmail for the booker). Use for 'setup'.",
-    inputSchema: z.object({}),
-    run: async () => PEOPLE.map((p) => `${p}: ${onboardingLink(p)}`).join("\n"),
-  }),
 ];
 
 /** Short "what I'm doing" phrases for the live status line. */
 const STATUS: Record<string, string> = {
   recommend_options: "Understanding what you're after…",
   option_details: "Pulling up details and reviews…",
-  book_plan_option: "Booking it…",
+  book_option: "Booking it…",
   book_place: "Checking the table and booking…",
   check_availability: "Checking live availability…",
   search_places: "Searching places…",
@@ -431,7 +370,6 @@ const STATUS: Record<string, string> = {
   add_saved_place: "Adding the place…",
   place_call: "Getting ready to call…",
   log_visit: "Noting the visit…",
-  recent_calls: "Pulling up the call…",
 };
 
 export const tools = rawTools.map((t) => ({

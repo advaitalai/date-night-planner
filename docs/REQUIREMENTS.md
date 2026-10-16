@@ -1,11 +1,11 @@
 # Date Night Planner: requirements
 
 Owner: Advait. Users: Advait and Emily (a couple in Tokyo).
-Status: MVP built on branch `claude/festive-volta-e3nm17` (PR #1). **First real booking made on 7 Oct 2026:** h:armonia, Fri 9 Oct 18:00, 2 people, seats only, via TableCheck. Kept (they're going). The next milestone is the WhatsApp beta (phase 3).
+Status: MVP built on branch `claude/festive-volta-e3nm17` (PR #1). **First real booking made on 7 Oct 2026:** h:armonia, Fri 9 Oct 18:00, 2 people, seats only, via TableCheck. Live in WhatsApp with Emily since 12 Oct. **16 Oct: cut to a lean scope** (§4.0) so there's less to test and maintain.
 
 ## 1. Problem
 
-Planning the weekly date night means choosing a place, checking it's free, booking it, and keeping track of cancellation deadlines. Booking is the most annoying part. The goal is an agent that does all of this inside the WhatsApp chat Advait and Emily already use. The humans only vote and show up.
+Planning the weekly date night means choosing a place, checking it's free, booking it, and keeping track of cancellation deadlines. Booking is the most annoying part. The goal is an agent that does all of this inside the WhatsApp chat Advait and Emily already use. The humans only decide and show up.
 
 ## 2. MVP success event
 
@@ -20,23 +20,36 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 | Home | Residia Tower Meguro Fudomae, 3-7-6 Nishigotanda, Shinagawa (Gotanda/Fudomae) |
 | Work (Advait) | Arco Tower Annex, 1-8-1 Shimomeguro, Meguro (near Meguro station) |
 | Usual slot | Wednesday 18:30, 2 people. Day and time must be easy to change from chat. |
-| Planning cadence | Plan the weekend before: options go out Sat 10:00, a nudge Sun 10:00, a decision by Sun 20:00. Monday is too late to get tables at good places. |
+| Planning cadence | Plan the weekend before: options go out Sat 10:00, a reminder Sun 10:00 if nobody has picked. Monday is too late to get tables at good places. Nothing is booked without a decision. |
 | Travel limit | About 25 min from the starting point (default: home). "Near work" switches the starting point to the office. |
 | Budget | ¥15,000 per person by default (can be changed) |
 | Booking contact | In `.env` only, because the repo is public. Name Advait (アドヴァイト), Japanese phone 070 number, advaitalai@gmail.com. Japanese text puts the Japanese name first. |
 
 ## 4. Functional requirements
 
+### 4.0 Lean scope (16 Oct 2026)
+
+The core loop: Saturday options → either of you decides → the bot books (TableCheck, else a phone call) → change or cancel from the chat → one "still on?" and a day-of reminder → the visit is logged.
+
+Cut on 16 Oct, and why:
+- **Calls scheduled for later** ("call at 11", "call in 30"): both caller bugs of 12–15 Oct were here. A closed restaurant gets "they open at 17:00, reply when you'd like me to call".
+- **Vote counting and the Sunday auto-book:** the agent reads the conversation instead (R3). Nothing is booked without a decision.
+- **Email and Tabelog booking, Gmail and Drive watchers, the onboarding web page, polls:** parked or unused. Saved lists come in by CSV import.
+- **Auto-cancel and the 48h "still on?":** one reminder, a day before free cancellation ends; it never cancels by itself.
+- **The detailed call outcome tree:** one message shape (what happened, what they said, offered times, "try again?").
+- **"Recap the last call" in chat:** the summary is posted after every call; `npm run logs` has the rest.
+
+Kept on purpose: changing a booking (one call to the restaurant beats cancel + rebook), the visit log, the cancellation policy lookup.
+
 ### 4.1 Chat (WhatsApp)
 - R1. The bot lives in a WhatsApp group with Advait and Emily.
-- R2. No extra SIM. Self mode (default) links the bot to Advait's own WhatsApp as a linked device. Its messages are prefixed with 🤖. People address it by saying "planner" or by replying to its messages.
-- R3. Options are posted as a WhatsApp poll. When both people vote for the same option, the bot books it straight away. If the vote is split, it says so. At the decide deadline it books the top-voted option (a tie goes to the higher-ranked one).
+- R2. Self mode (today) links the bot to Advait's own WhatsApp as a linked device; its messages are prefixed with 🤖. **Planned: its own number** (fixes the linked-device outages and makes @mentions work). **Addressing (16 Oct):** the bot answers only inline replies to its messages, messages that say "planner", or (own number) an @mention. Everything else is the two of them talking: the bot reads it as context and never acts on it.
+- R3. **Decisions (16 Oct).** Either of them can decide on an option, in any words ("2", "let's do the Thai one", or one suggests and the other agrees); the agent judges it, and asks "Shall I book X?" when unsure. An opinion ("2 looks nice") isn't a decision. When the bot hears them settle it in their own conversation, it asks once to confirm ("Sounds like X. Shall I book it?") and books on a reply. No votes, no deadline auto-book.
 - R4. It understands loose requests: "feeling Italian, not too far from work", "somewhere like Monna Lisa", "Thursday instead", "move it to 19:30", "cancel".
 
 ### 4.2 Saved places
 - R5. It uses both people's saved Google Maps places. There is no API for those lists, so they come in through Google Takeout:
-  - a one-off CSV import (`fixtures/Tokyo_food.csv` is Advait's list);
-  - a recurring Takeout export (*Saved* only, delivered to Drive every 2 months) that the bot picks up automatically.
+  - a CSV import from Takeout (`npm run import-csv`; `fixtures/Tokyo_food.csv` is Advait's list), redone by hand a couple of times a year. (The automatic Drive pickup was cut on 16 Oct.)
 - R6. A Google Maps link pasted into the chat gets added to the sender's saved places.
 - R7. A place saved by both people ranks higher.
 
@@ -57,43 +70,28 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 ### 4.4 Reservations
 - R13a. **Seat-only bookings.** Never book courses or anything needing prepayment or a card. Pick TableCheck's seat-only item (e.g. "Reservation for seats only"), or skip the place. The ¥ amounts shown to users are average spend per person, not prices.
 - R14. **The bot books itself.** Posting a link or phone number for a human to act on doesn't count. It also changes and cancels bookings.
-- R15. Booking order, fastest and most predictable first; on failure move to the next channel for the **same place** (a definite "that time is full" stops and asks instead). Never move on to a different place without asking:
-  1. **Booking sites:** TableCheck (guest booking in a headless browser), then Tabelog (saved login).
-  2. **Email:** fixed polite template, Japanese first then English, from Advait's Gmail. Replies are read and classified.
-  3. **AI phone call:** Vapi (Japanese speech, Claude for the conversation). Says it's an AI assistant, seats only, never agrees to a course or card, asks the cancellation policy. The transcript is read to get the outcome.
-- R15a. **No call without a human go-ahead** (11 Oct). Every call (book, change, cancel, retry, call back for an offered time) is proposed in the chat first ("Shall I call them…? Reply *call* or *no*"). A message that itself says "call X" counts as the go-ahead. Hard rule in code (12 Oct): a call is only placed when the message contains "call" (or 電話して / かけて); "yes", "ok", "sounds good" never place one. Inline replies to each other and @mentions never reach the bot. Auto-cancel and the Sunday deadline never phone on their own; they ask.
+- R15. Booking order for the **same place** (a definite "that time is full" stops and asks instead). Never move on to a different place without asking:
+  1. **TableCheck** (guest booking in a headless browser).
+  2. **AI phone call:** Vapi (Japanese speech, Claude for the conversation). Says it's an AI assistant, seats only, never agrees to a course or card. The transcript is read to get the outcome.
+  (Email and Tabelog booking were cut on 16 Oct; places with only those are booked by phone.)
+- R15a. **Calls need a go-ahead, judged like a person would** (changed 16 Oct). Deciding on a phone-only place is the go-ahead: the bot calls straight away. Anything else (cancel, change, retry, call back for an offered time) is asked first, and any clear yes counts ("ok call then", "go for it"); "no" drops it. Safe because only messages addressed to the bot can act (R2). Calls are made now or not at all: if the restaurant is closed, the bot says when it opens and waits to be told. (Replaces the 12 Oct "must contain the word call" rule and scheduled calls.)
 - R15c. **Time window** (12 Oct). Each booking has the time to ask for and the latest time the bot may take without asking: by default 30 min later (prefs `flexLaterMin`), or the range they gave in chat for that date night ("6 to 7:30 all good"; "exactly 7" = no window). Applies to sites (book the free time inside the window) and calls (the caller may accept it on the call). Earlier times, other dates or conditions always come back to the chat.
 - R15d. **Calls** (12 Oct): book under **Emily (エミリー)** (easy to write in katakana; sites keep the full name); open with "seat reservation" only, mention courses only if they do; know today's date and restate the booking date if they mix it up; don't ask the cancellation policy (looked up online first, else 24h assumed).
-- R15b. **After each call, report and propose the next step** (which again needs a yes):
-
-  | Outcome | Message | Proposed next call |
-  |---|---|---|
-  | Booked | ✅ booked, cancellation deadline | none |
-  | Full, they offered a time | ❌ full, they offered 19:00 | call back and book 19:00 |
-  | Full, nothing offered | ❌ fully booked | none; another option or day? |
-  | Course/card required | 🚫 breaks seats-only | none; another option? |
-  | Line busy | 📵 busy | try again in 30 min |
-  | No answer | 📵 nobody picked up (closed now? opens at…) | try at opening +15 min, or in 1 hour |
-  | Voicemail | 📼 no message left | try again in 1 hour |
-  | Closed (holiday etc.) | 🔒 closed | none; another option or day? |
-  | Wrong number | ☎️ number dropped from the place | none; another option? |
-  | They'll call back | 📞 they'll call your phone | none; tell me what they say |
-  | Call didn't connect | ⚠️ plain reason from Vapi/Twilio, e.g. "Twilio balance is $0.12" | call again once fixed |
-  | Unclear | 🤷 summary | try again |
+- R15b. **After each call** (simplified 16 Oct): booked → ✅ confirmation with the deadline; otherwise one message: what happened (full, busy, no answer…), a 1–2 line summary of what they said, any times they offered, and "Want me to try again, another time, or another option?" (a retry needs a yes). No retry is offered when they require a course or card, or the number was wrong (that number is dropped). A call that never connected says why in plain words (e.g. "Twilio balance is $0.12").
 - R16. Google "Reserve a table" has no consumer API; it hands off to the booking site behind it, so the bot books there.
 - R17. Any place with a phone number is bookable (via an AI call). Walk-in-only places are excluded.
 - R18. Cancellation policy:
-  - Read the policy from the booking page or email and work out the last moment to cancel for free (assume 24h if no policy is stated, and say so).
-  - Ask "still on?" 48h before that deadline and again at 24h.
-  - Cancel automatically only if someone asked to cancel, or if auto-cancel is turned on.
+  - Read the policy and work out the last moment to cancel for free (assume 24h if no policy is stated, and say so).
+  - The policy comes from the TableCheck page, what the restaurant said on the call, or their website (looked up after a phone booking). The call never asks about it.
+  - One "still on?" a day before free cancellation ends, with the exact deadline. It never cancels by itself (auto-cancel was cut on 16 Oct).
 - R19. Never fail silently. If a booking fails (slot gone, captcha, site changed), say so in the group and ask what to try next. (Changed 11 Oct: it used to move on to the next option by itself, and booked a place nobody picked.)
-- R20. `DRY_RUN=1` (the default) stops before the final confirm click and sends emails to Advait instead of the restaurant. Turn it off only after the booking flow has been checked live.
+- R20. `DRY_RUN=1` (the default) stops before the final confirm click and sends calls to Advait instead of the restaurant. Turn it off only after the booking flow has been checked live.
 
 ### 4.5 Chat UX
 
 - R23. Messages use WhatsApp formatting: *bold* names, short lines, blank lines between items. Never em dashes.
 - R24. Show what the bot is doing: ⏳ on the incoming message, a single status line edited as work progresses ("Checking opening hours for 92 places…"), removed when the answer arrives; ✅ or ❌ at the end.
-- R25. People reply in words or with a number; polls are optional.
+- R25. People reply in words or with a number (an inline reply to the bot). No polls (removed 16 Oct).
 
 ### 4.6 Reminders
 - R21. Day-of reminder at 11:00 with place, time, ref, address and map link.
@@ -103,13 +101,12 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 
 | Topic | Decision | Why |
 |---|---|---|
-| Hosting | Google Cloud always-free e2-micro VM (us-west1) with systemd. Not Fly.io. | Advait doesn't want to pay extra. The bot must run all the time (WhatsApp connection, timers, Gmail watcher). |
+| Hosting | Google Cloud always-free e2-micro VM (us-west1) with systemd. Not Fly.io. | Advait doesn't want to pay extra. The bot must run all the time (WhatsApp connection, timers). |
 | Paid services | Anthropic API only, a few dollars a month. The Google Maps APIs stay within the free monthly allowance. | Cost |
 | WhatsApp library | Baileys (unofficial). Self mode by default. | The official API doesn't support bots in ordinary group chats. No spare SIM. |
-| Google OAuth | App set to "In production" (unverified). Onboarding over an SSH tunnel to localhost. | Logins in Testing mode expire after 7 days. Nothing needs to be public. |
 | Repo | Public. No personal data or secrets in code; they belong in `.env`/environment variables. | Privacy. Note: `fixtures/Tokyo_food.csv` is Advait's saved list and is public. Ask before adding more personal data. |
-| Language | Chat in English unless the users write Japanese. Restaurant emails in Japanese, then English. | |
-| Stack | TypeScript/Node 22, Claude API tool loop (`claude-opus-5-5`, configurable), SQLite, Playwright, Fastify | |
+| Language | Chat in English unless the users write Japanese. Restaurant calls in Japanese. | |
+| Stack | TypeScript/Node 22, Claude API tool loop (`claude-opus-5-5`, configurable), SQLite, Playwright, Vapi + Twilio | |
 
 ## 6. Out of scope for the MVP
 

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { isNonDining, sameName, scanWebsite } from "../src/booking/detect";
-import { jaDate, requestEmail } from "../src/booking/email";
 import { parseTabelogPage } from "../src/booking/tabelog";
 import { parseShop, readCalendar } from "../src/booking/tablecheck";
 import { domesticPhone, intlPhone } from "../src/config";
-import { buildRaw } from "../src/google/gmail";
+import { jaDate } from "../src/util/time";
 import { place } from "./helpers";
 
 const slot = { date: "2026-10-07", time: "18:30", partySize: 2 };
@@ -80,38 +79,15 @@ describe("booking channel detection", () => {
   });
 });
 
-describe("reservation emails", () => {
-  const contact = { name: "Advait", nameKana: "アドヴァイト", phone: "090-0000-0000", email: "a@example.com" };
-
+describe("dates and numbers for the call script", () => {
   it("formats Japanese dates with the weekday", () => {
     expect(jaDate("2026-10-07", "18:30")).toBe("2026年10月7日（水）18:30");
-  });
-
-  it("writes a complete request", () => {
-    const { subject, body } = requestEmail(place({ name: "Chez Lui" }), slot, contact, "anniversary");
-    expect(subject).toContain("2名");
-    expect(body).toContain("Chez Lui ご担当者様");
-    expect(body).toContain("・人数：2名");
-    expect(body).toContain("キャンセルポリシー");
-    expect(body).toContain("備考：anniversary");
-    expect(body).toContain("・お名前：アドヴァイト（Advait）");
-    // Japanese first, then English
-    expect(body.indexOf("ご担当者様")).toBeLessThan(body.indexOf("Dear Chez Lui team"));
-    expect(body).toContain("Wednesday 7 October 2026, 18:30");
-    expect(body).toContain("+81 90-0000-0000");
   });
 
   it("formats phone numbers for Japanese and English text", () => {
     expect(intlPhone("070-1568-0178")).toBe("+81 70-1568-0178");
     expect(domesticPhone("+81 070 1568 0178")).toBe("070-1568-0178");
     expect(domesticPhone("+81 70-1568-0178")).toBe("070-1568-0178");
-  });
-
-  it("encodes UTF-8 subjects and bodies for Gmail", () => {
-    const raw = buildRaw({ to: "x@example.jp", subject: "【ご予約のお願い】", body: "こんにちは" });
-    const mime = Buffer.from(raw, "base64url").toString("utf8");
-    expect(mime).toContain("Subject: =?UTF-8?B?");
-    expect(mime).toContain(Buffer.from("こんにちは").toString("base64"));
   });
 });
 
@@ -178,13 +154,15 @@ describe("AI phone calls", () => {
 });
 
 describe("booking order", () => {
-  it("tries booking sites, then email, then phone", async () => {
+  it("tries TableCheck, then phone; never email or Tabelog", async () => {
     process.env.VAPI_API_KEY = "test";
     process.env.VAPI_PHONE_NUMBER_ID = "test";
     const { bookingRoutes } = await import("../src/booking/service");
     const routes = bookingRoutes(place({ tablecheck_slug: "armonia", phone: "03-6431-8960" }));
     expect(routes.map((r) => r.channel)).toEqual(["tablecheck", "phone"]);
     expect(bookingRoutes(place({ tablecheck_slug: null, phone: "03-1111-2222" })).map((r) => r.channel)).toEqual(["phone"]);
+    const webOnly = bookingRoutes(place({ tablecheck_slug: null, phone: "03-1111-2222", tabelog_url: "https://tabelog.com/tokyo/A1/A2/1/", booking_email: "info@example.jp", booking_channel: "tabelog" }));
+    expect(webOnly.map((r) => r.channel)).toEqual(["phone"]);
     delete process.env.VAPI_API_KEY;
     delete process.env.VAPI_PHONE_NUMBER_ID;
   });

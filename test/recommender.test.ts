@@ -183,7 +183,7 @@ describe("options message", () => {
     expect(msg).toContain("1️⃣ *h:armonia*\n_Italian  ·  ¥¥  ·  ★ 4.6  ·  Nishigotanda, 6 min walk from home_\nHandmade pasta");
     expect(msg).toContain("*Why:* Saved by Advait; reviewers rave about the handmade pasta.");
     expect(msg).toContain("📍 https://maps.google.com/?cid=1");
-    expect(msg).toContain("Reply with a number");
+    expect(msg).toContain("Reply to this message");
     expect(msg).not.toContain("—");
   });
 });
