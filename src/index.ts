@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { closeBrowsers } from "./booking/browser";
 import { config } from "./config";
 import { kvGet, kvSet } from "./db";
@@ -32,7 +34,32 @@ async function geocodeAnchors(): Promise<void> {
   kvSet("anchors_geocoded", true);
 }
 
+/**
+ * Only one copy of the bot may run: two copies sharing one WhatsApp login knock
+ * each other off (endless reconnects), corrupt the encryption keys ("Bad MAC")
+ * and both send reminders.
+ */
+function singleInstance(): void {
+  const file = path.join(config.dataDir, "bot.pid");
+  const other = Number(fs.existsSync(file) ? fs.readFileSync(file, "utf8") : 0);
+  if (other && other !== process.pid) {
+    try {
+      process.kill(other, 0);
+      console.error(`Another copy of the bot is already running (process ${other}). Stop it first (Ctrl+C in its window, or: kill ${other}).`);
+      process.exit(1);
+    } catch {
+      // that process is gone; take over
+    }
+  }
+  fs.mkdirSync(config.dataDir, { recursive: true });
+  fs.writeFileSync(file, String(process.pid));
+  process.on("exit", () => {
+    if (fs.existsSync(file) && fs.readFileSync(file, "utf8") === String(process.pid)) fs.unlinkSync(file);
+  });
+}
+
 async function main(): Promise<void> {
+  singleInstance();
   logToFile();
   console.log(`date-night-planner starting (DRY_RUN=${config.dryRun ? "on" : "off"}, model ${config.anthropicModel})`);
   registerWeeklyJobs();

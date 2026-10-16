@@ -27,6 +27,7 @@ const SEARCH_FIELDS = [
   "nationalPhoneNumber",
   "reservable",
   "googleMapsUri",
+  "businessStatus",
   ...FEATURE_FIELDS,
 ];
 
@@ -47,6 +48,7 @@ const DETAIL_FIELDS = [
   "editorialSummary",
   "reviews",
   "googleMapsUri",
+  "businessStatus",
   ...FEATURE_FIELDS,
 ];
 
@@ -67,6 +69,7 @@ export interface GPlace {
   editorialSummary?: { text: string };
   reviews?: { rating?: number; text?: { text: string }; originalText?: { text: string } }[];
   googleMapsUri?: string;
+  businessStatus?: string;
   liveMusic?: boolean;
   servesDinner?: boolean;
   outdoorSeating?: boolean;
@@ -135,7 +138,7 @@ export async function placeDetails(placeId: string): Promise<GPlace> {
 /** Just the yes/no attributes, for saved places looked up before they were collected. */
 export async function placeFeatures(placeId: string): Promise<PlaceFeatures> {
   const res = await fetch(`${PLACES}/places/${placeId}`, {
-    headers: { "X-Goog-Api-Key": requireKey(), "X-Goog-FieldMask": FEATURE_FIELDS.join(",") },
+    headers: { "X-Goog-Api-Key": requireKey(), "X-Goog-FieldMask": [...FEATURE_FIELDS, "businessStatus"].join(",") },
   });
   if (!res.ok) throw new Error(`Place features ${res.status}: ${await res.text()}`);
   return featuresOf((await res.json()) as GPlace);
@@ -144,6 +147,7 @@ export async function placeFeatures(placeId: string): Promise<PlaceFeatures> {
 export function featuresOf(g: GPlace): PlaceFeatures {
   const out: PlaceFeatures = {};
   for (const f of FEATURE_FIELDS) if (typeof g[f] === "boolean") out[f] = g[f];
+  if (g.businessStatus && g.businessStatus !== "OPERATIONAL") out.notOperating = g.businessStatus;
   return out;
 }
 

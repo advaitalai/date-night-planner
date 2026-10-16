@@ -41,6 +41,13 @@ export function pendingJobs(): { id: number; run_at: string; type: string; dedup
 const MAX_ATTEMPTS = 3;
 
 /**
+ * Jobs that post a message or place a call are not retried: if WhatsApp times
+ * out after delivering, a retry sends it twice (the day-of reminder did), and a
+ * call must never repeat without a yes.
+ */
+const NO_RETRY = new Set(["dayof_reminder", "cancel_guard", "nudge", "decide", "kickoff", "phone_call"]);
+
+/**
  * Reminders that are pointless once they're this late (e.g. the app was off
  * when they were due). They're dropped instead of all firing at startup.
  */
@@ -77,7 +84,7 @@ export async function runDueJobs(nowIso = new Date().toISOString()): Promise<num
         const retryAt = new Date(Date.now() + 5 * 60_000 * attempts).toISOString();
         db()
           .prepare("UPDATE jobs SET attempts = ?, last_error = ?, status = ?, run_at = ? WHERE id = ?")
-          .run(attempts, String((err as Error).stack ?? err), attempts >= MAX_ATTEMPTS ? "failed" : "pending", retryAt, job.id);
+          .run(attempts, String((err as Error).stack ?? err), attempts >= MAX_ATTEMPTS || NO_RETRY.has(job.type) ? "failed" : "pending", retryAt, job.id);
         console.error(`job ${job.type}#${job.id} failed (attempt ${attempts}):`, err);
       }
       ran++;

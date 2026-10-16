@@ -135,3 +135,43 @@ describe("dropping calls", () => {
     expect(scheduledCalls()).toHaveLength(0);
   });
 });
+
+describe("incidents from the 12–15 Oct retro", () => {
+  it("a new time for a scheduled call replaces the old one (18:30 → 19:15 ran both)", async () => {
+    const { freshDb, place } = await import("./helpers");
+    freshDb();
+    const { insertPlace } = await import("../src/db/repo");
+    const { scheduleCall, scheduledCalls } = await import("../src/booking/calls");
+    const { DateTime } = await import("luxon");
+    const { id: _id, ...rest } = place({ name: "Suan Sawan", booking_channel: "phone", phone: "03-0000-0000" });
+    const p = insertPlace(rest);
+    const at = DateTime.now().plus({ hours: 2 });
+    scheduleCall({ kind: "book", placeId: p.id, slot: { date: "2026-10-15", time: "18:30", partySize: 2 } }, at);
+    scheduleCall({ kind: "book", placeId: p.id, slot: { date: "2026-10-15", time: "19:15", partySize: 2 } }, at);
+    const calls = scheduledCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].call.slot.time).toBe("19:15");
+  });
+
+  it("never retries a reminder or call job (a delivered-but-timed-out send went out twice)", async () => {
+    const { freshDb } = await import("./helpers");
+    freshDb();
+    const { registerJob, schedule, runDueJobs } = await import("../src/jobs/scheduler");
+    const { db } = await import("../src/db");
+    const { DateTime } = await import("luxon");
+    registerJob("dayof_reminder", async () => {
+      throw new Error("Timed Out");
+    });
+    schedule("dayof_reminder", DateTime.now().minus({ minutes: 1 }), {}, "dayof-test");
+    await runDueJobs();
+    expect((db().prepare("SELECT status FROM jobs WHERE dedupe_key = 'dayof-test'").get() as { status: string }).status).toBe("failed");
+  });
+
+  it("leaves out places Google marks as temporarily closed", async () => {
+    const { applyFilters } = await import("../src/recommender/filters");
+    const { EMPTY_CONSTRAINTS } = await import("../src/recommender/parseRequest");
+    const { place } = await import("./helpers");
+    const c = { place: place({ features: { notOperating: "CLOSED_TEMPORARILY" } }), travelMin: 10, travelEstimated: false, openAtSlot: true, lastVisitDaysAgo: null };
+    expect(applyFilters([c], EMPTY_CONSTRAINTS, { maxTravelMin: 25, revisitCooldownWeeks: 8, budgetPerPersonMaxJpy: 15000 }).rejected[0].reason).toBe("closed");
+  });
+});

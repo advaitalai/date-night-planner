@@ -2,7 +2,7 @@
 
 A WhatsApp agent that plans Advait and Emily's weekly date night and books it end to end.
 
-**Read `docs/STATUS.md` first** (where the project is, next steps, Advait's preferences, gotchas), **then `docs/REQUIREMENTS.md`**. It has the requirements, decisions, the MVP success event, known gaps, and how to start a session. Also see `docs/SETUP.md` (accounts and deployment), `docs/BACKLOG.md` (what's next) and `docs/USER_STORIES.md` (what the build does and how tested each story is).
+**Read `docs/STATUS.md` first** (where the project is, next steps, Advait's preferences, gotchas), **then `docs/REQUIREMENTS.md`**. It has the requirements, decisions, the MVP success event, known gaps, and how to start a session. Also see `docs/SETUP.md` (accounts and deployment), `docs/BACKLOG.md` (what's next) `docs/USER_STORIES.md` (what the build does and how tested each story is) and `docs/QA_MAP.md` (requirements vs tests, what escaped and why).
 
 ## Commands
 
@@ -12,6 +12,8 @@ A WhatsApp agent that plans Advait and Emily's weekly date night and books it en
 - `npm run import-csv -- <file> <Advait|Emily> [list]` / `npm run audit`
 - `npm start`: full app (WhatsApp, scheduler, onboarding web page)
 - `npm run logs` / `npm run logs -- call <id>`: recent calls and booking attempts (debugging); full log in `data/logs/`
+- `npm run retro -- <since>`: week-in-review report (`data/retro.md`)
+- `npm run p0`: launch-blocker tests (real bot, fake WhatsApp and calls); `npm run fresh-start`: clear test leftovers
 
 ## Rules
 

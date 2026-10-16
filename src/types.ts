@@ -37,6 +37,8 @@ export interface PlaceFeatures {
   servesCocktails?: boolean;
   servesWine?: boolean;
   servesVegetarianFood?: boolean;
+  /** Google's business status when it isn't OPERATIONAL, e.g. CLOSED_TEMPORARILY. */
+  notOperating?: string;
 }
 
 export interface Place {

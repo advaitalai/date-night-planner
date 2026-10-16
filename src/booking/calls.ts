@@ -105,7 +105,10 @@ export function askToCall(call: PendingCall, place: Place, tried: string[]): str
 export function scheduleCall(call: PendingCall, at: DateTime): string {
   clearPendingCall();
   const place = getPlace(call.placeId)!;
-  schedule("phone_call", at, { call, due: at.toISO() }, `call:${call.placeId}:${call.kind}:${at.toISO()}`);
+  // A new time for the same call replaces the old one (Emily moved 18:30 → 19:15 and both calls ran).
+  cancelJobs(`call:${call.placeId}:${call.kind}:`);
+  // Unique key per request: the same place and time asked again (18:30 → 19:15, both "at 11") must not be dropped as a duplicate.
+  schedule("phone_call", at, { call, due: at.toISO() }, `call:${call.placeId}:${call.kind}:${at.toISO()}:${Date.now()}`);
   return `⏰ I'll call *${place.name}* at ${at.setZone(ZONE).toFormat("HH:mm")}${at.hasSame(now(), "day") ? "" : ` on ${at.setZone(ZONE).toFormat("ccc d LLL")}`} to ${task(call)}.\nSay *don't call* to stop it.`;
 }
 

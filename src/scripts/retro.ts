@@ -109,7 +109,7 @@ const convo: string[] = [];
 if (fs.existsSync(logDir)) {
   for (const f of fs.readdirSync(logDir).filter((f) => f.slice(0, 10) >= since).sort()) {
     for (const l of fs.readFileSync(path.join(logDir, f), "utf8").split("\n")) {
-      const m = l.match(/^(\S+) \w+ \[(in|out|status|skip)\] (.*)$/);
+      const m = l.match(/^(\S+) \w+ (?:\[\d+\] )?\[(in|out|status|skip)\] (.*)$/);
       if (m) convo.push(`- \`${m[1].slice(5, 16)}\` ${m[2] === "in" ? "➡️" : m[2] === "out" ? "🤖" : m[2] === "skip" ? "⏭️" : "⏳"} ${mask(m[3]).slice(0, 300)}`);
     }
   }

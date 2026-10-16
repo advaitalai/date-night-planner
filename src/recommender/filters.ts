@@ -89,6 +89,7 @@ export function rejectReason(c: Candidate, k: Constraints, s: FilterSettings): R
   const p = c.place;
   if (nameMatches(p, k.excludePlaces)) return "excluded";
   if (s.excludeIds?.has(p.id)) return "shown_before";
+  if (p.features?.notOperating) return "closed";
   if (!isDinnerPlace(p, k)) return "not_dinner";
   if (k.features.some((f) => hasFeature(p, f) !== true)) return "missing_feature";
   if (!canAttemptBooking(p)) return "not_bookable";

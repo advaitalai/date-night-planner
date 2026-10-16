@@ -69,7 +69,7 @@ export function logToFile(): void {
       try {
         const now = new Date();
         const line = args.map((a) => (typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : JSON.stringify(a))).join(" ");
-        fs.appendFileSync(path.join(dir, `${now.toISOString().slice(0, 10)}.log`), `${now.toISOString()} ${level.toUpperCase()} ${line}\n`);
+        fs.appendFileSync(path.join(dir, `${now.toISOString().slice(0, 10)}.log`), `${now.toISOString()} ${level.toUpperCase()} [${process.pid}] ${line}\n`);
       } catch {
         // logging must never break the app
       }
