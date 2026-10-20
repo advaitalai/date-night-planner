@@ -54,6 +54,8 @@ The bot has to run all the time, to stay connected to WhatsApp and send the remi
    ```
    Keep `DRY_RUN=1` for now.
 
+**Updating later:** `cd ~/date-night-planner && bash deploy/update.sh`. It pulls the latest code, reinstalls libraries only if their list changed (`npm ci --omit=dev`), and restarts the service if it's running. Don't run plain `npm install` on the server: it adds developer tools and can rewrite `package-lock.json`.
+
 ## 4. Connect WhatsApp (no spare SIM needed)
 
 By default (`WA_SELF_MODE=1`) the bot links to **your own WhatsApp** as a linked device, the same way WhatsApp Web does.
@@ -132,7 +134,7 @@ On the Google Cloud VM the bot also sends its log lines to **Cloud Logging** in 
 1. **Let the VM write logs.** Cloud console → **IAM & Admin → IAM** → find *Compute Engine default service account* → edit → add the role **Logs Writer** (skip if it already has *Editor*).
 2. **Make the read-only key.** **IAM & Admin → Service accounts → Create service account**: name `log-reader`, role **Logs Viewer** only, Done. Open it → **Keys → Add key → Create new key → JSON**. A file downloads.
 3. **Give it to Claude's environment, not the chat.** The environment variables box takes one line per variable, so turn the key into one line first (Mac): `base64 -i ~/Downloads/<key>.json | tr -d '\n' | pbcopy`. Then in the Claude Code cloud session: the environment menu in the session's title bar → **Edit** → **Environment variables** (not the setup script) → add `GCP_LOG_READER_KEY=<paste>`. Start a new session to pick it up. Then delete the downloaded file.
-4. **On the server:** `git pull && npm install && sudo systemctl restart date-night-planner`. The log shows `Sending logs to Cloud Logging (project …)`.
+4. **On the server:** `bash deploy/update.sh`. The log shows `Sending logs to Cloud Logging (project …)`.
 
 To revoke: delete the key (or the `log-reader` account) in the console.
 
