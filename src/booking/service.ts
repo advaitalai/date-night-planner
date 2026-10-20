@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import { z } from "zod";
 import { config, testCallee } from "../config";
-import { createReservation, getPlace, getPrefs, getReservation, updatePlace, updatePlan, updateReservation } from "../db/repo";
+import { closeProposalsWith, createReservation, getPlace, getPrefs, getReservation, updatePlace, updatePlan, updateReservation } from "../db/repo";
 import { cancelJobs, schedule } from "../jobs/scheduler";
 import { extract } from "../llm";
 import { say, status } from "../notify";
@@ -234,6 +234,7 @@ export async function recordBooking(place: Place, slot: Slot, channel: Route["ch
   });
   const withPolicy = await applyPolicy(reservation.id, result.policyText ?? null, result.policyChecked);
   if (planId) updatePlan(planId, { status: result.status === "confirmed" ? "booked" : "booking", chosen_place_id: place.id });
+  closeProposalsWith(place.id);
 
   const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people${moved}`;
   const how = { tablecheck: "on TableCheck", phone: `by phone, under *${config.call.bookingName}*` }[channel];

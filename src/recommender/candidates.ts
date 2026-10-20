@@ -4,7 +4,7 @@ import { tcSearchNear } from "../booking/tablecheck";
 import type { Slot } from "../booking/types";
 import { config } from "../config";
 import { kvGet, kvSet } from "../db";
-import { listPlaces, recentVisits, updatePlace, upsertPlace } from "../db/repo";
+import { findTwin, listPlaces, recentVisits, updatePlace, upsertPlace } from "../db/repo";
 import { cidFromMapsUri, placeFeatures, textSearch, toPlaceFields, travelMinutes } from "../places/google";
 import { buildProfile } from "../places/profile";
 import type { Place } from "../types";
@@ -19,14 +19,33 @@ const REDETECT_DAYS = 30;
  * Fill in Google details (and the review-based profile unless `lite`).
  * Booking-channel detection is left to booking time, so recommending stays fast.
  */
+/** Google lookups made by enrich() since the last reset (logged per planning run, to watch costs). */
+let lookups = 0;
+export function takeLookupCount(): number {
+  const n = lookups;
+  lookups = 0;
+  return n;
+}
+
 export async function enrich(place: Place, opts: { lite?: boolean } = {}): Promise<Place> {
   let p = place;
   if (!config.google.mapsKey) return p;
   try {
     if (!p.google_place_id) {
+      lookups++;
       const results = await textSearch(`${p.name} Tokyo`, { lat: p.lat ?? 35.65, lng: p.lng ?? 139.72 }, 20000, 5);
       const hit = (p.cid && results.find((r) => cidFromMapsUri(r.googleMapsUri) === p.cid)) || results[0];
-      if (hit) p = updatePlace(p.id, { ...toPlaceFields(hit), name: p.name });
+      if (hit) {
+        const fields = toPlaceFields(hit);
+        // The same place saved twice in different forms (both lists): merge into the one already known.
+        const twin = findTwin(p.id, fields.google_place_id, fields.cid);
+        if (twin) {
+          const merged = updatePlace(twin.id, { saved_by: [...new Set([...twin.saved_by, ...p.saved_by])] });
+          updatePlace(p.id, { booking_channel: "not_restaurant", note: [p.note, `duplicate of #${twin.id} ${twin.name}`].filter(Boolean).join(" / ") });
+          return merged;
+        }
+        p = updatePlace(p.id, { ...fields, name: p.name });
+      }
     }
     if (!opts.lite && !p.profile && p.google_place_id && p.booking_channel !== "not_restaurant") p = await buildProfile(p);
   } catch (err) {

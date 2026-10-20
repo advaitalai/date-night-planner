@@ -145,13 +145,25 @@ function callsBot(text: string): boolean {
   return new RegExp(`(^|[^\\p{L}\\p{N}])(${names.join("|")})($|[^\\p{L}\\p{N}])`, "iu").test(text);
 }
 
+/**
+ * Whether an @mention is the bot. Compared by the number part only: WhatsApp can mention by
+ * phone-number id or by LID (the "@191414596010191" in round 2 wasn't recognised).
+ */
+function mentionsBot(mentioned: string[] | null | undefined, text: string): boolean {
+  const mine = botJids().map((j) => j.split("@")[0].split(":")[0]);
+  if (!mine.length) return false;
+  if (mentioned?.some((j) => mine.includes(j.split("@")[0].split(":")[0]))) return true;
+  return mine.some((n) => text.includes(`@${n}`));
+}
+
 export function isAddressed(m: WAMessage, text: string): boolean {
   if (isSolo()) return true;
   if (callsBot(text)) return true;
   const ctx = contentOf(m)?.extendedTextMessage?.contextInfo;
+  // An @mention counts even inside a reply to someone else. In self mode a mention of the bot is a
+  // mention of Advait, so only the keyword and replies count there.
+  if (!config.wa.selfMode && mentionsBot(ctx?.mentionedJid, text)) return true;
   if (ctx?.stanzaId) return quotesBot(ctx);
-  // In self mode a mention of the bot is a mention of Advait, so only the keyword and replies count.
-  if (!config.wa.selfMode && ctx?.mentionedJid?.some((j) => botJids().includes(jidNormalizedUser(j)))) return true;
   return false;
 }
 

@@ -8,7 +8,7 @@ import { geocode } from "../places/google";
 import type { Anchor, Place, Plan, PlanOption } from "../types";
 import { areaOf, estimateTravelMin, travelLabel } from "../util/geo";
 import { fmtDate, nextWeekday, now } from "../util/time";
-import { discover, enrich, ensureFeatures, savedPool, toCandidate } from "./candidates";
+import { discover, enrich, ensureFeatures, savedPool, takeLookupCount, toCandidate } from "./candidates";
 import { applyFilters, FEATURE_INFO, hasFeature, type Candidate, type FilterResult, type RejectReason } from "./filters";
 import { EMPTY_CONSTRAINTS, parseRequest, type Constraints } from "./parseRequest";
 import { writePitches } from "./pitch";
@@ -52,9 +52,11 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
-async function resolveAnchor(k: Constraints): Promise<Anchor> {
+export async function resolveAnchor(k: Constraints): Promise<Anchor> {
   const prefs = getPrefs();
   if (k.anchor === "office") return prefs.anchors.office;
+  // "Anywhere in Tokyo" widens the search; travel is still measured from home (the cards said "from Tokyo").
+  if (k.anchor === "other" && k.anchorQuery && /^(tokyo|anywhere|all of tokyo|central tokyo|東京)( ?(city|area|wide|-wide))?$/i.test(k.anchorQuery.trim())) return prefs.anchors.home;
   if (k.anchor === "other" && k.anchorQuery && config.google.mapsKey) {
     const ll = await geocode(`${k.anchorQuery}, Tokyo`).catch(() => null);
     if (ll) return { label: k.anchorQuery, address: k.anchorQuery, ...ll };
@@ -96,7 +98,11 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   if (!k.onlySaved) pool = [...pool, ...(await discover(k, anchor, slot, Math.min(6000, 1500 + widest * 120)))];
   const unique = new Map(pool.map((p) => [p.id, p]));
   const near = [...unique.values()].filter((p) => p.lat == null || estimateTravelMin(anchor, { lat: p.lat, lng: p.lng! }) <= widest + 10);
+  takeLookupCount();
   let enriched = await mapLimit(near, 6, (p) => enrich(p, { lite: true }));
+  enriched = [...new Map(enriched.filter((p) => p.booking_channel !== "not_restaurant").map((p) => [p.id, p])).values()];
+  const looked = takeLookupCount();
+  if (looked) console.log(`[plan] Google lookups for new places: ${looked} (once each; saved afterwards)`);
   if (k.features.length) {
     // Must-haves are hard filters, so look up Google's attributes for nearby places that don't have them yet.
     await status(`Checking which places have ${k.features.map((f) => FEATURE_INFO[f].label).join(" and ")}…`);
@@ -163,6 +169,17 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   return { slot, anchor, constraints: k, options, rejectedCounts, rejectedExamples, notBookableChannels, relaxed, skippedFavourites: [], unmet: unmetParts(k, options) };
 }
 
+/** Something specific was asked for and none of the places found has any of it: don't post them. */
+export function nothingMatches(k: Constraints, unmet: string[], places: Place[]): boolean {
+  return unmet.length > 0 && places.every((p) => requestMatches(k, p).length === 0 && !k.vibe.some((v) => hasVibe(p, v)));
+}
+
+/** A vibe word ("listening bar") in the place's profile. */
+function hasVibe(p: Place, v: string): boolean {
+  const re = new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  return re.test([...(p.profile?.vibeTags ?? []), ...(p.profile?.highlights ?? []), p.profile?.summary ?? ""].join(" "));
+}
+
 /** The parts of the request a place meets (for the pitch's "why"). */
 export function requestMatches(k: Constraints, p: Place): string[] {
   return [
@@ -177,10 +194,7 @@ export function unmetParts(k: Constraints, options: RecommendOption[]): string[]
   const places = options.map((o) => o.scored.place);
   const unmet: string[] = [];
   for (const c of k.cuisines) if (!places.some((p) => cuisineMatch(cuisineOf(p), c) > 0)) unmet.push(c);
-  for (const v of k.vibe) {
-    const re = new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    if (!places.some((p) => re.test([...(p.profile?.vibeTags ?? []), ...(p.profile?.highlights ?? []), p.profile?.summary ?? ""].join(" ")))) unmet.push(v);
-  }
+  for (const v of k.vibe) if (!places.some((p) => hasVibe(p, v))) unmet.push(v);
   return unmet;
 }
 
@@ -207,6 +221,16 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
     await say(message);
     await clearStatus();
     return { message, facts: `No options posted: nothing fit${asked.length ? ` (asked for: ${asked.join(", ")})` : ""}. The chat was told why.` };
+  }
+
+  // Nothing matches what they asked for: don't post filler (round 2 posted three non-music places
+  // for "other listening bars?", then a second set). Tell the agent, which may widen once.
+  if (nothingMatches(r.constraints, r.unmet, r.options.map((o) => o.scored.place))) {
+    await clearStatus();
+    return {
+      message: "",
+      facts: `NOT POSTED: none of the places found has ${r.unmet.join(" or ")} (closest: ${r.options.map((o) => o.scored.place.name).join(", ")}). Either call recommend_options once more with a wider search (e.g. "anywhere in Tokyo, up to 45 min"), or tell them in a line or two that nothing fits and offer alternatives. Don't post options that don't match.`,
+    };
   }
 
   await status("Writing up the options…");

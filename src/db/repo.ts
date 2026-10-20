@@ -145,6 +145,23 @@ export function getPlan(id: number): Plan | undefined {
   return row ? rowToPlan(row) : undefined;
 }
 
+/**
+ * A place from open options got booked (from the options or by name): those
+ * options are settled, so the bot stops listening for a decision on them.
+ */
+export function closeProposalsWith(placeId: number): void {
+  const open = db().prepare("SELECT id, options FROM plans WHERE status = 'proposed'").all() as { id: number; options: string }[];
+  for (const p of open) if ((JSON.parse(p.options) as { placeId: number }[]).some((o) => o.placeId === placeId)) updatePlan(p.id, { status: "booked", chosen_place_id: placeId });
+}
+
+/** Another row for the same Google place (by place id or Maps CID), if any. */
+export function findTwin(id: number, googlePlaceId?: string | null, cid?: string | null): Place | undefined {
+  const row = db()
+    .prepare("SELECT * FROM places WHERE id != ? AND ((google_place_id IS NOT NULL AND google_place_id = ?) OR (cid IS NOT NULL AND cid = ?)) LIMIT 1")
+    .get(id, googlePlaceId ?? null, cid ?? null) as Record<string, unknown> | undefined;
+  return row ? rowToPlace(row) : undefined;
+}
+
 /** The newest plan for a date that hasn't been cancelled. */
 export function activePlanFor(date: string): Plan | undefined {
   const row = db()

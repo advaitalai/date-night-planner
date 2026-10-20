@@ -119,6 +119,7 @@ const rawTools = [
     }),
     run: async ({ request, date }) => {
       const { facts } = await proposePlan(request, { date });
+      if (facts.startsWith("NOT POSTED")) return facts;
       return `${facts}\nAlready posted to the chat. Reply exactly NO_REPLY. If you must add something, only state what these facts say; never claim a wish was met unless it's listed.`;
     },
   }),

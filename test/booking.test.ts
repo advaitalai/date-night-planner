@@ -80,6 +80,18 @@ describe("booking channel detection", () => {
 });
 
 describe("dates and numbers for the call script", () => {
+  it("writes dates, times and phone numbers the way they should be spoken", async () => {
+    const { spokenDateEn, spokenTimeEn, spokenTimeJa, spokenDateJa } = await import("../src/booking/phone");
+    expect(spokenDateEn("2026-10-21")).toBe("Wednesday, October 21st");
+    expect(spokenDateEn("2026-10-22")).toBe("Thursday, October 22nd");
+    expect(spokenDateEn("2026-10-11")).toBe("Sunday, October 11th");
+    expect(spokenTimeEn("18:30")).toBe("6:30 p.m.");
+    expect(spokenTimeEn("12:00")).toBe("12 p.m.");
+    expect(spokenTimeJa("19:00")).toBe("午後7時");
+    expect(spokenTimeJa("18:45")).toBe("午後6時45分");
+    expect(spokenDateJa("2026-10-21")).toBe("10月21日、水曜日");
+  });
+
   it("formats Japanese dates with the weekday", () => {
     expect(jaDate("2026-10-07", "18:30")).toBe("2026年10月7日（水）18:30");
   });
@@ -151,10 +163,13 @@ describe("AI phone calls", () => {
     expect(s.firstMessage).toContain("AIアシスタント");
     expect(s.systemPrompt).toContain("席のみ");
     expect(s.systemPrompt).toContain("クレジットカード");
-    expect(s.systemPrompt).toContain("10月16日（金）18:30から2名");
+    expect(s.systemPrompt).toContain("10月16日、金曜日、午後6時半から2名");
     // Booked under a name staff can write, with the 30-minute window, and no policy question.
     expect(s.firstMessage).toContain("エミリー");
-    expect(s.systemPrompt).toContain("18:30〜19:00");
+    expect(s.systemPrompt).toContain("午後6時半から午後7時の間");
+    // Spoken forms only: no 24-hour times or digit strings for the voice to mangle.
+    expect(s.systemPrompt).not.toMatch(/\b18:30\b|070-0000-0000/);
+    expect(s.systemPrompt).toContain("ゼロナナゼロ、ゼロゼロゼロゼロ、ゼロゼロゼロゼロ");
     expect(s.systemPrompt).not.toContain("キャンセルポリシー");
   });
 });
@@ -217,8 +232,12 @@ describe("time window", () => {
     const { bookingScript } = await import("../src/booking/phone");
     const s = bookingScript(place({ name: "Test" }), { date: "2026-10-16", time: "18:00", latest: "19:30", partySize: 2 }, { name: "Advait Alai", nameKana: "", phone: "070-0000-0000", email: "a@example.com" }, "en");
     expect(s.firstMessage).toContain("calling for Emily");
-    expect(s.systemPrompt).toContain("Any time from 18:00 to 19:30 on Friday 16 October");
-    expect(s.systemPrompt).toContain("It's for Friday 16 October");
+    expect(s.systemPrompt).toContain("Any time from 6 p.m. to 7:30 p.m. on Friday, October 16th");
+    expect(s.systemPrompt).toContain("It's for Friday, October 16th");
+    expect(s.systemPrompt).toContain("for two people");
+    expect(s.systemPrompt).toContain("zero seven zero, zero zero zero zero, zero zero zero zero");
+    // The 24-hour time ("18:00"), heard as "18 hundred", and digits ("21st" heard as "Tony") are gone.
+    expect(s.systemPrompt).not.toMatch(/\b18:00\b|\b19:30\b|\+81/);
   });
 });
 

@@ -76,13 +76,46 @@ export function callName(): { name: string; kana: string } {
  * notes it and says it'll call back. Cancellation policy is looked up online
  * before the call (calls.ts), so it isn't asked.
  */
+/**
+ * Dates, times and numbers written the way they should be spoken. Text-to-speech
+ * mangles digits ("21st" heard as "Tony", "18:30" as "18 30", a phone number as a
+ * jumble), so the caller gets them as words and is told to say them exactly so.
+ */
+const ORD = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
+export function spokenDateEn(date: string): string {
+  const d = DateTime.fromISO(date, { zone: ZONE }).setLocale("en");
+  return `${d.toFormat("cccc")}, ${d.toFormat("LLLL")} ${ORD(d.day)}`;
+}
+export function spokenTimeEn(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "a.m." : "p.m."}`;
+}
+const DIGITS_EN = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+const DIGITS_JA = ["ゼロ", "イチ", "ニー", "サン", "ヨン", "ゴー", "ロク", "ナナ", "ハチ", "キュー"];
+/** "090-1234-5678" → "zero nine zero, one two three four, …" (or ゼロキューゼロ、…). */
+export function spokenPhone(phone: string, lang: CallLanguage): string {
+  const groups = domesticPhone(phone).split(/[^0-9]+/).filter(Boolean);
+  return lang === "en" ? groups.map((g) => [...g].map((d) => DIGITS_EN[+d]).join(" ")).join(", ") : groups.map((g) => [...g].map((d) => DIGITS_JA[+d]).join("")).join("、");
+}
+export function spokenDateJa(date: string): string {
+  const d = DateTime.fromISO(date, { zone: ZONE });
+  return `${d.month}月${d.day}日、${"月火水木金土日"[d.weekday - 1]}曜日`;
+}
+export function spokenTimeJa(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const h12 = h > 12 ? h - 12 : h;
+  return `${h >= 12 ? "午後" : "午前"}${h12}時${m === 30 ? "半" : m ? `${m}分` : ""}`;
+}
+
 export function bookingScript(place: Place, slot: Slot, c: Contact, language: CallLanguage, task: "book" | "cancel" = "book", existing?: Reservation): CallScript {
   const { name, kana } = callName();
   const today = now();
   const latest = latestOk(slot);
   const flexible = latest !== slot.time;
   if (language === "en") {
-    const day = (d: string) => DateTime.fromISO(d, { zone: ZONE }).setLocale("en").toFormat("cccc d LLLL");
+    const day = spokenDateEn;
+    const at = spokenTimeEn;
     return {
       language,
       firstMessage: `Hello, is this ${place.name}? I'm an AI assistant calling for ${name} ${task === "book" ? "to make a reservation" : "about a reservation"}.`,
@@ -90,15 +123,16 @@ export function bookingScript(place: Place, slot: Slot, c: Contact, language: Ca
 Today is ${today.setLocale("en").toFormat("cccc d LLLL yyyy")}.
 Goal: ${
         task === "book"
-          ? `a seat reservation for ${slot.partySize} on ${day(slot.date)} at ${slot.time}.`
-          : `cancel the reservation for ${existing?.party_size} on ${existing ? day(existing.date) : ""} at ${existing?.time} under the name ${name}.`
+          ? `a seat reservation for ${DIGITS_EN[slot.partySize] ?? slot.partySize} people on ${day(slot.date)} at ${at(slot.time)}.`
+          : `cancel the reservation for ${DIGITS_EN[existing?.party_size ?? 2] ?? existing?.party_size} people on ${existing ? day(existing.date) : ""} at ${existing ? at(existing.time) : ""} under the name ${name}.`
       }
 What you may agree to:
-- ${flexible ? `Any time from ${slot.time} to ${latest} on ${day(slot.date)}. If ${slot.time} is full, ask whether anything until ${latest} is free and book it.` : `Only ${slot.time} on ${day(slot.date)}.`}
+- ${flexible ? `Any time from ${at(slot.time)} to ${at(latest)} on ${day(slot.date)}. If ${at(slot.time)} is full, ask whether anything until ${at(latest)} is free and book it.` : `Only ${at(slot.time)} on ${day(slot.date)}.`}
 - Seats only. Don't mention courses unless they bring them up; then say just seats, please. Never agree to a set course, prepayment or a credit card.
 Anything else (another date, a time outside that, a condition): thank them, note it, and say you'll check with ${name} and call back. Don't book it.
 If they seem to mean a different date (or a date that has passed), politely restate: "It's for ${day(slot.date)}."
-If they accept, confirm the date, time, number of people, the name ${name} and the phone number ${intlPhone(c.phone)}.
+If they accept, confirm the date, time, number of people, the name ${name} and the phone number: ${spokenPhone(c.phone, "en")}.
+Say dates, times and numbers exactly as written in these instructions (e.g. "${day(slot.date)}", "${at(slot.time)}"): never a different day, never 24-hour times, never digits.
 Say you are an AI assistant if asked. When done, thank them and end with "Goodbye." (only then).`,
     };
   }
@@ -115,15 +149,16 @@ Say you are an AI assistant if asked. When done, thank them and end with "Goodby
 今日は${today.year}年${jaDay(today.toISODate()!)}です。
 目的：${
       task === "book"
-        ? `${jaDay(slot.date)}${slot.time}から${slot.partySize}名、席のみの予約。`
-        : `${existing ? jaDay(existing.date) : ""}${existing?.time}、${existing?.party_size}名、${who}名義の予約のキャンセル。`
+        ? `${spokenDateJa(slot.date)}、${spokenTimeJa(slot.time)}から${slot.partySize}名、席のみの予約。`
+        : `${existing ? spokenDateJa(existing.date) : ""}、${existing ? spokenTimeJa(existing.time) : ""}、${existing?.party_size}名、${who}名義の予約のキャンセル。`
     }
 同意してよいこと：
-- ${flexible ? `${jaDay(slot.date)}の${slot.time}〜${latest}の間ならどの時間でも可。${slot.time}が満席なら${latest}までに空きがないか伺い、あれば予約する。` : `${jaDay(slot.date)}の${slot.time}のみ。`}
+- ${flexible ? `${spokenDateJa(slot.date)}の${spokenTimeJa(slot.time)}から${spokenTimeJa(latest)}の間ならどの時間でも可。${spokenTimeJa(slot.time)}が満席なら${spokenTimeJa(latest)}までに空きがないか伺い、あれば予約する。` : `${spokenDateJa(slot.date)}の${spokenTimeJa(slot.time)}のみ。`}
 - 席のみ。コースの話は相手から出た場合だけ「席のみでお願いします」と伝える。コース、事前決済、クレジットカードには同意しない。
 それ以外（別の日、範囲外の時間、条件付き）は、お礼を言ってメモし、「本人に確認して折り返しご連絡します」と伝える。予約はしない。
-相手が別の日付（過去の日付など）を言った場合は、「${jaDay(slot.date)}でございます」と丁寧に言い直す。
-予約できたら、日時・人数・お名前（${who}）・電話番号（${domesticPhone(c.phone)}）を確認する。
+相手が別の日付（過去の日付など）を言った場合は、「${spokenDateJa(slot.date)}でございます」と丁寧に言い直す。
+予約できたら、日時・人数・お名前（${who}）・電話番号（${spokenPhone(c.phone, "ja")}）を確認する。
+日付・時間・番号は、この指示に書いてある通りの言い方で話す（例：「${spokenDateJa(slot.date)}」「${spokenTimeJa(slot.time)}」）。別の日付や24時間表記、数字の羅列は使わない。
 AIかと聞かれたら正直に答える。用件が済んだら、最後に必ず「本日はありがとうございました。失礼いたします。」と言って電話を終える（途中では「失礼いたします」と言わない）。`,
   };
 }
@@ -157,7 +192,8 @@ export async function startCall(to: string, script: CallScript): Promise<VapiCal
           messages: [{ role: "system", content: script.systemPrompt }],
         },
         transcriber: { provider: "deepgram", model: "nova-2", language: script.language },
-        voice: { provider: "11labs", voiceId: process.env.VAPI_VOICE_ID || "sarah", model: "eleven_multilingual_v2" },
+        // Flash: ElevenLabs' low-latency model (speaks Japanese too); VAPI_VOICE_MODEL=eleven_multilingual_v2 for the slower, richer one.
+        voice: { provider: "11labs", voiceId: process.env.VAPI_VOICE_ID || "sarah", model: process.env.VAPI_VOICE_MODEL || "eleven_flash_v2_5" },
         // Only the closing line ends the call (a greeting like お忙しいところ失礼いたします used to).
         endCallPhrases: script.language === "ja" ? ["本日はありがとうございました"] : ["goodbye"],
       },
