@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # One-time setup on a fresh Google Cloud e2-micro VM (Ubuntu 24.04).
-#   curl -fsSL https://raw.githubusercontent.com/advaitalai/date-night-planner/main/deploy/setup-vm.sh | bash
-# or, after cloning: bash deploy/setup-vm.sh
+#   curl -fsSL https://raw.githubusercontent.com/advaitalai/date-night-planner/main/deploy/setup-vm.sh | BRANCH=main bash
+# BRANCH is the branch to run (default: the working branch, until it's merged to main).
 set -euo pipefail
+BRANCH="${BRANCH:-claude/festive-volta-e3nm17}"
 
 # e2-micro has 1 GB RAM; add 2 GB swap so the booking browser fits.
 if ! swapon --show | grep -q /swapfile; then
@@ -20,11 +21,15 @@ sudo apt-get install -y nodejs git
 cd "$HOME"
 [ -d date-night-planner ] || git clone https://github.com/advaitalai/date-night-planner.git
 cd date-night-planner
+git fetch origin "$BRANCH"
+git checkout "$BRANCH"
+git pull --ff-only origin "$BRANCH"
 npm ci --omit=dev
 # Chromium + system libraries for the booking browser (matches playwright-core's version).
 npx -y playwright@1.63.0 install --with-deps chromium
 
 [ -f .env ] || cp .env.example .env
+chmod 600 .env
 
 sudo tee /etc/systemd/system/date-night-planner.service >/dev/null <<UNIT
 [Unit]
@@ -49,7 +54,8 @@ cat <<MSG
 
 Done. Next:
   1. nano ~/date-night-planner/.env        (fill in keys; see README)
-  2. cd ~/date-night-planner && npm start  (first run only: scan the WhatsApp QR, then Ctrl+C)
+  2. cd ~/date-night-planner && npm start  (first run only: scan the QR from the bot's WhatsApp
+     Business app, Settings → Linked devices; wait for "Listening in", then Ctrl+C)
   3. sudo systemctl enable --now date-night-planner
   4. journalctl -u date-night-planner -f   (logs)
 MSG

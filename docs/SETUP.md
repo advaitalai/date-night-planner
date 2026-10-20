@@ -41,9 +41,9 @@ The bot has to run all the time, to stay connected to WhatsApp and fire the Satu
    - Everything else default. No need to allow HTTP/HTTPS, because nothing needs to be public.
 2. Once it's running, click **SSH** to open a terminal in the browser, then run:
    ```
-   curl -fsSL https://raw.githubusercontent.com/advaitalai/date-night-planner/main/deploy/setup-vm.sh | bash
+   git clone https://github.com/advaitalai/date-night-planner.git && bash date-night-planner/deploy/setup-vm.sh
    ```
-   Until the code is merged to `main`, clone the branch and run `bash deploy/setup-vm.sh` instead.
+   It runs the working branch (`claude/festive-volta-e3nm17`) until that's merged; `BRANCH=main` after.
 3. Edit the config with `nano ~/date-night-planner/.env`. Fill in the keys from steps 1–2 and your booking details:
    ```
    BOOKING_NAME=Advait
@@ -73,9 +73,9 @@ By default (`WA_SELF_MODE=1`) the bot links to **your own WhatsApp** as a linked
 2. Install **WhatsApp Business** on the same phone and register it with that number. Give it a name and photo (e.g. "Planner 🍷").
 3. Add it to the group with Emily.
 4. On your own phone: **WhatsApp → Settings → Linked devices**, log out the old bot device. Then `rm -rf data/wa-auth`.
-5. `.env`: `WA_SELF_MODE=0`, and `ADVAIT_PHONE` / `EMILY_PHONE` set (in this mode they're how the bot tells you apart).
+5. `.env`: `WA_SELF_MODE=0`, `WA_BOT_NAME=<its WhatsApp name, e.g. Concierge>`, and `ADVAIT_PHONE` / `EMILY_PHONE` set (in this mode they're how the bot tells you apart; once one of you is recognised, the other unknown sender is the other person).
 6. `npm start` and scan the QR **with the WhatsApp Business app** (its Linked devices).
-7. Bot messages now come from the bot's own name, without the 🤖 prefix. Talk to it by replying inline, "planner", or @Planner.
+7. Bot messages now come from the bot's own name, without the 🤖 prefix. Talk to it by replying inline, saying its name ("concierge") or "planner", or @mentioning it.
 
 ## 5. Saved places
 

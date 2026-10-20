@@ -29,6 +29,15 @@ describe("who the bot answers", () => {
     expect(isAddressed(msg("yes go ahead", "🤖 Shall I book *Suan Sawan*?"), "yes go ahead")).toBe(true);
     expect(isAddressed(msg("planner plan wednesday"), "planner plan wednesday")).toBe(true);
   });
+
+  it("answers to its WhatsApp name too (e.g. Concierge), as a word", async () => {
+    const { config } = await import("../src/config");
+    const { isAddressed } = await import("../src/wa/whatsapp");
+    Object.assign(config.wa, { groupJid: "group@g.us", solo: false, selfMode: false, botName: "Concierge" });
+    expect(isAddressed(msg("Concierge, plan wednesday"), "Concierge, plan wednesday")).toBe(true);
+    expect(isAddressed(msg("hey concierge what's booked?"), "hey concierge what's booked?")).toBe(true);
+    expect(isAddressed(msg("the hotel concierges were nice"), "the hotel concierges were nice")).toBe(false);
+  });
 });
 
 describe("listening to the two of them", () => {

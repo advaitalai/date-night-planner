@@ -18,6 +18,8 @@ export const config = {
      */
     selfMode: env("WA_SELF_MODE", "1") === "1",
     selfName: "Advait",
+    /** The bot's name in the group (its WhatsApp profile name). Saying it, or "planner", addresses the bot. */
+    botName: env("WA_BOT_NAME", "Planner"),
     /** Solo test: only Advait votes and every message is for the bot (any chat, e.g. a group with just him). */
     solo: env("WA_SOLO", "0") === "1",
     phones: { Advait: env("ADVAIT_PHONE"), Emily: env("EMILY_PHONE") } as Record<string, string>,

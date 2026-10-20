@@ -18,6 +18,8 @@ Last updated: 16 Oct 2026.
 
 ## Next steps
 
+**20 Oct: own number.** Advait got a povo eSIM (voice plan, for the SMS code; no 5G SA), registered WhatsApp Business on it, named the bot **Concierge** and added it to the group. Code: `WA_BOT_NAME` (saying "concierge" addresses the bot, as a whole word), the "other person" fallback now works with the bot's own number, `setup-vm.sh` checks out the working branch and locks down `.env`. Next: the cloud server (SETUP §2–4), linking Concierge there directly; stop the laptop copy first.
+
 **16 Oct, lean cut (Advait: "run a very lean product so I don't have to keep testing").** Agreed story by story (`docs/USER_STORIES.md`), then built:
 - **Decisions by judgement:** either of you can decide, in any words; the bot asks "Shall I book X?" when unsure. No vote counting, no Sunday auto-book.
 - **Addressing:** the bot answers only inline replies to its messages or "planner". Everything else it just listens to, and only speaks up to confirm a decision it heard ("Sounds like X. Shall I book it?", once per option). `WA_DEDICATED` is gone.

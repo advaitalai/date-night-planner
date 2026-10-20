@@ -28,7 +28,7 @@ import { clearStatus, saidCount, say, setSender, status } from "../notify";
  *   member of the group.
  *
  * Only messages from WA_GROUP_JID are handled. The bot answers when it's
- * replied to inline, called "planner", or (bot-number mode) @-mentioned.
+ * replied to inline, called by name ("planner" or WA_BOT_NAME), or (bot-number mode) @-mentioned.
  * Everything else is the two of them talking: the bot reads it as context and
  * speaks up only to confirm a decision on open options.
  */
@@ -86,9 +86,15 @@ function identify(jid: string, pushName?: string | null, text?: string, altJid?:
   name ??= PEOPLE.find((p) => pushName?.toLowerCase().includes(p.toLowerCase())) ?? null;
   const claim = text?.match(/\bi['’]?m (advait|emily)\b/i)?.[1];
   if (claim) name = PEOPLE.find((p) => p.toLowerCase() === claim.toLowerCase()) ?? name;
-  // Two-person group: Advait's own messages are handled before this, so anyone else is Emily.
-  if (!name && !isSelfChat() && !config.wa.solo && config.wa.selfMode) {
-    name = PEOPLE.find((p) => p !== config.wa.selfName) ?? null;
+  // Two people in the group. Self mode: Advait's own messages are handled before this, so anyone
+  // else is Emily. Own number: once one of them is known, the other unknown sender is the other one
+  // (WhatsApp sometimes hides the phone number, so matching by number alone isn't enough).
+  if (!name && !isSelfChat() && !config.wa.solo) {
+    if (config.wa.selfMode) name = PEOPLE.find((p) => p !== config.wa.selfName) ?? null;
+    else {
+      const known = PEOPLE.filter((p) => getUser(p)?.wa_jid);
+      if (known.length === 1) name = PEOPLE.find((p) => p !== known[0]) ?? null;
+    }
     if (name) console.log(`[who] treating ${jid} (${pushName ?? "no name"}) as ${name}`);
   }
   if (name && !getUser(name)?.wa_jid) upsertUser(name, { wa_jid: jid });
@@ -128,14 +134,20 @@ function quotesBot(ctx: { stanzaId?: string | null; participant?: string | null;
 }
 
 /**
- * Whether a message is for the bot: it says "planner", it's an inline reply to
+ * Whether a message is for the bot: it says its name, it's an inline reply to
  * one of the bot's messages, or (bot's own number) it @mentions the bot.
  * Anything else is the two of them talking, so a "yes" or "ok go" between them
  * can never book or call anything.
  */
+/** The message calls the bot by name: "planner", or its WhatsApp name (e.g. "concierge"). */
+function callsBot(text: string): boolean {
+  const names = ["planner", config.wa.botName].map((n) => n.trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).filter(Boolean);
+  return new RegExp(`(^|[^\\p{L}\\p{N}])(${names.join("|")})($|[^\\p{L}\\p{N}])`, "iu").test(text);
+}
+
 export function isAddressed(m: WAMessage, text: string): boolean {
   if (isSolo()) return true;
-  if (/\bplanner\b/i.test(text)) return true;
+  if (callsBot(text)) return true;
   const ctx = contentOf(m)?.extendedTextMessage?.contextInfo;
   if (ctx?.stanzaId) return quotesBot(ctx);
   // In self mode a mention of the bot is a mention of Advait, so only the keyword and replies count.
