@@ -75,3 +75,27 @@ describe("the same place saved twice", () => {
     expect(getPlace(emilys.id)!.booking_channel).toBe("not_restaurant");
   });
 });
+
+describe("change-a-booking call script", () => {
+  it("says the old and new times as words (it said 'change that to 20 dollars' for 20:00)", async () => {
+    const { config } = await import("../src/config");
+    const { modifyScript } = await import("../src/booking/phone");
+    const before = { lang: process.env.CALL_LANGUAGE, dry: config.dryRun };
+    process.env.CALL_LANGUAGE = "en";
+    config.dryRun = true;
+    const r = { id: 1, date: "2026-10-22", time: "19:00", party_size: 2 } as never;
+    const contact = { name: "Advait", nameKana: "", phone: "090-1234-5678", email: "a@example.com" };
+    const en = modifyScript(r, place({ name: "Shiva Curry Wara" }), { date: "2026-10-22", time: "20:00", partySize: 2 }, contact);
+    expect(en.firstMessage).toContain("about a reservation");
+    expect(en.systemPrompt).toContain("Thursday, October 22nd at 7 p.m., two people");
+    expect(en.systemPrompt).toContain("changed to Thursday, October 22nd at 8 p.m. for two people");
+    expect(en.systemPrompt).not.toMatch(/\b20:00\b|\b19:00\b/);
+    config.dryRun = false; // real calls are Japanese
+    const ja = modifyScript(r, place({ name: "Shiva Curry Wara" }), { date: "2026-10-22", time: "20:00", partySize: 2 }, contact);
+    expect(ja.systemPrompt).toContain("10月22日、木曜日、午後7時、2名）を、10月22日、木曜日、午後8時、2名に変更");
+    expect(ja.firstMessage).toContain("予約の件でお電話");
+    if (before.lang === undefined) delete process.env.CALL_LANGUAGE;
+    else process.env.CALL_LANGUAGE = before.lang;
+    config.dryRun = before.dry;
+  });
+});

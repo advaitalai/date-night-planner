@@ -63,7 +63,7 @@ By default (`WA_SELF_MODE=1`) the bot links to **your own WhatsApp** as a linked
 1. On the VM, run `cd ~/date-night-planner && npm start`. A QR code appears.
 2. On your phone, go to **WhatsApp → Settings → Linked devices → Link a device** and scan it.
 3. The log lists your groups. Make a group with Emily (e.g. "Date night 🍷"), restart, copy that group's id into `WA_GROUP_JID`, and restart again.
-4. Press Ctrl+C, then start it as a service with `sudo systemctl enable --now date-night-planner`. To watch the logs: `journalctl -u date-night-planner -f`.
+4. Press Ctrl+C, then start it as a service with `sudo systemctl enable --now date-night-planner`. To watch the logs: `journalctl -u date-night-planner -f`. Keep it as a service even while testing: `npm start` in an SSH window stops when the window disconnects.
 
 **How this mode works:**
 - The bot's messages appear as you, starting with 🤖.

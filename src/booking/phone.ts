@@ -6,7 +6,7 @@ import { logCall } from "../logbook";
 import type { Place, Reservation } from "../types";
 import { latestOk } from "./window";
 import { DateTime } from "luxon";
-import { jaDate, now, ZONE } from "../util/time";
+import { now, ZONE } from "../util/time";
 import type { AvailabilityResult, BookingAdapter, BookResult, ChangeResult, Slot } from "./types";
 
 /**
@@ -392,13 +392,23 @@ export function callToBook(place: Place, slot: Slot, c: Contact): Promise<CallRe
   return runCall(place, c, bookingScript(place, slot, c, config.call.language), `book ${slot.partySize} people on ${slot.date} at ${slot.time}, seats only`);
 }
 
+/** The script for moving an existing booking (exported for tests). */
+export function modifyScript(r: Reservation, place: Place, slot: Slot, c: Contact): CallScript {
+  const lang = config.call.language;
+  const script = bookingScript(place, slot, c, lang);
+  // Spoken forms here too: this call said "change that to 20 dollars" for 20:00 (round 2).
+  if (lang === "en") {
+    script.firstMessage = script.firstMessage.replace("to make a reservation", "about a reservation");
+    script.systemPrompt += `\nThis is about an existing booking: ${spokenDateEn(r.date)} at ${spokenTimeEn(r.time)}, ${DIGITS_EN[r.party_size] ?? r.party_size} people, under ${callName().name}. Ask whether it can be changed to ${spokenDateEn(slot.date)} at ${spokenTimeEn(slot.time)} for ${DIGITS_EN[slot.partySize] ?? slot.partySize} people. Say these exactly as written.`;
+  } else {
+    script.firstMessage = script.firstMessage.replace("ご予約でお電話", "予約の件でお電話");
+    script.systemPrompt += `\n既存の予約（${spokenDateJa(r.date)}、${spokenTimeJa(r.time)}、${r.party_size}名）を、${spokenDateJa(slot.date)}、${spokenTimeJa(slot.time)}、${slot.partySize}名に変更できるか伺ってください。日時はこの通りの言い方で話してください。`;
+  }
+  return script;
+}
+
 export function callToModify(r: Reservation, place: Place, slot: Slot, c: Contact): Promise<CallReport> {
-  const script = bookingScript(place, slot, c, config.call.language);
-  script.systemPrompt +=
-    config.call.language === "en"
-      ? `\nThis is about an existing booking (${r.date} ${r.time}, ${r.party_size} people). Ask whether it can be changed to ${slot.date} ${slot.time} for ${slot.partySize}.`
-      : `\n既存の予約（${jaDate(r.date, r.time)}、${r.party_size}名）を、${jaDate(slot.date, slot.time)}、${slot.partySize}名に変更できるか伺ってください。`;
-  return runCall(place, c, script, `change booking to ${slot.date} ${slot.time} for ${slot.partySize}`, "modify");
+  return runCall(place, c, modifyScript(r, place, slot, c), `change booking to ${slot.date} ${slot.time} for ${slot.partySize}`, "modify");
 }
 
 export function callToCancel(r: Reservation, place: Place, c: Contact): Promise<CallReport> {
