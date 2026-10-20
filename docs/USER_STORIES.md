@@ -7,14 +7,14 @@ Grouped by epic.
 - **Production:** how it held up in live use with Emily (Validated / Bug fixed, revalidate / Unvalidated / In progress).
 - **Gaps:** what neither a test nor live use has checked yet.
 
-Last updated: 20 Oct 2026 (own number, Concierge; Saturday trigger and skip-a-week cut). Lean cut on 16 Oct. What was cut, and why: end of this page.
+Last updated: 20 Oct 2026 (own number, Concierge; Saturday trigger and skip-a-week cut; unit tests for change, visit log, settings, status line, tell me more). Lean cut on 16 Oct. What was cut, and why: end of this page.
 
 ## 1. Chat (WhatsApp)
 
 | # | Story | Test coverage | Production | Gaps |
 |---|---|---|---|---|
 | A1 | As Advait or Emily, I want to talk to the bot in plain words or a number, so I never learn commands. | Partial: the bot's replies yes; WhatsApp itself no | Bug fixed, revalidate: messages stopped arriving for hours | WhatsApp delivery, reconnects (own number planned) |
-| A2 | As a user, I want to see what the bot is doing (status line, ⏳ then ✅). | None | Validated | |
+| A2 | As a user, I want to see what the bot is doing (status line, ⏳ then ✅). | Covered (unit) | Validated | |
 | A3 | As a user, I want options as clean cards (area, travel, why, map link). | Covered | Validated | |
 | A4 | As a user, I want a short hello with ideas of what to say. | None | Validated | |
 | A5 | As a couple, we want either of us to decide in our own words, and the bot to check when it isn't sure. | Covered (P0-7, with the AI, 16 Oct) | Unvalidated (changed 16 Oct) | |
@@ -33,7 +33,7 @@ Last updated: 20 Oct 2026 (own number, Concierge; Saturday trigger and skip-a-we
 | C6 | As a couple, we want places beyond our lists, linked to ones we saved. | Covered | Validated | "similar to X" requests |
 | C7 | As a user, I want each card to say what it is and why it suits us. | Covered | Validated | |
 | C8 | As a couple, we want dinner places only, open that day (no dessert bars, nothing closed). | Covered | Bug fixed, revalidate: a temporarily closed place was offered | |
-| C9 | As a user, I want "tell me more" and review summaries for an option. | None | Validated | |
+| C9 | As a user, I want "tell me more" and review summaries for an option. | Covered (unit) | Validated | |
 | C10 | As a user, I want "we went to X" to stop it being suggested. | Covered | Unvalidated | |
 
 ## 3. Booking
@@ -61,17 +61,17 @@ Last updated: 20 Oct 2026 (own number, Concierge; Saturday trigger and skip-a-we
 
 | # | Story | Test coverage | Production | Gaps |
 |---|---|---|---|---|
-| F1 | As a user, I want to change a booking's time, day or party size (one call, not cancel + rebook). | None | Unvalidated | Everything (test to add) |
+| F1 | As a user, I want to change a booking's time, day or party size (one call, not cancel + rebook). | Covered (unit: TableCheck change, full new time, phone asks then calls) | Unvalidated | |
 | F2 | As a user, I want to cancel from the chat (by call, or "I cancelled it myself"). | Covered (by call, P0-5) | Validated by phone (bug fixed: the first "Cancel!" was swallowed) | TableCheck cancel |
 | F3 | As a couple, we want one "still on?" a day before free cancellation ends, with the exact deadline. The deadline comes from TableCheck, the call, or the website, else 24h assumed. | Covered (scheduled once) | Validated: the 24h one fired | |
 | F4 | As a couple, we want a reminder on the day. | Covered (sent once) | Bug fixed, revalidate: sent twice | |
-| F5 | As a couple, we want the visit logged after the date, for rotation. | None | Unvalidated | Everything |
+| F5 | As a couple, we want the visit logged after the date, for rotation. | Covered (unit: logged after the date; not for cancelled bookings) | Unvalidated | |
 
 ## 6. Weekly rhythm and settings
 
 | # | Story | Test coverage | Production | Gaps |
 |---|---|---|---|---|
-| G2 | As a user, I want to change our usual day, time, budget or travel limit in chat. | None | Unvalidated | Everything |
+| G2 | As a user, I want to change our usual day, time, budget or travel limit in chat. | Covered (unit) | Unvalidated | |
 
 ## 7. Saved places
 
