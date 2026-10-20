@@ -385,13 +385,20 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
 
   // 5. Next Step → TableCheck validates and shows the confirmation page.
   await page.locator("input[type=submit][value='Next Step']").first().click();
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(2000);
-  // The button reads "Confirm" or "CONFIRM" depending on the venue's layout (SMOKEHOUSE: "CONFIRM").
+  // TableCheck submits by script ("PLEASE WAIT…") and can take several seconds. Checking too early
+  // read hidden placeholder text as "time unavailable" and reported a free table as full (20 Oct).
+  // Wait for the review page, or stop early once the form is back with a visible error.
   const confirmBtn = page.getByRole("button", { name: /^\s*confirm\s*$/i }).first();
-  const reviewing = (await confirmBtn.isVisible().catch(() => false)) || isReviewPage(await page.locator("body").innerText().catch(() => ""));
+  const visibleErrors = async () => (await page.locator(".has-error, .alert-danger, .error, .help-block").filter({ visible: true }).allInnerTexts().catch(() => [])).join(" / ");
+  let reviewing = false;
+  for (let i = 0; i < 25 && !reviewing; i++) {
+    await page.waitForTimeout(1000);
+    reviewing = (await confirmBtn.isVisible().catch(() => false)) || isReviewPage(await page.locator("body").innerText().catch(() => ""));
+    const submitting = await page.getByText(/please wait/i).first().isVisible().catch(() => false);
+    if (!reviewing && !submitting && i >= 3 && /unavailable|required|invalid|is not valid|must be|満席/i.test(await visibleErrors())) break;
+  }
   if (!reviewing) {
-    const errors = (await page.locator(".has-error, .alert-danger, .error, .help-block").allInnerTexts().catch(() => [])).join(" / ");
+    const errors = await visibleErrors();
     // TableCheck adds "selected time is unavailable" to other form errors too (a missing answer, an
     // invalid phone), so it only means full when nothing else is wrong.
     const full = /time is unavailable|fully booked|満席/i.test(errors) && !/required|invalid|is not valid|must be/i.test(errors);
