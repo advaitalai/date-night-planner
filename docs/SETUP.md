@@ -42,9 +42,9 @@ The bot has to run all the time, to stay connected to WhatsApp and send the remi
 2. Once it's running, click **SSH** to open a terminal in the browser, then run:
    ```
    sudo apt-get update && sudo apt-get install -y git
-   git clone https://github.com/advaitalai/date-night-planner.git && bash date-night-planner/deploy/setup-vm.sh
+   git clone -b claude/festive-volta-e3nm17 https://github.com/advaitalai/date-night-planner.git && bash date-night-planner/deploy/setup-vm.sh
    ```
-   It runs the working branch (`claude/festive-volta-e3nm17`) until that's merged; `BRANCH=main` after.
+   `main` only has the README until the working branch is merged, so clone the branch (`-b`); after the merge, plain `git clone` and `BRANCH=main`.
 3. Edit the config with `nano ~/date-night-planner/.env`. Fill in the keys from steps 1–2 and your booking details:
    ```
    BOOKING_NAME=Advait
