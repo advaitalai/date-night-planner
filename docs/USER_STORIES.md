@@ -77,7 +77,7 @@ Last updated: 20 Oct 2026 (own number, Concierge; Saturday trigger and skip-a-we
 
 | # | Story | Test coverage | Production | Gaps |
 |---|---|---|---|---|
-| B1 | As a couple, we want our Google Maps saved places used (Takeout CSV import, by hand a couple of times a year). | Covered | Validated: Advait's list | Emily's list |
+| B1 | As a couple, we want our Google Maps saved places used (Takeout CSV import, by hand a couple of times a year; only dinner places within reach are kept, cheaply). | Covered | Validated: Advait's list | Emily's list |
 
 ## 8. Logs and debugging
 
