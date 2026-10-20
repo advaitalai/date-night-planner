@@ -131,14 +131,15 @@ On the Google Cloud VM the bot also sends its log lines to **Cloud Logging** in 
 
 1. **Let the VM write logs.** Cloud console → **IAM & Admin → IAM** → find *Compute Engine default service account* → edit → add the role **Logs Writer** (skip if it already has *Editor*).
 2. **Make the read-only key.** **IAM & Admin → Service accounts → Create service account**: name `log-reader`, role **Logs Viewer** only, Done. Open it → **Keys → Add key → Create new key → JSON**. A file downloads.
-3. **Give it to Claude's environment, not the chat.** In the Claude Code cloud session: the environment menu in the session's title bar → **Edit** → add an environment variable `GCP_LOG_READER_KEY` whose value is the whole JSON file's contents. Start a new session to pick it up. Then delete the downloaded file.
+3. **Give it to Claude's environment, not the chat.** The environment variables box takes one line per variable, so turn the key into one line first (Mac): `base64 -i ~/Downloads/<key>.json | tr -d '\n' | pbcopy`. Then in the Claude Code cloud session: the environment menu in the session's title bar → **Edit** → **Environment variables** (not the setup script) → add `GCP_LOG_READER_KEY=<paste>`. Start a new session to pick it up. Then delete the downloaded file.
 4. **On the server:** `git pull && npm install && sudo systemctl restart date-night-planner`. The log shows `Sending logs to Cloud Logging (project …)`.
 
 To revoke: delete the key (or the `log-reader` account) in the console.
 
 How Claude reads them (for future sessions):
 ```
-echo "$GCP_LOG_READER_KEY" > /tmp/log-reader.json
+# The key is base64 (one line) or raw JSON.
+(echo "$GCP_LOG_READER_KEY" | base64 -d 2>/dev/null || echo "$GCP_LOG_READER_KEY") > /tmp/log-reader.json
 gcloud auth activate-service-account --key-file=/tmp/log-reader.json
 gcloud logging read 'logName="projects/<project>/logs/date-night-planner" AND timestamp>="2026-10-20T12:00:00Z"' --project <project> --order=asc --format='value(timestamp,textPayload)' --limit 2000
 ```
