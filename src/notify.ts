@@ -42,7 +42,7 @@ export async function say(text: string): Promise<string | undefined> {
   said++;
   text = tidy(text);
   logMessage("planner", text);
-  console.log(`[out] ${text.slice(0, 500)}`);
+  console.log(`[out] ${text}`);
   return sender.text(text);
 }
 

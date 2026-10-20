@@ -26,6 +26,10 @@ export interface BookResult {
   manageUrl?: string;
   gmailThreadId?: string;
   policyText?: string;
+  /** Where the cancellation policy was looked for, when none was found (e.g. "the call, their website"). */
+  policyChecked?: string;
+  /** Phone bookings: a one-line summary of what the restaurant said. */
+  said?: string;
   /** The requested time is definitely full (don't try other channels). */
   full?: boolean;
   /** Other times the venue offered (HH:mm). */

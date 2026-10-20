@@ -59,6 +59,21 @@ describe("phone calls need a go-ahead", () => {
     const out = await bookPlace(p, slot, { callApproved: true });
     expect(await callCount()).toBe(1);
     expect(out.message).toContain("Booked Warayaki");
+    // What they said, and where the policy was looked for (not "policy not stated").
+    expect(out.message).toContain("_They said: Fake call (CALL_FAKE): booked._");
+    expect(out.message).toContain("(no policy on the call; assuming 24h)");
+  });
+
+  it("gives the agent the last call, so \"what did they say?\" gets the real answer", async () => {
+    process.env.CALL_FAKE = "booked";
+    const { bookPlace } = await import("../src/booking/service");
+    const { lastCallNote } = await import("../src/logbook");
+    expect(lastCallNote()).toBeNull();
+    await bookPlace(await savedPhonePlace(), slot, { callApproved: true });
+    const note = lastCallNote()!;
+    expect(note).toContain("book call to Warayaki");
+    expect(note).toContain("booked. Fake call (CALL_FAKE): booked.");
+    expect(note).toContain("Transcript (start): [fake call:");
   });
 
   it("doesn't call a closed restaurant: says when they open and waits to be told", async () => {

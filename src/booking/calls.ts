@@ -122,6 +122,8 @@ export async function runCall(call: PendingCall): Promise<{ ok: boolean; message
       const out = await recordBooking(place, slot, "phone", {
         status: "confirmed",
         policyText: report.outcome.cancellationPolicy ?? onlinePolicy ?? undefined,
+        policyChecked: ["the call", place.website && "their website", place.tabelog_url && "Tabelog"].filter(Boolean).join(", "),
+        said: report.outcome.summaryEn,
         detail: `${report.outcome.summaryEn}\n\nTranscript:\n${report.transcript.slice(0, 1500)}`,
       }, call.planId);
       return { ok: true, message: out.message };

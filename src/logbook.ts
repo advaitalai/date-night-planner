@@ -62,6 +62,18 @@ export function logAttempt(a: AttemptLog): void {
   }
 }
 
+/**
+ * The most recent call in the last `hours`, for the agent's state, so "what did
+ * they say?" gets the real answer (a summary plus the start of the transcript).
+ */
+export function lastCallNote(hours = 12): string | null {
+  const c = db()
+    .prepare("SELECT at, place_name, kind, outcome, summary, transcript, dry_run FROM call_log WHERE at >= ? ORDER BY id DESC LIMIT 1")
+    .get(new Date(Date.now() - hours * 3600_000).toISOString().replace("T", " ").slice(0, 19)) as Record<string, string | number | null> | undefined;
+  if (!c) return null;
+  return `${c.kind} call to ${c.place_name} at ${c.at} UTC${c.dry_run ? " (dry run: Advait played the restaurant)" : ""}: ${c.outcome}. ${c.summary}${c.transcript ? `\nTranscript (start): ${String(c.transcript).slice(0, 1500)}` : ""}`;
+}
+
 /** Also write everything the app prints to data/logs/<day>.log (kept across restarts). */
 export function logToFile(): void {
   const dir = path.join(config.dataDir, "logs");

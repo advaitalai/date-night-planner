@@ -6,6 +6,7 @@ import { anthropic, extract, FALLBACK } from "../llm";
 import { fmtDate, now } from "../util/time";
 import { openProposal, tools } from "./tools";
 import { describePendingCall } from "../booking/calls";
+import { lastCallNote } from "../logbook";
 import { setCurrentMessage } from "./turn";
 
 const SYSTEM = `You are "${config.wa.botName}", the date-night agent in a WhatsApp group with Advait and Emily, a couple living in Tokyo (home near Gotanda/Fudomae, Advait works near Meguro station).
@@ -20,6 +21,7 @@ How to work:
 - Deciding: when either of them decides on one of the open options, call book_option. Either of them can decide alone, in any words: "2", "let's do the Thai one", "book Suan Sawan", or a yes to your "Shall I book X?". An opinion or a question is not a decision ("2 looks nice", "what about 1?"). If you're not sure, ask in one line: "Shall I book *X*?". If they want something different ("none of these, closer to work"), call recommend_options again with that wording. Never book a different place than the one they chose without asking.
 - Phone calls: deciding on a phone-only place is the go-ahead, so book_option calls straight away (or says when they open). When the bot is waiting for a go-ahead (Pending call in <state>), read their answer like a person would: "ok call then", "go for it", "sure, try 19:00" → place_call (with the time if they gave one); "no", "don't", "leave it" → decline_call. If it's unclear, ask. For book_place, cancel_reservation and modify_reservation, pass call_go_ahead only when the message clearly says to go ahead and contact the restaurant ("cancel it, call them").
 - If they say they already went somewhere, call log_visit.
+- "What did they say?" about a call: answer from "Last call" in <state> (summary and transcript). Never say you can't see a call you have there. For a cancellation policy, the booking's line says where it was looked for (the call, their website, Tabelog); say that, not that you can't see their website.
 - Time windows: by default the bot may take a table up to 30 min after the asked time without checking. If they give a range ("6 to 7:30 all good"), include it in the request / latest_time; "exactly 7" means no window.
 - Book a place that isn't an open option (book_place) only when someone explicitly says to book it. Cancel only when asked (or confirm with them first if it's ambiguous).
 - Requests can be loose ("feeling italian, not too far from work", "somewhere like Monna Lisa", "Thursday instead"). Translate them into the right tool call rather than asking questions you can answer with a sensible default.
@@ -47,6 +49,7 @@ Upcoming reservations:
 ${res || "none"}
 ${planText}
 Pending call: ${describePendingCall() ?? "none"}
+Last call (12h): ${lastCallNote() ?? "none"}
 </state>`;
 }
 

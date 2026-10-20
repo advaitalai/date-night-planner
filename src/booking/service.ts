@@ -70,7 +70,7 @@ const PolicySchema = z.object({
 });
 
 /** Turn policy text into a free-cancel deadline and (re)schedule the reminders. */
-export async function applyPolicy(reservationId: number, policyText: string | null): Promise<Reservation> {
+export async function applyPolicy(reservationId: number, policyText: string | null, checked?: string): Promise<Reservation> {
   const r = getReservation(reservationId)!;
   let rule: z.infer<typeof PolicySchema> | null = null;
   if (policyText?.trim()) {
@@ -89,7 +89,7 @@ export async function applyPolicy(reservationId: number, policyText: string | nu
     policy_text: policyText ?? r.policy_text,
     free_cancel_deadline: deadline.toISO(),
     cancel_fee: rule?.fee ?? r.cancel_fee,
-    notes: assumed ? "cancellation policy not stated; assuming 24h" : r.notes,
+    notes: assumed ? `cancellation policy not found${checked ? ` (checked ${checked})` : ""}; assuming 24h` : r.notes,
   });
   scheduleReservationJobs(updated);
   return updated;
@@ -232,7 +232,7 @@ export async function recordBooking(place: Place, slot: Slot, channel: Route["ch
     cancel_fee: null,
     notes: result.detail?.slice(0, 2000) ?? null,
   });
-  const withPolicy = await applyPolicy(reservation.id, result.policyText ?? null);
+  const withPolicy = await applyPolicy(reservation.id, result.policyText ?? null, result.policyChecked);
   if (planId) updatePlan(planId, { status: result.status === "confirmed" ? "booked" : "booking", chosen_place_id: place.id });
 
   const when = `${fmtDate(slot.date)}, ${slot.time}, ${slot.partySize} people${moved}`;
@@ -240,7 +240,7 @@ export async function recordBooking(place: Place, slot: Slot, channel: Route["ch
   const mock = config.dryRun && channel === "phone" ? `\n\n_Dry run: the call went to ${testCallee().label}, not the restaurant._` : "";
   const message =
     result.status === "confirmed"
-      ? [`✅ *Booked ${place.name}*`, `${when}, ${how}${result.externalRef ? `\nRef ${result.externalRef}` : ""}`, policyLine(withPolicy)].filter(Boolean).join("\n\n") + mock
+      ? [`✅ *Booked ${place.name}*`, `${when}, ${how}${result.externalRef ? `\nRef ${result.externalRef}` : ""}`, result.said ? `_They said: ${result.said}_` : "", policyLine(withPolicy)].filter(Boolean).join("\n\n") + mock
       : [`📨 *Reservation requested at ${place.name}*`, `${when}, ${how}`, "I'll post here when they confirm."].join("\n\n");
   return { ok: true, reservation: withPolicy, message };
 }
@@ -248,7 +248,8 @@ export async function recordBooking(place: Place, slot: Slot, channel: Route["ch
 export function policyLine(r: Reservation): string {
   if (!r.free_cancel_deadline) return "";
   const d = DateTime.fromISO(r.free_cancel_deadline, { zone: ZONE }).toFormat("ccc d LLL HH:mm");
-  const assumed = r.notes?.includes("assuming 24h") ? " (policy not stated, assuming 24h)" : "";
+  const checked = r.notes?.match(/policy not found \(checked ([^)]+)\)/)?.[1];
+  const assumed = r.notes?.includes("assuming 24h") ? (checked ? ` (no policy on ${checked.replace(/, ([^,]+)$/, " or $1")}; assuming 24h)` : " (policy not stated, assuming 24h)") : "";
   return `Free cancellation until ${d}${assumed}${r.cancel_fee ? `; after that: ${r.cancel_fee}` : ""}.`;
 }
 
