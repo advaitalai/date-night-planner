@@ -213,3 +213,18 @@ describe("incidents from the 12–15 Oct retro", () => {
     expect(applyFilters([c], EMPTY_CONSTRAINTS, { maxTravelMin: 25, revisitCooldownWeeks: 8, budgetPerPersonMaxJpy: 15000 }).rejected[0].reason).toBe("closed");
   });
 });
+
+describe("call language", () => {
+  it("speaks English only in dry runs; real restaurant calls are always Japanese", async () => {
+    const { config } = await import("../src/config");
+    const before = { lang: process.env.CALL_LANGUAGE, dry: config.dryRun };
+    process.env.CALL_LANGUAGE = "en";
+    config.dryRun = true;
+    expect(config.call.language).toBe("en");
+    config.dryRun = false;
+    expect(config.call.language).toBe("ja");
+    process.env.CALL_LANGUAGE = before.lang ?? "";
+    if (before.lang === undefined) delete process.env.CALL_LANGUAGE;
+    config.dryRun = before.dry;
+  });
+});

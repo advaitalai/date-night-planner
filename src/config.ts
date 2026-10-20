@@ -45,8 +45,13 @@ export const config = {
   },
 
   call: {
-    /** Language the AI caller speaks: "ja" for restaurants, "en" for testing. */
-    language: (env("CALL_LANGUAGE", "ja") === "en" ? "en" : "ja") as "ja" | "en",
+    /**
+     * Language the AI caller speaks. CALL_LANGUAGE=en is for dry runs (the call comes to
+     * you); real calls to restaurants are always Japanese, whatever it says.
+     */
+    get language(): "ja" | "en" {
+      return env("CALL_LANGUAGE", "ja") === "en" && config.dryRun ? "en" : "ja";
+    },
     /**
      * Dry run only: who plays the restaurant. "Emily" / "Advait" (their *_PHONE),
      * or a number. Empty = BOOKING_PHONE (you).

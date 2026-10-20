@@ -17,6 +17,7 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 - Calls scheduled for later ("call at 11", "call in 30") and rescheduling them.
 - Vote counting ("you both picked") and the Sunday auto-book.
 - (20 Oct) The Saturday trigger, the Sunday reminder and "skip a week".
+- (20 Oct) Saving a Google Maps link from the chat: save it in Google Maps; it comes in with the next CSV import.
 - Email booking and the Gmail reply watcher; Tabelog booking.
 - Automatic Takeout pickup from Drive; the Google onboarding web page.
 - WhatsApp polls.
@@ -81,7 +82,7 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 ## Done (MVP)
 
 - WhatsApp group bot with an agent loop. It answers inline replies and "planner", listens to the rest, and either of you can decide (16 Oct).
-- Saved lists: Takeout CSV import and Maps links pasted in chat.
+- Saved lists: Takeout CSV import.
 - Recommender:
   - parses free-text requests;
   - starts from home or the office;

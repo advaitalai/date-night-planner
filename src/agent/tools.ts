@@ -1,14 +1,13 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { bookAndAnnounce, cancelReservation, checkAvailability, ensureDetected, howBooked, modifyReservation, policyLine } from "../booking/service";
-import { config, PEOPLE } from "../config";
+import { config } from "../config";
 import { db } from "../db";
 import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, getReservation, upcomingReservations, updatePrefs, updateReservation, upsertPlace } from "../db/repo";
 import { cancelJobs } from "../jobs/scheduler";
 import { say, status } from "../notify";
 import { clearPendingCall, pendingCall, runCall } from "../booking/calls";
-import { cidFromMapsUri, placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
-import { cidFromSavedUrl } from "../places/takeout";
+import { placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
 import { bookOption } from "../plans/decide";
 import { proposePlan } from "../recommender";
 import { enrich, savedPool, toCandidate } from "../recommender/candidates";
@@ -323,21 +322,6 @@ const rawTools = [
     },
   }),
 
-  betaZodTool({
-    name: "add_saved_place",
-    description: "Add a place to someone's saved list from a Google Maps link or a name.",
-    inputSchema: z.object({ maps_url_or_name: z.string(), saved_by: z.enum(PEOPLE) }),
-    run: async ({ maps_url_or_name, saved_by }) => {
-      const isUrl = /^https?:\/\//.test(maps_url_or_name);
-      const cid = isUrl ? (cidFromSavedUrl(maps_url_or_name) ?? cidFromMapsUri(maps_url_or_name)) : null;
-      const name = isUrl ? decodeURIComponent(maps_url_or_name.match(/\/place\/([^/]+)/)?.[1] ?? "").replace(/\+/g, " ") : maps_url_or_name;
-      if (!name && !cid) return "Couldn't read that link — paste the place name instead.";
-      const place = upsertPlace({ name: name || "(from link)", cid, maps_url: isUrl ? maps_url_or_name : null, source: "chat", saved_by: [saved_by] });
-      const e = await enrich(place);
-      return `Added: ${describe(e)}`;
-    },
-  }),
-
 ];
 
 /** Short "what I'm doing" phrases for the live status line. */
@@ -353,7 +337,6 @@ const STATUS: Record<string, string> = {
   modify_reservation: "Changing the booking…",
   cancel_reservation: "Cancelling the booking…",
   update_preferences: "Updating your preferences…",
-  add_saved_place: "Adding the place…",
   place_call: "Getting ready to call…",
   log_visit: "Noting the visit…",
 };

@@ -25,7 +25,7 @@ Scheduler (SQLite jobs) ──┘                                              �
 | Area | Where | Notes |
 |---|---|---|
 | Chat | `src/wa/whatsapp.ts` | A linked device on your own WhatsApp (messages start with 🤖) or on a separate number. Answers inline replies, its name, and messages it judges are meant for it; listens to the rest. |
-| Agent | `src/agent/` | A Claude tool loop with tools to recommend, book, check, change, cancel, set preferences and add places. It judges decisions and go-aheads from the conversation. |
+| Agent | `src/agent/` | A Claude tool loop with tools to recommend, book, check, change, cancel, and set preferences. It judges decisions and go-aheads from the conversation. |
 | Recommender | `src/recommender/` | Turns a free-text request into constraints, then: saved-list and discovered candidates → filters → scoring (cuisine rotation, both-saved boost, similarity) → 3 varied options → pitches. |
 | Booking | `src/booking/` | TableCheck availability from its public diner API, bookings as a guest in a headless browser. Phone-only places get an AI call (`calls.ts` decides when, `phone.ts` makes it). |
 | Policies | `src/booking/service.ts` | The cancellation policy is read with an LLM and turned into a free-cancel deadline. One "still on?" a day before it. |

@@ -121,6 +121,7 @@ Last updated: 20 Oct 2026 (own number, Concierge; Saturday trigger and skip-a-we
 | F3 part: the 48h "still on?" | One reminder is enough. |
 | F6: auto-cancel | An unasked action on a real booking. |
 | B1 part: Google Drive pickup, onboarding page | A CSV import twice a year is fine. |
+| B1 part: saving a Maps link from the chat (cut 20 Oct) | Bloat: save it in Google Maps; it arrives with the next import. |
 | I3: "recap the last call" in chat | The summary is posted after every call. |
 | I5: private alert | Not built; not now. |
 | Polls | Unused. |

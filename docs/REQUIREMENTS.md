@@ -51,7 +51,7 @@ Kept on purpose: changing a booking (one call to the restaurant beats cancel + r
 ### 4.2 Saved places
 - R5. It uses both people's saved Google Maps places. There is no API for those lists, so they come in through Google Takeout:
   - a CSV import from Takeout (`npm run import-csv`; `fixtures/Tokyo_food.csv` is Advait's list), redone by hand a couple of times a year. (The automatic Drive pickup was cut on 16 Oct.)
-- R6. A Google Maps link pasted into the chat gets added to the sender's saved places.
+- R6. ~~A Google Maps link pasted into the chat gets added to the sender's saved places.~~ Cut 20 Oct (bloat): save places in Google Maps; they arrive with the next CSV import.
 - R7. A place saved by both people ranks higher.
 
 ### 4.3 Recommendations

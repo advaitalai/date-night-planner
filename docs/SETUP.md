@@ -85,7 +85,6 @@ By default (`WA_SELF_MODE=1`) the bot links to **your own WhatsApp** as a linked
 Import each person's saved Google Maps places from a Takeout export (a couple of times a year):
 1. **takeout.google.com** → deselect all → tick **Saved** → export once, download the zip.
 2. Unzip it and run `npm run import-csv -- "<file>.csv" Advait` (or `Emily`), once per list.
-3. A Google Maps link pasted into the chat is added straight away.
 
 ## 6. Booking-site logins
 
