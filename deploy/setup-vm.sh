@@ -15,8 +15,11 @@ if ! swapon --show | grep -q /swapfile; then
 fi
 
 sudo timedatectl set-timezone Asia/Tokyo
+# The minimal Ubuntu image has no curl or git.
+sudo apt-get update
+sudo apt-get install -y curl ca-certificates git
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs git
+sudo apt-get install -y nodejs
 
 cd "$HOME"
 [ -d date-night-planner ] || git clone https://github.com/advaitalai/date-night-planner.git
