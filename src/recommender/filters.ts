@@ -54,7 +54,7 @@ export function hasFeature(p: Place, f: Feature): boolean | null {
   return attr === false ? false : null;
 }
 
-const NOT_DINNER_TYPES = new Set(["dessert_shop", "dessert_restaurant", "cake_shop", "pastry_shop", "cafe", "coffee_shop", "bakery", "confectionery", "ice_cream_shop", "tea_house", "donut_shop", "candy_store", "chocolate_shop", "juice_shop"]);
+export const NOT_DINNER_TYPES = new Set(["dessert_shop", "dessert_restaurant", "cake_shop", "pastry_shop", "cafe", "coffee_shop", "bakery", "confectionery", "ice_cream_shop", "tea_house", "donut_shop", "candy_store", "chocolate_shop", "juice_shop"]);
 const NOT_DINNER_WORDS = /dessert|sweets|patisserie|pâtisserie|parfait|cafe|café|coffee|bakery|kakigori|甘味|スイーツ/i;
 
 /** Dessert bars, cafés and bakeries aren't dinner, unless that's what they asked for. */

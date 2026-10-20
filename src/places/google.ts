@@ -127,6 +127,31 @@ export async function nearbyRestaurants(near: LatLng, radiusM: number, types = [
   return data.places ?? [];
 }
 
+/**
+ * Cheap lookups for importing big saved lists: a text search for ids only
+ * (no charge) and a few basic details per place (within Google's free monthly
+ * allowance). The full details (hours, phone, live music…) are fetched later,
+ * only for places that come up as candidates.
+ */
+const LITE_FIELDS = ["id", "displayName", "formattedAddress", "location", "types", "primaryType", "googleMapsUri", "businessStatus"];
+
+export async function searchIds(query: string, near: LatLng, radiusM = 30000, max = 3): Promise<string[]> {
+  const data = await placesPost(
+    "places:searchText",
+    { textQuery: query, languageCode: "en", regionCode: "JP", pageSize: max, locationBias: { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: radiusM } } },
+    ["id"],
+  );
+  return (data.places ?? []).map((p) => p.id);
+}
+
+export async function placeLite(placeId: string): Promise<GPlace> {
+  const res = await fetch(`${PLACES}/places/${placeId}?languageCode=en`, {
+    headers: { "X-Goog-Api-Key": requireKey(), "X-Goog-FieldMask": LITE_FIELDS.join(",") },
+  });
+  if (!res.ok) throw new Error(`Place details (lite) ${res.status}: ${await res.text()}`);
+  return (await res.json()) as GPlace;
+}
+
 export async function placeDetails(placeId: string): Promise<GPlace> {
   const res = await fetch(`${PLACES}/places/${placeId}?languageCode=en`, {
     headers: { "X-Goog-Api-Key": requireKey(), "X-Goog-FieldMask": DETAIL_FIELDS.join(",") },

@@ -84,7 +84,7 @@ By default (`WA_SELF_MODE=1`) the bot links to **your own WhatsApp** as a linked
 
 Import each person's saved Google Maps places from a Takeout export (a couple of times a year):
 1. **takeout.google.com** → deselect all → tick **Saved** → export once, download the zip.
-2. Unzip it and run `npm run import-csv -- "<file>.csv" Advait` (or `Emily`), once per list.
+2. Unzip it, upload the CSV to the server, stop the bot, and run `npm run import-csv -- "<file>.csv" Emily "<list name>"` (or `Advait`), once per list. Each new place gets two cheap Google lookups (within the free monthly allowance); only **dinner places within reach of home or work** are kept, and it prints what was added and skipped. Full details (hours, phone, live music) are fetched later, only for places that come up near a date. Never commit the CSV (the repo is public).
 
 ## 6. Booking-site logins
 

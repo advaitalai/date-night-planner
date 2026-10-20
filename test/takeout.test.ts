@@ -31,3 +31,45 @@ describe("Takeout saved-list CSV", () => {
     expect(places.find((p) => p.name === "Ghungroo")!.saved_by.sort()).toEqual(["Advait", "Emily"]);
   });
 });
+
+describe("cheap import of a big saved list", () => {
+  beforeEach(freshDb);
+
+  it("keeps dinner places within reach, skips cafés, far-away and closed places, and merges known ones without a lookup", async () => {
+    const { vi } = await import("vitest");
+    const { config } = await import("../src/config");
+    const before = config.google.mapsKey;
+    config.google.mapsKey = "test";
+    const url = (name: string, cid: string) => `https://www.google.com/maps/place/${name}/data=!4m2!3m1!1s0x601:${cid}`;
+    await importSavedList(`Title,Note,URL\nGhungroo,,${url("Ghungroo", "0x10")}\n`, "Want to go", "Advait", false);
+    const google: Record<string, object> = {
+      "Izakaya Near": { primaryType: "izakaya_restaurant", types: ["izakaya_restaurant", "restaurant"], location: { latitude: 35.626, longitude: 139.722 }, googleMapsUri: "https://maps.google.com/?cid=17" },
+      "Coffee Near": { primaryType: "coffee_shop", types: ["coffee_shop", "cafe"], location: { latitude: 35.626, longitude: 139.722 }, googleMapsUri: "https://maps.google.com/?cid=18" },
+      "Kyoto Kaiseki": { primaryType: "japanese_restaurant", types: ["restaurant"], location: { latitude: 35.011, longitude: 135.768 }, googleMapsUri: "https://maps.google.com/?cid=19" },
+      "Gone Bistro": { primaryType: "french_restaurant", types: ["restaurant"], businessStatus: "CLOSED_PERMANENTLY", location: { latitude: 35.626, longitude: 139.722 }, googleMapsUri: "https://maps.google.com/?cid=20" },
+    };
+    const calls: string[] = [];
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const u = String(input);
+      calls.push(u);
+      if (u.includes("searchText")) {
+        const q = JSON.parse(String(init?.body)).textQuery as string;
+        expect((init?.headers as Record<string, string>)["X-Goog-FieldMask"]).toBe("places.id"); // ids only: no charge
+        return new Response(JSON.stringify({ places: google[q] ? [{ id: q }] : [] }));
+      }
+      const id = decodeURIComponent(u.split("/places/")[1].split("?")[0]);
+      return new Response(JSON.stringify({ id, displayName: { text: id }, ...google[id] }));
+    });
+    const csv = ["Title,Note,URL", `Ghungroo,,${url("Ghungroo", "0x10")}`, `Izakaya Near,,${url("a", "0x11")}`, `Coffee Near,,${url("b", "0x12")}`, `Kyoto Kaiseki,,${url("c", "0x13")}`, `Gone Bistro,,${url("d", "0x14")}`, `Nowhere,,${url("e", "0x15")}`].join("\n");
+    const r = await importSavedList(csv, "Japan", "Emily", true);
+    fetchSpy.mockRestore();
+    config.google.mapsKey = before;
+    expect(r).toMatchObject({ rows: 6, imported: 1, alreadyKnown: 1, unresolved: ["Nowhere"], skipped: { notDinner: ["Coffee Near"], tooFar: ["Kyoto Kaiseki"], closed: ["Gone Bistro"] } });
+    expect(calls.some((c) => c.includes("Ghungroo"))).toBe(false); // known place: no lookup
+    const places = listPlaces();
+    expect(places.map((p) => p.name).sort()).toEqual(["Ghungroo", "Izakaya Near"]);
+    expect(places.find((p) => p.name === "Ghungroo")!.saved_by.sort()).toEqual(["Advait", "Emily"]);
+    const izakaya = places.find((p) => p.name === "Izakaya Near")!;
+    expect(izakaya).toMatchObject({ lat: 35.626, saved_by: ["Emily"], google_place_id: null }); // full details later, only if it's near a date
+  });
+});

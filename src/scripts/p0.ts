@@ -134,6 +134,9 @@ async function ensureFixtures(): Promise<void> {
   if (listPlaces().length) return;
   console.log("Importing fixtures/Tokyo_food.csv…");
   await importSavedList(fs.readFileSync("fixtures/Tokyo_food.csv", "utf8"), "Tokyo food", "Advait", Boolean(config.google.mapsKey));
+  // The import keeps only basics; fetch full details (phone numbers etc.) so the fixtures below find phone-only places.
+  const { enrich } = await import("../recommender/candidates");
+  for (const p of listPlaces()) await enrich(p, { lite: true });
 }
 
 /**
