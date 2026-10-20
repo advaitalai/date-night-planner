@@ -2,7 +2,7 @@
 
 The running log of where the project is. **Update this at the end of every session.** It's what a new session (or a compacted one) relies on to pick up without re-asking Advait.
 
-Last updated: 16 Oct 2026.
+Last updated: 20 Oct 2026.
 
 ## Where we are
 
@@ -17,6 +17,18 @@ Last updated: 16 Oct 2026.
 | 5. Always-on server (Google Cloud e2-micro) | ⏳ After the beta. |
 
 ## Next steps
+
+**Handoff for the next session (20 Oct): live test on the server.**
+1. Check log access first: decode `GCP_LOG_READER_KEY` (base64 or raw JSON) and run the `gcloud logging read` command in SETUP §10. Expect startup lines ("Listening in \"Concierge test\"", "Sending logs to Cloud Logging"). If the network policy blocks a Google host, tell Advait which one to allow.
+2. Setup at this point: Google Cloud e2-micro VM (us-west1), bot on its own number **Concierge** (`WA_SELF_MODE=0`, `WA_BOT_NAME=Concierge`), `DRY_RUN=1`, in a **test group with only Advait and Concierge**. The laptop copy is stopped for good.
+3. Advait runs the **5-step live test** and says "done, check it". Expected:
+   1. "Concierge, hi" → a reply from Concierge; log `[in] Advait: …`.
+   2. "Plan Wednesday" → one options message (cards).
+   3. Without replying to the bot: "2 looks good, let's do it" → log `[heard] …`, bot asks "Sounds like X. Shall I book it?"; inline "yes" → "🧪 would be booked" (TableCheck) or a call.
+   4. Pick a phone-only place → a dry-run call to Advait (he plays the restaurant) → outcome posted.
+   5. "cancel it" → asks before calling; "ok" → one call → cancelled.
+   Read the logs since the test started, compare with this, fix with a test, push; Advait does `git pull && npm install` and restarts.
+4. After it passes: stop the bot, `npm run fresh-start`, set the real group's `WA_GROUP_JID`, `sudo systemctl enable --now date-night-planner`. Emily joins as a **beta user, not a bug finder**: her first message should log `[in] Emily`. Then `DRY_RUN=0` only when Advait says so.
 
 **20 Oct, server logs for Claude:** the bot sends its log lines to Google Cloud Logging when it runs on the VM (`src/cloudlog.ts`, no agent, a few MB of RAM; calls and transcripts logged as `[call]` lines too). Claude reads them read-only with `GCP_LOG_READER_KEY` (a Logs Viewer service-account key in the cloud environment's settings): see SETUP §10 for the setup and the `gcloud logging read` command. **The test loop:** Advait tests in WhatsApp and says "done, check it"; Claude reads the logs since the test began, finds what went wrong against the expected steps, fixes, tests and pushes; Advait runs `git pull` and restarts, then retests.
 
