@@ -6,13 +6,14 @@ set -euo pipefail
 BRANCH="${BRANCH:-claude/festive-volta-e3nm17}"
 
 # e2-micro has 1 GB RAM; add 2 GB swap so the booking browser fits.
-if ! swapon --show | grep -q /swapfile; then
-  sudo fallocate -l 2G /swapfile
+# (/proc/swaps, not swapon: Debian keeps swapon out of a normal user's PATH.)
+if ! grep -q /swapfile /proc/swaps; then
+  [ -f /swapfile ] || sudo fallocate -l 2G /swapfile
   sudo chmod 600 /swapfile
-  sudo mkswap /swapfile
-  sudo swapon /swapfile
-  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  sudo /sbin/mkswap /swapfile
+  sudo /sbin/swapon /swapfile
 fi
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 sudo timedatectl set-timezone Asia/Tokyo
 # Minimal images (Debian 13 by default) lack curl, git and the compiler tools
