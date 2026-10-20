@@ -262,7 +262,7 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
     notes: [
       r.unmet.length ? `I couldn't find anything ${r.unmet.join(" or ")} that fits, so these are the closest matches.` : "",
       r.options.length < 3 ? `Only ${r.options.length} ${r.options.length === 1 ? "place fits" : "places fit"} everything you asked for.` : "",
-      r.relaxed.length ? `Few places fit your usual limits, so I also looked ${r.relaxed.join(" and ")}.` : "",
+      r.relaxed.length ? `Few places fit your usual limits, so I widened the search: ${r.relaxed.join(", ")}.` : "",
     ],
     solo: voters().length === 1,
   });

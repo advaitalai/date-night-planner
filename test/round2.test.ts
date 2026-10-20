@@ -136,3 +136,18 @@ describe("English names on cards, Japanese for calls", () => {
     expect(bookingScript(p, slot, c, "en").firstMessage).toContain("is this Shiva Curry Wara?");
   });
 });
+
+describe("cuisine matching (round 4: 'Latin American' offered American barbecue)", () => {
+  it("needs every word asked for, or the family it belongs to", async () => {
+    const { cuisineMatch } = await import("../src/recommender/similarity");
+    expect(cuisineMatch("new american", "latin american")).toBe(0);
+    expect(cuisineMatch("american barbecue", "latin american")).toBe(0);
+    expect(cuisineMatch("cuban", "latin american")).toBe(0.5);
+    expect(cuisineMatch("peruvian restaurant", "latin american")).toBe(0.5);
+    expect(cuisineMatch("south indian", "indian")).toBe(0.5);
+    expect(cuisineMatch("american barbecue", "barbecue")).toBe(0.5);
+    expect(cuisineMatch("japanese curry", "japanese")).toBe(0.5);
+    expect(cuisineMatch("thai", "southeast asian")).toBe(0.5);
+    expect(cuisineMatch("thai", "thai")).toBe(1);
+  });
+});

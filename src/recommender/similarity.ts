@@ -15,12 +15,42 @@ function words(s: string): Set<string> {
   return new Set(s.toLowerCase().split(/[\s/,-]+/).filter(Boolean));
 }
 
-/** 1 = same cuisine, 0.5 = overlapping words ("south indian" vs "indian"), else 0. */
+/** Words that say nothing about the cuisine ("japanese restaurant" = "japanese"). */
+const GENERIC = new Set(["restaurant", "food", "cuisine", "style", "dining", "shop", "and", "&"]);
+
+/**
+ * Umbrella terms people ask for, and the cuisines they cover. Without these,
+ * "latin american" matched "new american" and American barbecue on the shared
+ * word (round 4), and never matched Cuban or Peruvian.
+ */
+const FAMILIES: Record<string, string[]> = {
+  "latin american": ["mexican", "peruvian", "cuban", "brazilian", "argentinian", "argentine", "colombian", "venezuelan", "chilean", "caribbean", "latin", "tex-mex", "taco"],
+  "south american": ["peruvian", "brazilian", "argentinian", "argentine", "colombian", "venezuelan", "chilean"],
+  "middle eastern": ["lebanese", "turkish", "israeli", "persian", "iranian", "arab", "falafel", "kebab", "mediterranean"],
+  "southeast asian": ["thai", "vietnamese", "indonesian", "malaysian", "singaporean", "filipino", "cambodian", "burmese"],
+  "south asian": ["indian", "nepalese", "sri lankan", "pakistani", "bangladeshi", "curry"],
+};
+
+function meaningful(s: string): string[] {
+  return [...words(s)].filter((w) => !GENERIC.has(w));
+}
+
+/**
+ * How well a place's cuisine (a) fits an asked-for one (b): 1 = same, 0.5 = every
+ * word asked for is there ("indian" fits "south indian"; "american" fits
+ * "american barbecue"), or it's in the family asked for ("latin american" →
+ * Cuban); else 0. One shared word isn't enough ("new american" ≠ "latin american").
+ */
 export function cuisineMatch(a: string | null, b: string | null): number {
   if (!a || !b) return 0;
-  if (a === b) return 1;
-  const wa = words(a);
-  for (const w of words(b)) if (wa.has(w) && w !== "restaurant" && w !== "food") return 0.5;
+  const A = a.toLowerCase();
+  const B = b.toLowerCase();
+  if (A === B) return 1;
+  const wa = new Set(meaningful(A));
+  const wb = meaningful(B);
+  if (wb.length && wb.every((w) => wa.has(w))) return 0.5;
+  const family = FAMILIES[wb.join(" ")];
+  if (family?.some((f) => A.includes(f))) return 0.5;
   return 0;
 }
 
