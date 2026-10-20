@@ -37,7 +37,7 @@ The bot has to run all the time, to stay connected to WhatsApp and send the remi
    - Name `date-night`
    - Region **us-west1** (Oregon), any zone
    - Machine type **e2-micro**
-   - Boot disk: **Ubuntu 24.04 LTS**, *Standard persistent disk*, 30 GB
+   - Boot disk: the default (Debian 13) is fine, *Standard persistent disk*, 30 GB
    - Everything else default. No need to allow HTTP/HTTPS, because nothing needs to be public.
 2. Once it's running, click **SSH** to open a terminal in the browser, then run:
    ```

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time setup on a fresh Google Cloud e2-micro VM (Ubuntu 24.04).
+# One-time setup on a fresh Google Cloud e2-micro VM (Debian 13 or Ubuntu 24.04).
 #   curl -fsSL https://raw.githubusercontent.com/advaitalai/date-night-planner/main/deploy/setup-vm.sh | BRANCH=main bash
 # BRANCH is the branch to run (default: the working branch, until it's merged to main).
 set -euo pipefail
@@ -15,9 +15,10 @@ if ! swapon --show | grep -q /swapfile; then
 fi
 
 sudo timedatectl set-timezone Asia/Tokyo
-# The minimal Ubuntu image has no curl or git.
+# Minimal images (Debian 13 by default) lack curl, git and the compiler tools
+# better-sqlite3 builds with.
 sudo apt-get update
-sudo apt-get install -y curl ca-certificates git
+sudo apt-get install -y curl ca-certificates git build-essential python3
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
