@@ -26,7 +26,7 @@ How to work:
 - Tools that post to the group (recommend_options, booking and call tools) already told them the result. Then reply exactly NO_REPLY, unless they asked something the posted message doesn't answer.
 - Write like a friend in a chat: short, warm, at most one emoji. Use WhatsApp formatting for anything longer than two lines: *bold* names, short lines, a blank line between items. Never use em dashes.
 - If they ask for a cuisine or area and nothing fits, widen the search yourself (call recommend_options again with a bigger area or "any budget") before telling them there's nothing. Never just give up. English unless they write in Japanese.
-- Every message you get was addressed to you (an inline reply to you, or it calls you by name). <recent_chat> also has what they said to each other; use it as context (e.g. what they were deciding between).
+- Every message you get is meant for you: an inline reply to you, your name, or a message you judged was for you ("What's booked?"). <recent_chat> also has what they said to each other; use it as context (e.g. what they were deciding between).
 - Always answer a question or request (e.g. "tell me more about option 2" → call option_details and reply with 2–4 helpful sentences). Reply NO_REPLY only to things like "thanks" or "ok" that need no answer.
 - If someone just says hi or asks what you can do, greet them back in one line, mention any open proposal or upcoming booking from <state>, and suggest 2–3 things to say (e.g. "plan Wednesday 18:30", "something Italian near work", "what's booked?"). Don't start planning unasked.
 - Only book places on a seat-only basis; never courses or anything needing a card. If asked about price, say the ¥ figures are average spend per person, not a course price.`;
@@ -63,7 +63,7 @@ export function handleMessage(sender: string, text: string, opts: { addressed?: 
   const addressed = opts.addressed ?? true;
   const run = queue.then(() =>
     Promise.race([
-      addressed ? runAgent(sender, text) : listen(sender, text),
+      addressed ? runAgent(sender, text) : listen(sender, text).then((r) => (r === FOR_BOT ? runAgent(sender, text) : r)),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("that took too long, so I stopped waiting")), TURN_LIMIT_MS)),
     ]),
   );
@@ -106,27 +106,39 @@ async function runAgent(sender: string, text: string): Promise<string | null> {
 }
 
 const HeardSchema = z.object({
-  decided_option: z.number().int().nullable().describe("The 1-based option number they've settled on, or null if they haven't clearly decided"),
+  for_bot: z.boolean().describe("True if the latest message is meant for the bot (a question or request to it), not for the other person"),
+  decided_option: z.number().int().nullable().describe("The 1-based option number they've settled on, or null if they haven't clearly decided (or there are no open options)"),
 });
 
-const LISTEN_SYSTEM = `Advait and Emily are talking to each other in their group chat about date-night options a bot posted. Decide whether the conversation now shows they've settled on one option: either of them says they want it ("let's do 2", "book the Thai one", "Suan Sawan it is"), or one suggests it and the other agrees ("2?" "yes!"). An opinion or a question alone ("2 looks nice", "what do you think of 1?") is not a decision. If they're undecided, talking about something else, or want different options, answer null.`;
+const LISTEN_SYSTEM = `Advait and Emily share a WhatsApp group with a date-night bot (it plans dates, finds restaurants and books them). The latest message wasn't an inline reply to the bot and didn't use its name. Decide two things.
+
+1. for_bot: is it meant for the bot? Yes for a question or request only the bot would handle, said to nobody in particular: "What's booked?", "find us somewhere Thai on Friday", "can you move it to 8?", "any live music places?", "thanks!" right after the bot answered. No when they're talking to each other: "babe which one do you like?", "Emily what do you think?", "see you at 7", "lol", "yes!" to the other person, opinions or decisions about the options ("2 looks good, let's do it"). If unsure, answer false: staying quiet is better than butting in.
+
+2. decided_option: if there are open options, has the conversation now settled on one? Either of them says they want it ("let's do 2", "Suan Sawan it is"), or one suggests it and the other agrees ("2?" "yes!"). An opinion or a question alone ("2 looks nice", "what about 1?") isn't a decision. Otherwise null.`;
+
+/** listen() found the message is meant for the bot: answer it like an addressed one. */
+const FOR_BOT = Symbol("for_bot");
 
 /**
- * A message between the two of them, not to the bot. The bot has no tools here
- * and can't book anything; it stays quiet unless they've just settled on one
- * of the open options, and then only asks them to confirm (once per option).
+ * A message not addressed to the bot (no inline reply, no name). One quick check:
+ * if it's really meant for the bot ("What's booked?"), it's answered like any other;
+ * if the two of them have just settled on an open option, the bot asks to confirm
+ * (once per option); anything else gets no reply.
  */
-async function listen(sender: string, text: string): Promise<string | null> {
+async function listen(sender: string, text: string): Promise<string | null | typeof FOR_BOT> {
   const plan = openProposal();
-  if (!plan) return null;
   const chat = recentMessages(15)
     .map((m) => `${m.sender}: ${m.text}`)
     .join("\n");
-  const options = plan.options.map((o, i) => `${i + 1}. ${o.name}`).join("\n");
-  const { decided_option } = await extract(HeardSchema, LISTEN_SYSTEM, `Options:\n${options}\n\n<recent_chat>\n${chat}\n</recent_chat>\n\nLatest message, from ${sender}: ${text}`);
-  const opt = decided_option ? plan.options[decided_option - 1] : undefined;
-  if (!opt) return null;
-  const key = `confirm_asked:${plan.id}:${decided_option}`;
+  const options = plan ? plan.options.map((o, i) => `${i + 1}. ${o.name}`).join("\n") : "(none)";
+  const heard = await extract(HeardSchema, LISTEN_SYSTEM, `Open options:\n${options}\n\n<recent_chat>\n${chat}\n</recent_chat>\n\nLatest message, from ${sender}: ${text}`);
+  if (heard.for_bot) {
+    console.log(`[for bot] ${sender}: ${text.slice(0, 80)}`);
+    return FOR_BOT;
+  }
+  const opt = plan && heard.decided_option ? plan.options[heard.decided_option - 1] : undefined;
+  if (!plan || !opt) return null;
+  const key = `confirm_asked:${plan.id}:${heard.decided_option}`;
   if (kvGet(key, false)) return null;
   kvSet(key, true);
   return `Sounds like *${opt.name}* 🙂 Shall I book it?\nReply to this message to confirm.`;

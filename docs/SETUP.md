@@ -65,7 +65,7 @@ By default (`WA_SELF_MODE=1`) the bot links to **your own WhatsApp** as a linked
 
 **How this mode works:**
 - The bot's messages appear as you, starting with 🤖.
-- Talk to it by **replying inline to one of its messages** (swipe right on it), or by including "planner". Everything else is you two talking: the bot only listens, and speaks up just to confirm a decision it heard ("Sounds like X. Shall I book it?").
+- Talk to it like a third person in the group: it judges which messages are meant for it. Replying inline (swipe right) or using its name always counts. When you two settle on an option between yourselves, it asks before booking ("Sounds like X. Shall I book it?").
 
 **Risk:** it's an unofficial WhatsApp library, and in this mode it runs on your own number. WhatsApp rarely bans low-volume use like this, but the risk isn't zero.
 

@@ -4,14 +4,14 @@ A WhatsApp agent for Advait and Emily that plans the weekly date night and handl
 
 Ask it for options ("plan Wednesday", "something Thai near work on Friday") and it posts three, each with a short pitch. Talk it over between you; when either of you decides (or the bot hears you settle it and you confirm), it books: on TableCheck if it can, otherwise by an AI phone call in Japanese. After that it reminds you a day before free cancellation ends, changes or cancels the booking if you ask, and reminds you on the day.
 
-The bot answers when you **reply inline to one of its messages** or say "planner":
+Talk to it like a third person in the group. It works out which messages are for it ("What's booked?") and which are you two talking ("babe, which one?"). Replying inline to it, or using its name, always counts:
 
 - "planner feeling Italian, not too far from work"
 - "somewhere like Monna Lisa" (as a reply to the options)
 - "move it to 19:30"
 - "cancel Wednesday"
 
-Everything else in the group is you two talking: it only listens.
+When you two settle on an option between yourselves, it asks before booking.
 
 ## How it works
 
@@ -24,7 +24,7 @@ Scheduler (SQLite jobs) ──┘                                              �
 
 | Area | Where | Notes |
 |---|---|---|
-| Chat | `src/wa/whatsapp.ts` | A linked device on your own WhatsApp (messages start with 🤖) or on a separate number. Answers inline replies to its messages and "planner"; listens to the rest. |
+| Chat | `src/wa/whatsapp.ts` | A linked device on your own WhatsApp (messages start with 🤖) or on a separate number. Answers inline replies, its name, and messages it judges are meant for it; listens to the rest. |
 | Agent | `src/agent/` | A Claude tool loop with tools to recommend, book, check, change, cancel, set preferences and add places. It judges decisions and go-aheads from the conversation. |
 | Recommender | `src/recommender/` | Turns a free-text request into constraints, then: saved-list and discovered candidates → filters → scoring (cuisine rotation, both-saved boost, similarity) → 3 varied options → pitches. |
 | Booking | `src/booking/` | TableCheck availability from its public diner API, bookings as a guest in a headless browser. Phone-only places get an AI call (`calls.ts` decides when, `phone.ts` makes it). |

@@ -359,6 +359,8 @@ const TESTS: Record<string, (r: Result) => Promise<void>> = {
     const [logId, callId] = [maxId("booking_log"), maxId("call_log")];
     const nothingYet = () => rowsAfter("booking_log", logId).length === 0 && rowsAfter("call_log", callId).length === 0;
 
+    const out0 = await send("Advait", "What's booked?", undefined, false);
+    check(r, out0.length > 0 && nothingYet(), "a question for the bot, without replying to it: answered");
     const out1 = await send("Advait", "Emily which one do you like?", undefined, false);
     check(r, out1.length === 0 && nothingYet(), "a question between them: no reply, nothing booked");
     const out2 = await send("Emily", `${tc.name} for sure, let's do that one`, undefined, false);

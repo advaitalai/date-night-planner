@@ -18,7 +18,7 @@ Last updated: 20 Oct 2026 (own number, Concierge; Saturday trigger and skip-a-we
 | A3 | As a user, I want options as clean cards (area, travel, why, map link). | Covered | Validated | |
 | A4 | As a user, I want a short hello with ideas of what to say. | None | Validated | |
 | A5 | As a couple, we want either of us to decide in our own words, and the bot to check when it isn't sure. | Covered (P0-7, with the AI, 16 Oct) | Unvalidated (changed 16 Oct) | |
-| A6 | As a couple, we want the bot to answer only when we reply to it or call it by name ("Concierge", "planner"), and just listen otherwise. | Covered | Unvalidated (changed 16 Oct) | Inline replies on the real WhatsApp |
+| A6 | As a couple, we want the bot to judge which messages are meant for it ("What's booked?" counts; "babe, which one?" doesn't). Replying to it or using its name always counts. | Covered | Unvalidated (changed 16 Oct) | Inline replies on the real WhatsApp |
 | A8 | As a couple, we want the bot on its own WhatsApp number ("Concierge"), not Advait's account. | Partial: name and who's-who rules yes; linking no | In progress (20 Oct) | First messages on the new number |
 | A7 | As a user, I want every request answered, never left hanging. | Partial | Bug fixed, revalidate: "Cancel!" got no reply | |
 

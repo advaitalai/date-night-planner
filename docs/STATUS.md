@@ -18,6 +18,8 @@ Last updated: 20 Oct 2026.
 
 ## Next steps
 
+**20 Oct, first live test on the server (Concierge, test group):** log access works (Cloud Logging, read-only key; unset the sandbox's `CLOUDSDK_AUTH_ACCESS_TOKEN`). "Hello!" answered well. **"What's booked?" (no reply, no name) got silence**, though the greeting had suggested it. Advait: the bot should judge whether a message is meant for it. Built: the listener now decides `for_bot` (answered like an addressed message) as well as "they've decided" (confirm first); unsure → quiet. Also fixed a misleading log line (every new message logged as "older message skipped"). 105 unit tests; P0-7 gained a "What's booked?" step.
+
 **Handoff for the next session (20 Oct): live test on the server.**
 1. Check log access first: decode `GCP_LOG_READER_KEY` (base64 or raw JSON) and run the `gcloud logging read` command in SETUP §10. Expect startup lines ("Listening in \"Concierge test\"", "Sending logs to Cloud Logging"). If the network policy blocks a Google host, tell Advait which one to allow.
 2. Setup at this point: Google Cloud e2-micro VM (us-west1), bot on its own number **Concierge** (`WA_SELF_MODE=0`, `WA_BOT_NAME=Concierge`), `DRY_RUN=1`, in a **test group with only Advait and Concierge**. The laptop copy is stopped for good.

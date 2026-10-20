@@ -1,16 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { freshDb } from "./helpers";
 
-// No real AI in unit tests: the listener's "have they decided?" answer is scripted.
-const decided = vi.hoisted(() => ({ option: null as number | null }));
+// No real AI in unit tests: the listener's answers ("for the bot?", "decided?") and the agent's reply are scripted.
+const decided = vi.hoisted(() => ({ option: null as number | null, forBot: false, agentRuns: 0 }));
 vi.mock("../src/llm", async (orig) => ({
   ...(await orig<typeof import("../src/llm")>()),
-  extract: async () => ({ decided_option: decided.option }),
+  extract: async () => ({ for_bot: decided.forBot, decided_option: decided.option }),
+  anthropic: () => ({
+    beta: {
+      messages: {
+        toolRunner: async () => (decided.agentRuns++, { stop_reason: "end_turn", content: [{ type: "text", text: "Nothing booked yet." }] }),
+      },
+    },
+  }),
 }));
 
 beforeEach(() => {
   freshDb();
   decided.option = null;
+  decided.forBot = false;
+  decided.agentRuns = 0;
 });
 
 const msg = (text: string, quoted?: string) =>
@@ -57,6 +66,20 @@ describe("listening to the two of them", () => {
     const { handleMessage } = await import("../src/agent/loop");
     decided.option = 1;
     expect(await handleMessage("Emily", "let's do 1", { addressed: false })).toBeNull();
+  });
+
+  it("answers a message it judges is meant for it, even without a reply or its name", async () => {
+    const { handleMessage } = await import("../src/agent/loop");
+    decided.forBot = true;
+    expect(await handleMessage("Advait", "What's booked?", { addressed: false })).toBe("Nothing booked yet.");
+    expect(decided.agentRuns).toBe(1);
+  });
+
+  it("doesn't wake the agent for messages between the two of them", async () => {
+    const { handleMessage } = await import("../src/agent/loop");
+    await openPlan();
+    expect(await handleMessage("Advait", "babe which one do you like?", { addressed: false })).toBeNull();
+    expect(decided.agentRuns).toBe(0);
   });
 
   it("stays quiet while they're still deciding", async () => {
