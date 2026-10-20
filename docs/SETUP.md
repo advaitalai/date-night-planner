@@ -41,6 +41,7 @@ The bot has to run all the time, to stay connected to WhatsApp and fire the Satu
    - Everything else default. No need to allow HTTP/HTTPS, because nothing needs to be public.
 2. Once it's running, click **SSH** to open a terminal in the browser, then run:
    ```
+   sudo apt-get update && sudo apt-get install -y git
    git clone https://github.com/advaitalai/date-night-planner.git && bash date-night-planner/deploy/setup-vm.sh
    ```
    It runs the working branch (`claude/festive-volta-e3nm17`) until that's merged; `BRANCH=main` after.
