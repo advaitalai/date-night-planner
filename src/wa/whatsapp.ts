@@ -273,7 +273,8 @@ export async function startWhatsApp(): Promise<void> {
     const ours = messages.filter((m) => isOurChat(m.key.remoteJid));
     if (ours.length) console.log(`[wa] ${ours.length} message(s) in our group (${type})`);
     const todo = type === "notify" ? messages : ours.filter(fresh);
-    const old = ours.length - (type === "notify" ? 0 : todo.length);
+    // "notify" messages are all handled; only a sync ("append") can leave older ones out.
+    const old = type === "notify" ? 0 : ours.length - todo.length;
     if (old) console.log(`[skip] ${old} older message(s) from our chat synced from the phone (not new)`);
     for (const m of todo) {
       if (m.key.id && seenIds.has(m.key.id)) continue;
