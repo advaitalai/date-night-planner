@@ -50,7 +50,7 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 
 ## Booking coverage
 
-- **TableCheck newer flow** (`/reserve/message` → landing → menu): finish the booking steps. The flow is mapped in REQUIREMENTS §7. Kuss Daikanyama, TUITUI and Taro Yamada use it. On the saved list (12 Oct): 6 of 15 TableCheck places (Kuss, Picica Picica, Nakayoshi, BROWNSTONE, Chef's Theatre, Peter Luger).
+- **TableCheck newer flow** (`/reserve/message` → landing → menu): finish the booking steps. Decide after a week of real use (20 Oct): today those places are booked by phone. The flow is mapped in REQUIREMENTS §7. Kuss Daikanyama, TUITUI and Taro Yamada use it. On the saved list (12 Oct): 6 of 15 TableCheck places (Kuss, Picica Picica, Nakayoshi, BROWNSTONE, Chef's Theatre, Peter Luger).
 - **TableCheck `postpay_optional` items** (ask Advait): The Public Place offers "【DINNER】Seating only (no meal included)" with payment type `postpay_optional`. The bot treats anything but `none` as "needs a card" and skips it. If `postpay_optional` means "pay at the venue, online payment optional", it's fine to book. Check one by hand before allowing it.
 - ✅ **Wrong TableCheck slug from detection** (fixed 12 Oct): Peter Luger got `peterluger-pickup` (the takeout page). Detection now skips pickup/takeout/delivery slugs. Places detected before keep their slug until re-detected.
 

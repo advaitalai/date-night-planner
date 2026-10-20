@@ -13,6 +13,7 @@ export function place(overrides: Partial<Place> = {}): Place {
     google_place_id: null,
     cid: null,
     name: "Test Place",
+    name_local: null,
     address: null,
     lat: 35.625,
     lng: 139.72,

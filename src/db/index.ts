@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS messages (
 const ADDED_COLUMNS: [table: string, column: string, type: string][] = [
   ["places", "features", "TEXT"],
   ["plans", "time_latest", "TEXT"],
+  ["places", "name_local", "TEXT"],
 ];
 
 function migrate(db: Database.Database): void {

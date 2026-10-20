@@ -99,3 +99,40 @@ describe("change-a-booking call script", () => {
     config.dryRun = before.dry;
   });
 });
+
+describe("English names on cards, Japanese for calls", () => {
+  it("shows Google's English name for a place saved in Japanese, and keeps the Japanese", async () => {
+    const { namesFor } = await import("../src/util/geo");
+    expect(namesFor("カレバカ世紀", "Karebaka Seiki")).toEqual({ name: "Karebaka Seiki", name_local: "カレバカ世紀" });
+    expect(namesFor("PIZZERIA BRUNA", "Pizzeria Bruna")).toEqual({ name: "PIZZERIA BRUNA" }); // saved English name wins
+    expect(namesFor("カレバカ世紀", "カレバカ世紀")).toEqual({ name: "カレバカ世紀" }); // no English name on Google
+  });
+
+  it("renames on lookup, and also backfills places looked up before", async () => {
+    const { config } = await import("../src/config");
+    const { enrich } = await import("../src/recommender/candidates");
+    const { findPlaceByName } = await import("../src/db/repo");
+    const before = config.google.mapsKey;
+    config.google.mapsKey = "test";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).includes("searchText")
+        ? new Response(JSON.stringify({ places: [{ id: "gp-9", displayName: { text: "Karebaka Seiki" }, googleMapsUri: "https://maps.google.com/?cid=9", location: { latitude: 35.63, longitude: 139.71 } }] }))
+        : new Response(JSON.stringify({ id: "gp-8", displayName: { text: "Randan" } })),
+    );
+    const fresh = await enrich(await saved({ name: "カレバカ世紀", google_place_id: null, cid: "9" }), { lite: true });
+    const old = await enrich(await saved({ name: "もつ焼き専門店 ランダン", google_place_id: "gp-8", cid: "8" }), { lite: true });
+    config.google.mapsKey = before;
+    expect(fresh).toMatchObject({ name: "Karebaka Seiki", name_local: "カレバカ世紀" });
+    expect(old).toMatchObject({ name: "Randan", name_local: "もつ焼き専門店 ランダン" });
+    expect(findPlaceByName("カレバカ世紀")?.name).toBe("Karebaka Seiki"); // "book カレバカ世紀" still finds it
+  });
+
+  it("uses the Japanese name on Japanese calls and the English one on English calls", async () => {
+    const { bookingScript } = await import("../src/booking/phone");
+    const p = place({ name: "Shiva Curry Wara", name_local: "シバカリーワラ" });
+    const c = { name: "Advait", nameKana: "", phone: "090-1234-5678", email: "a@example.com" };
+    const slot = { date: "2026-10-23", time: "18:30", partySize: 2 };
+    expect(bookingScript(p, slot, c, "ja").firstMessage).toContain("シバカリーワラ様でしょうか");
+    expect(bookingScript(p, slot, c, "en").firstMessage).toContain("is this Shiva Curry Wara?");
+  });
+});

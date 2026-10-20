@@ -5,10 +5,10 @@ import type { Slot } from "../booking/types";
 import { config } from "../config";
 import { kvGet, kvSet } from "../db";
 import { findTwin, listPlaces, recentVisits, updatePlace, upsertPlace } from "../db/repo";
-import { cidFromMapsUri, placeFeatures, textSearch, toPlaceFields, travelMinutes } from "../places/google";
+import { cidFromMapsUri, placeFeatures, placeLite, textSearch, toPlaceFields, travelMinutes } from "../places/google";
 import { buildProfile } from "../places/profile";
 import type { Place } from "../types";
-import { walkMinutes, type LatLng } from "../util/geo";
+import { hasJapanese, namesFor, walkMinutes, type LatLng } from "../util/geo";
 import { isOpenFor, jst, ZONE } from "../util/time";
 import { FEATURE_INFO, type Candidate } from "./filters";
 import type { Constraints } from "./parseRequest";
@@ -44,8 +44,14 @@ export async function enrich(place: Place, opts: { lite?: boolean } = {}): Promi
           updatePlace(p.id, { booking_channel: "not_restaurant", note: [p.note, `duplicate of #${twin.id} ${twin.name}`].filter(Boolean).join(" / ") });
           return merged;
         }
-        p = updatePlace(p.id, { ...fields, name: p.name });
+        p = updatePlace(p.id, { ...fields, ...namesFor(p.name, fields.name) });
       }
+    } else if (hasJapanese(p.name) && !p.name_local) {
+      // Saved with a Japanese name before English names were shown: one cheap lookup for Google's.
+      lookups++;
+      const g = await placeLite(p.google_place_id);
+      const n = namesFor(p.name, g.displayName?.text);
+      if (n.name_local) p = updatePlace(p.id, n);
     }
     if (!opts.lite && !p.profile && p.google_place_id && p.booking_channel !== "not_restaurant") p = await buildProfile(p);
   } catch (err) {

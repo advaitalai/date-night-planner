@@ -17,6 +17,19 @@ export function haversineKm(a: LatLng, b: LatLng): number {
  * transit answer: walk up to ~1.2 km, otherwise train at ~20 km/h effective
  * plus 12 minutes of walking and waiting.
  */
+/** Contains Japanese (kana or kanji). */
+export function hasJapanese(s: string | null | undefined): boolean {
+  return /[\u3040-\u30ff\u3400-\u9fff]/.test(s ?? "");
+}
+
+/**
+ * Which name to show: Google's English name when the saved one is Japanese
+ * (keeping the Japanese for calls), otherwise the saved name.
+ */
+export function namesFor(saved: string, google: string | null | undefined): { name: string; name_local?: string } {
+  return hasJapanese(saved) && google && !hasJapanese(google) ? { name: google, name_local: saved } : { name: saved };
+}
+
 export function estimateTravelMin(a: LatLng, b: LatLng): number {
   const km = haversineKm(a, b) * 1.3; // streets aren't straight lines
   if (km <= 1.2) return Math.round((km / 4.8) * 60);

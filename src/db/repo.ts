@@ -53,8 +53,8 @@ export function getPlace(id: number): Place | undefined {
 
 export function findPlaceByName(name: string): Place | undefined {
   const row = db()
-    .prepare("SELECT * FROM places WHERE name = ? COLLATE NOCASE OR name LIKE ? ORDER BY length(name) LIMIT 1")
-    .get(name, `%${name}%`) as Record<string, unknown> | undefined;
+    .prepare("SELECT * FROM places WHERE name = ? COLLATE NOCASE OR name_local = ? OR name LIKE ? OR name_local LIKE ? ORDER BY length(name) LIMIT 1")
+    .get(name, name, `%${name}%`, `%${name}%`) as Record<string, unknown> | undefined;
   return row ? rowToPlace(row) : undefined;
 }
 

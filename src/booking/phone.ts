@@ -144,8 +144,8 @@ Say you are an AI assistant if asked. When done, thank them and end with "Goodby
   return {
     language,
     // No 失礼いたします in the greeting: it's an end-call phrase, and Vapi hung up right after the greeting.
-    firstMessage: `お忙しいところ恐れ入ります。${place.name}様でしょうか。${who}様の${task === "book" ? "ご予約" : "予約の件"}でお電話しております、AIアシスタントです。`,
-    systemPrompt: `あなたは${who}様の代理でレストラン「${place.name}」に電話している、丁寧なAIアシスタントです。日本語の敬語で、短く自然に話してください。
+    firstMessage: `お忙しいところ恐れ入ります。${place.name_local ?? place.name}様でしょうか。${who}様の${task === "book" ? "ご予約" : "予約の件"}でお電話しております、AIアシスタントです。`,
+    systemPrompt: `あなたは${who}様の代理でレストラン「${place.name_local ?? place.name}」に電話している、丁寧なAIアシスタントです。日本語の敬語で、短く自然に話してください。
 今日は${today.year}年${jaDay(today.toISODate()!)}です。
 目的：${
       task === "book"

@@ -45,7 +45,10 @@ export interface Place {
   id: number;
   google_place_id: string | null;
   cid: string | null;
+  /** Shown in the chat: Google's English name when the saved one is Japanese. */
   name: string;
+  /** The Japanese name, kept for calls in Japanese (staff answer to シバカリーワラ, not "Shiva Curry Wara"). */
+  name_local: string | null;
   address: string | null;
   lat: number | null;
   lng: number | null;
