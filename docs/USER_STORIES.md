@@ -6,7 +6,7 @@ Grouped by epic. For each story: is it **checked by a test**, how did it go when
 - **Checked by a test:** a small program tries it and checks the result, with no person involved (pretend WhatsApp and pretend calls). Yes / Partly / No.
 - **Used for real:** how it went when you and Emily used it (12–15 Oct). Worked / Broke (fixed since, not used again yet) / Changed 16 Oct (new behaviour, not used yet) / Not yet.
 
-Last updated: 16 Oct 2026, after the lean cut. What was cut, and why: end of this page.
+Last updated: 20 Oct 2026 (own number, Concierge). Lean cut on 16 Oct. What was cut, and why: end of this page.
 
 ## 1. Chat (WhatsApp)
 
@@ -17,7 +17,8 @@ Last updated: 16 Oct 2026, after the lean cut. What was cut, and why: end of thi
 | A3 | As a user, I want options as clean cards (area, travel, why, map link). | Yes | Worked | |
 | A4 | As a user, I want a short hello with ideas of what to say. | No | Worked | |
 | A5 | As a couple, we want either of us to decide in our own words, and the bot to check when it isn't sure. | Yes (P0-7, with the AI, 16 Oct) | Changed 16 Oct | |
-| A6 | As a couple, we want the bot to answer only when we reply to it (or say "planner"), and just listen otherwise. | Yes | Changed 16 Oct | Inline replies on the real WhatsApp |
+| A6 | As a couple, we want the bot to answer only when we reply to it or call it by name ("Concierge", "planner"), and just listen otherwise. | Yes | Changed 16 Oct | Inline replies on the real WhatsApp |
+| A8 | As a couple, we want the bot on its own WhatsApp number ("Concierge"), not Advait's account. | Partly: name and who's-who rules yes; linking no | Being set up 20 Oct | First messages on the new number |
 | A7 | As a user, I want every request answered, never left hanging. | Partly | Broke (fixed since): "Cancel!" got no reply | |
 
 ## 2. Recommender
@@ -94,7 +95,7 @@ Last updated: 16 Oct 2026, after the lean cut. What was cut, and why: end of thi
 | H1 | As Advait, I want a dry-run mode where nothing real happens. | Yes | Worked | |
 | H2 | As Advait, I want it to keep running: survive errors, restarts and timeouts, and only one copy at a time. | Partly | Broke (fixed since): crashed on a timeout; 146 reconnects | Reconnect handling, second copy refused |
 | H3 | As Advait, I want costs low (~$7–15/month). | No | Worked: calls $0.36 for the week; Claude not measured | Claude spend |
-| H4 | As a couple, we want it always on (server, not laptop). | Not built | Not built | Later; own number first |
+| H4 | As a couple, we want it always on (server, not laptop). | No | Being set up 20 Oct (Google Cloud e2-micro) | A week running on the server |
 
 ## Rules checked on every test (not stories)
 
