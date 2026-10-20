@@ -14,6 +14,7 @@ A WhatsApp agent that plans Advait and Emily's weekly date night and books it en
 - `npm run logs` / `npm run logs -- call <id>`: recent calls and booking attempts (debugging); full log in `data/logs/`
 - `npm run retro -- <since>`: week-in-review report (`data/retro.md`)
 - `npm run p0`: launch-blocker tests (real bot, fake WhatsApp and calls); `npm run fresh-start`: clear test leftovers
+- Server logs (Google Cloud VM): read-only with `GCP_LOG_READER_KEY`, see `docs/SETUP.md` §10
 
 ## Rules
 

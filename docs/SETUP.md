@@ -124,3 +124,23 @@ With `DRY_RUN=1` every booking call goes to `BOOKING_PHONE` (you) instead of the
 3. Phone calls to restaurants need an upgraded Twilio account (trial accounts only call verified numbers and play a trial notice). Until then, pick places bookable on TableCheck.
 4. Tell Emily: bot messages show as Advait with 🤖; to talk to the bot, reply inline to its message (or say "planner"); either of you can decide on an option; calls book under her name (エミリー); messages in the group are read by Claude.
 5. `npm start`, check the log says `Listening in "<group>"`, say hi.
+
+## 10. Server logs for Claude (read-only)
+
+On the Google Cloud VM the bot also sends its log lines to **Cloud Logging** in your project (log name `date-night-planner`), every 30 seconds, using the VM's own credentials. Nothing to install; `CLOUD_LOGGING=0` turns it off. Claude reads them with a key that can only view logs: no access to the server itself.
+
+1. **Let the VM write logs.** Cloud console → **IAM & Admin → IAM** → find *Compute Engine default service account* → edit → add the role **Logs Writer** (skip if it already has *Editor*).
+2. **Make the read-only key.** **IAM & Admin → Service accounts → Create service account**: name `log-reader`, role **Logs Viewer** only, Done. Open it → **Keys → Add key → Create new key → JSON**. A file downloads.
+3. **Give it to Claude's environment, not the chat.** In the Claude Code cloud session: the environment menu in the session's title bar → **Edit** → add an environment variable `GCP_LOG_READER_KEY` whose value is the whole JSON file's contents. Start a new session to pick it up. Then delete the downloaded file.
+4. **On the server:** `git pull && npm install && sudo systemctl restart date-night-planner`. The log shows `Sending logs to Cloud Logging (project …)`.
+
+To revoke: delete the key (or the `log-reader` account) in the console.
+
+How Claude reads them (for future sessions):
+```
+echo "$GCP_LOG_READER_KEY" > /tmp/log-reader.json
+gcloud auth activate-service-account --key-file=/tmp/log-reader.json
+gcloud logging read 'logName="projects/<project>/logs/date-night-planner" AND timestamp>="2026-10-20T12:00:00Z"' --project <project> --order=asc --format='value(timestamp,textPayload)' --limit 2000
+```
+(`<project>` is `project_id` in the key.) Every call's outcome and transcript are in the log too (`[call]` lines).
+

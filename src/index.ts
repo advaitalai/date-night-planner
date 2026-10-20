@@ -10,6 +10,7 @@ import { MIN_TWILIO_BALANCE, twilioBalance } from "./booking/phone";
 import { geocode } from "./places/google";
 import { startWhatsApp } from "./wa/whatsapp";
 import { logToFile } from "./logbook";
+import { flushCloudLogs, startCloudLogging } from "./cloudlog";
 
 /** Replace the approximate anchor coordinates with geocoded ones, once. */
 async function geocodeAnchors(): Promise<void> {
@@ -51,6 +52,8 @@ function singleInstance(): void {
 async function main(): Promise<void> {
   singleInstance();
   logToFile();
+  const cloudProject = await startCloudLogging();
+  if (cloudProject) console.log(`Sending logs to Cloud Logging (project ${cloudProject}, log "date-night-planner")`);
   console.log(`date-night-planner starting (DRY_RUN=${config.dryRun ? "on" : "off"}, model ${config.anthropicModel})`);
   registerReminderJobs();
   startScheduler();
@@ -67,6 +70,7 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, async () => {
     stopScheduler();
     await closeBrowsers();
+    await flushCloudLogs();
     process.exit(0);
   });
 }

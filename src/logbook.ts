@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "./config";
+import { cloudLog } from "./cloudlog";
 import { db } from "./db";
 
 /**
  * The debugging record: every phone call and every booking attempt goes into
  * the database (so it survives restarts and can be listed with `npm run logs`),
- * and the terminal log is also written to data/logs/YYYY-MM-DD.log.
+ * and the terminal log is also written to data/logs/YYYY-MM-DD.log (and, on the
+ * Google Cloud VM, sent to Cloud Logging: see cloudlog.ts).
  */
 
 export interface CallLog {
@@ -26,6 +28,8 @@ export interface CallLog {
 }
 
 export function logCall(c: CallLog): void {
+  // Also in the log files (and Cloud Logging), so a call can be debugged from the logs alone.
+  console.log(`[call] ${c.kind} ${c.placeName}${c.dryRun ? " (dry run)" : ""}: ${c.outcome}${c.endedReason ? ` (${c.endedReason})` : ""}, ${c.durationSec ?? "?"}s. ${c.summary}${c.transcript ? `\nTranscript:\n${c.transcript.slice(0, 4000)}` : ""}`);
   try {
     db()
       .prepare(
@@ -70,6 +74,7 @@ export function logToFile(): void {
         const now = new Date();
         const line = args.map((a) => (typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : JSON.stringify(a))).join(" ");
         fs.appendFileSync(path.join(dir, `${now.toISOString().slice(0, 10)}.log`), `${now.toISOString()} ${level.toUpperCase()} [${process.pid}] ${line}\n`);
+        cloudLog(level, line, now);
       } catch {
         // logging must never break the app
       }
