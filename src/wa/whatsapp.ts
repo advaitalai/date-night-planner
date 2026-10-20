@@ -271,6 +271,9 @@ export async function startWhatsApp(): Promise<void> {
     }
     if (connection === "close") {
       const code = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
+      // Why it dropped (e.g. 428 connection closed, 408 timed out, 440 replaced by another session, 515 restart required).
+      const why = Object.entries(DisconnectReason).find(([, v]) => v === code)?.[0];
+      console.log(`[wa] disconnected: ${code ?? "?"}${why ? ` (${why})` : ""}${lastDisconnect?.error?.message ? `, ${lastDisconnect.error.message}` : ""}; reconnecting`);
       if (code === DisconnectReason.loggedOut) {
         console.error("WhatsApp logged out; delete data/wa-auth and re-pair.");
         return;
