@@ -136,14 +136,11 @@ export interface Prefs {
   defaultWeekday: number; // luxon: 1 = Monday ... 7 = Sunday
   defaultTime: string;
   partySize: number;
-  kickoff: { weekday: number; time: string };
-  nudge: { weekday: number; time: string };
   maxTravelMin: number;
   cuisineCooldownDates: number;
   revisitCooldownWeeks: number;
   budgetPerPersonMaxJpy: number | null;
   dietary: string;
-  skipWeeks: string[]; // dates (YYYY-MM-DD) with no date night
   /** Minutes after the asked time the bot may accept without checking (e.g. 18:30 → up to 19:00). */
   flexLaterMin: number;
 }

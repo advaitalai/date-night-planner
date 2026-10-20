@@ -18,6 +18,8 @@ Last updated: 16 Oct 2026.
 
 ## Next steps
 
+**20 Oct, descoped the Saturday trigger** (Advait): planning starts only when asked. Removed the kickoff and Sunday reminder jobs, "skip a week", their settings (`src/jobs/weekly.ts` → `reminders.ts`, keeping still-on, day-of and visit log). Leftover kickoff/nudge jobs in the database have no handler and fail quietly. **Bug found on the way (P0-2 at SMOKEHOUSE):** TableCheck's review page there says "CONFIRM", and the bot only looked for "Confirm", so it read an accepted form as refused and reported "full" (a real booking would have left a held table and a wrong message). Fixed: any-case Confirm button, or the review page's own text.
+
 **20 Oct: own number.** Advait got a povo eSIM (voice plan, for the SMS code; no 5G SA), registered WhatsApp Business on it, named the bot **Concierge** and added it to the group. Code: `WA_BOT_NAME` (saying "concierge" addresses the bot, as a whole word), the "other person" fallback now works with the bot's own number, `setup-vm.sh` checks out the working branch and locks down `.env`. Next: the cloud server (SETUP §2–4), linking Concierge there directly; stop the laptop copy first.
 
 **16 Oct, lean cut (Advait: "run a very lean product so I don't have to keep testing").** Agreed story by story (`docs/USER_STORIES.md`), then built:

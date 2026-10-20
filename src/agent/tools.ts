@@ -7,7 +7,6 @@ import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, getReservation,
 import { cancelJobs } from "../jobs/scheduler";
 import { say, status } from "../notify";
 import { clearPendingCall, pendingCall, runCall } from "../booking/calls";
-import { ensureWeeklyJobs, skipDate } from "../jobs/weekly";
 import { cidFromMapsUri, placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
 import { cidFromSavedUrl } from "../places/takeout";
 import { bookOption } from "../plans/decide";
@@ -293,13 +292,11 @@ const rawTools = [
   betaZodTool({
     name: "update_preferences",
     description:
-      "Change standing preferences: usual weekday (1=Mon..7=Sun) and time, when options are posted (kickoff) and the reminder if nobody picked (nudge), max travel minutes, budget per person (JPY), dietary notes, cuisine cooldown.",
+      "Change standing preferences: usual weekday (1=Mon..7=Sun) and time, max travel minutes, budget per person (JPY), dietary notes, cuisine cooldown.",
     inputSchema: z.object({
       defaultWeekday: z.number().int().min(1).max(7).optional(),
       defaultTime: z.string().optional(),
       partySize: z.number().int().optional(),
-      kickoff: z.object({ weekday: z.number().int().min(1).max(7), time: z.string() }).optional(),
-      nudge: z.object({ weekday: z.number().int().min(1).max(7), time: z.string() }).optional(),
       maxTravelMin: z.number().int().optional(),
       budgetPerPersonMaxJpy: z.number().int().nullable().optional(),
       dietary: z.string().optional(),
@@ -322,18 +319,7 @@ const rawTools = [
       }
       const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
       updatePrefs({ ...clean, anchors });
-      ensureWeeklyJobs();
       return `Updated: ${Object.keys(clean).concat(homeAddress ? ["home"] : [], officeAddress ? ["office"] : []).join(", ")}.`;
-    },
-  }),
-
-  betaZodTool({
-    name: "skip_date",
-    description: "No date night on this date (e.g. travelling); stops the weekly kickoff for it.",
-    inputSchema: z.object({ date: z.string() }),
-    run: async ({ date }) => {
-      skipDate(date);
-      return `Skipping ${date}.`;
     },
   }),
 

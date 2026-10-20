@@ -9,14 +9,11 @@ export const DEFAULT_PREFS: Prefs = {
   defaultWeekday: 3,
   defaultTime: "18:30",
   partySize: 2,
-  kickoff: { weekday: 6, time: "10:00" },
-  nudge: { weekday: 7, time: "10:00" },
   maxTravelMin: 25,
   cuisineCooldownDates: 3,
   revisitCooldownWeeks: 8,
   budgetPerPersonMaxJpy: 15000,
   dietary: "",
-  skipWeeks: [],
   flexLaterMin: 30,
 };
 

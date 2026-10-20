@@ -7,7 +7,7 @@ Grouped by epic.
 - **Production:** how it held up in live use with Emily (Validated / Bug fixed, revalidate / Unvalidated / In progress).
 - **Gaps:** what neither a test nor live use has checked yet.
 
-Last updated: 20 Oct 2026 (own number, Concierge). Lean cut on 16 Oct. What was cut, and why: end of this page.
+Last updated: 20 Oct 2026 (own number, Concierge; Saturday trigger and skip-a-week cut). Lean cut on 16 Oct. What was cut, and why: end of this page.
 
 ## 1. Chat (WhatsApp)
 
@@ -26,7 +26,6 @@ Last updated: 20 Oct 2026 (own number, Concierge). Lean cut on 16 Oct. What was 
 
 | # | Story | Test coverage | Production | Gaps |
 |---|---|---|---|---|
-| C1 | As a couple, we want options every Saturday 10:00 for next Wednesday and a Sunday reminder if we haven't picked. Nothing is booked without a decision. | Partial: scheduling only | Validated: fired 10–11 Oct | A full week on a fake clock |
 | C2 | As a couple, we want cuisines to rotate week to week. | Covered | Unvalidated | |
 | C3 | As a user, I want loose requests understood ("Thai or Mexican", "near work", "under ¥8,000"). | Covered for cuisines | Validated: Thai/Mexican | "near work", budget |
 | C4 | As a user, I want must-haves (live music) treated as must-haves, or told honestly none fit. | Covered | Validated | |
@@ -72,7 +71,6 @@ Last updated: 20 Oct 2026 (own number, Concierge). Lean cut on 16 Oct. What was 
 
 | # | Story | Test coverage | Production | Gaps |
 |---|---|---|---|---|
-| G1 | As a couple, we want to skip a week. | None | Validated (a test skip leaked into real use; `npm run fresh-start` now clears it) | |
 | G2 | As a user, I want to change our usual day, time, budget or travel limit in chat. | None | Unvalidated | Everything |
 
 ## 7. Saved places
@@ -110,6 +108,8 @@ Last updated: 20 Oct 2026 (own number, Concierge). Lean cut on 16 Oct. What was 
 
 | Story | Why it went |
 |---|---|
+| C1: Saturday options and Sunday reminder (cut 20 Oct) | Planning starts when one of you asks; less to run and test. |
+| G1: skip a week (cut 20 Oct) | Only existed to stop the Saturday trigger. |
 | C1 part: Sunday auto-book of the top vote | The bot shouldn't book without a decision. |
 | C3a: spend per person on cards | Not built; not needed. |
 | D1 part: email and Tabelog booking | Parked or unused; phone covers those places. |

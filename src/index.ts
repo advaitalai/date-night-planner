@@ -5,7 +5,7 @@ import { config } from "./config";
 import { kvGet, kvSet } from "./db";
 import { getPrefs, updatePrefs } from "./db/repo";
 import { startScheduler, stopScheduler } from "./jobs/scheduler";
-import { ensureWeeklyJobs, registerWeeklyJobs } from "./jobs/weekly";
+import { registerReminderJobs } from "./jobs/reminders";
 import { MIN_TWILIO_BALANCE, twilioBalance } from "./booking/phone";
 import { geocode } from "./places/google";
 import { startWhatsApp } from "./wa/whatsapp";
@@ -52,8 +52,7 @@ async function main(): Promise<void> {
   singleInstance();
   logToFile();
   console.log(`date-night-planner starting (DRY_RUN=${config.dryRun ? "on" : "off"}, model ${config.anthropicModel})`);
-  registerWeeklyJobs();
-  ensureWeeklyJobs();
+  registerReminderJobs();
   startScheduler();
   await geocodeAnchors();
   const balance = await twilioBalance();

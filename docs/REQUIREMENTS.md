@@ -20,7 +20,7 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 | Home | Residia Tower Meguro Fudomae, 3-7-6 Nishigotanda, Shinagawa (Gotanda/Fudomae) |
 | Work (Advait) | Arco Tower Annex, 1-8-1 Shimomeguro, Meguro (near Meguro station) |
 | Usual slot | Wednesday 18:30, 2 people. Day and time must be easy to change from chat. |
-| Planning cadence | Plan the weekend before: options go out Sat 10:00, a reminder Sun 10:00 if nobody has picked. Monday is too late to get tables at good places. Nothing is booked without a decision. |
+| Planning cadence | On request only (changed 20 Oct: the Saturday trigger and Sunday reminder were cut). "Plan something" without a date means the next usual date night. Nothing is booked without a decision. |
 | Travel limit | About 25 min from the starting point (default: home). "Near work" switches the starting point to the office. |
 | Budget | ¥15,000 per person by default (can be changed) |
 | Booking contact | In `.env` only, because the repo is public. Name Advait (アドヴァイト), Japanese phone 070 number, advaitalai@gmail.com. Japanese text puts the Japanese name first. |
@@ -29,10 +29,11 @@ First target: Wed 7 Oct 2026, around 18:30, near home.
 
 ### 4.0 Lean scope (16 Oct 2026)
 
-The core loop: Saturday options → either of you decides → the bot books (TableCheck, else a phone call) → change or cancel from the chat → one "still on?" and a day-of reminder → the visit is logged.
+The core loop: you ask for options → either of you decides → the bot books (TableCheck, else a phone call) → change or cancel from the chat → one "still on?" and a day-of reminder → the visit is logged.
 
 Cut on 16 Oct, and why:
 - **Calls scheduled for later** ("call at 11", "call in 30"): both caller bugs of 12–15 Oct were here. A closed restaurant gets "they open at 17:00, reply when you'd like me to call".
+- **The Saturday trigger, Sunday reminder and "skip a week"** (cut 20 Oct): planning starts when one of you asks.
 - **Vote counting and the Sunday auto-book:** the agent reads the conversation instead (R3). Nothing is booked without a decision.
 - **Email and Tabelog booking, Gmail and Drive watchers, the onboarding web page, polls:** parked or unused. Saved lists come in by CSV import.
 - **Auto-cancel and the 48h "still on?":** one reminder, a day before free cancellation ends; it never cancels by itself.

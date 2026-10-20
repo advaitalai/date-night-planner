@@ -31,7 +31,7 @@ Do all of this in **console.cloud.google.com** while signed in as advaitalai@gma
 6. **Optional: cap the Maps usage.** Go to **APIs & Services → Places API (New) → Quotas** and lower the per-day request limits (e.g. 200/day). The bot uses far less than Google's free monthly allowance, so this is just a safety net.
 ## 3. The server: a free e2-micro VM
 
-The bot has to run all the time, to stay connected to WhatsApp and fire the Saturday and deadline timers. Google's always-free tier includes one small VM, but only in some US regions. That's fine for this: the bot mostly waits.
+The bot has to run all the time, to stay connected to WhatsApp and send the reminders on time. Google's always-free tier includes one small VM, but only in some US regions. That's fine for this: the bot mostly waits.
 
 1. Go to **Compute Engine → VM instances → Create instance** and set:
    - Name `date-night`

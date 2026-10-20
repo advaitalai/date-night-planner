@@ -42,7 +42,7 @@ function stateBlock(): string {
   return `<state>
 Now: ${now().toFormat("cccc yyyy-MM-dd HH:mm")} JST
 Usual date night: ${weekday[prefs.defaultWeekday]} ${prefs.defaultTime}, ${prefs.partySize} people, max ${prefs.maxTravelMin} min travel, budget ¥${prefs.budgetPerPersonMaxJpy ?? "—"}/person${prefs.dietary ? `, dietary: ${prefs.dietary}` : ""}
-Planning: options posted ${weekday[prefs.kickoff.weekday]} ${prefs.kickoff.time}, reminder ${weekday[prefs.nudge.weekday]} ${prefs.nudge.time} if nobody has picked
+Planning starts only when they ask (no weekly trigger); the usual day and time are the default date.
 Upcoming reservations:
 ${res || "none"}
 ${planText}

@@ -21,23 +21,6 @@ export function nextWeekday(from: DateTime, weekday: number): string {
   return d.toISODate()!;
 }
 
-/** The next moment at weekday+time strictly after `from`. */
-export function nextWeeklyMoment(from: DateTime, weekday: number, time: string): DateTime {
-  const [h, m] = time.split(":").map(Number);
-  let d = from.setZone(ZONE).set({ hour: h, minute: m, second: 0, millisecond: 0 });
-  while (d.weekday !== weekday || d <= from) d = d.plus({ days: 1 }).set({ hour: h, minute: m });
-  return d;
-}
-
-/**
- * The date-night date a planning round starting at `from` targets: the first
- * `dateWeekday` after the kickoff. With a Saturday kickoff and Wednesday dates
- * that's the coming Wednesday, 4 days later.
- */
-export function targetDateFor(from: DateTime, dateWeekday: number): string {
-  return nextWeekday(from, dateWeekday);
-}
-
 const WEEK_MIN = 7 * 24 * 60;
 
 /** Minutes since Sunday 00:00, matching the Places API day numbering (0 = Sunday). */

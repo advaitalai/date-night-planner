@@ -73,7 +73,7 @@ line();
 // ---------- reminders / jobs ----------
 const jobs = all("SELECT type, status, COUNT(*) AS n FROM jobs WHERE run_at >= ? GROUP BY type, status ORDER BY type", since);
 const failed = all("SELECT type, run_at, last_error FROM jobs WHERE status = 'failed' AND run_at >= ?", since);
-line("## Scheduled jobs (reminders, kickoff, calls)");
+line("## Scheduled jobs (reminders)");
 for (const j of jobs) line(`- ${j.type}: ${j.n} ${j.status}`);
 for (const f of failed) line(`- ❌ ${f.type} at ${f.run_at}: ${String(f.last_error ?? "").split("\n")[0].slice(0, 160)}`);
 line();

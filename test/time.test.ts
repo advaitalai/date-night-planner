@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import { describe, expect, it } from "vitest";
 import type { OpeningPeriod } from "../src/types";
-import { freeCancelDeadline, isOpenFor, jst, nextWeekday, nextWeeklyMoment, ZONE } from "../src/util/time";
+import { freeCancelDeadline, isOpenFor, jst, nextWeekday, ZONE } from "../src/util/time";
 
 const sat = DateTime.fromISO("2026-10-03T10:00", { zone: ZONE }); // a Saturday
 
@@ -13,12 +13,6 @@ describe("dates", () => {
   it("never returns the same day", () => {
     const wed = DateTime.fromISO("2026-10-07T09:00", { zone: ZONE });
     expect(nextWeekday(wed, 3)).toBe("2026-10-14");
-  });
-
-  it("finds the next weekly moment strictly after now", () => {
-    expect(nextWeeklyMoment(sat, 6, "10:00").toISO()).toContain("2026-10-10T10:00");
-    expect(nextWeeklyMoment(sat.minus({ minutes: 1 }), 6, "10:00").toISO()).toContain("2026-10-03T10:00");
-    expect(nextWeeklyMoment(sat, 7, "20:00").toISO()).toContain("2026-10-04T20:00");
   });
 });
 

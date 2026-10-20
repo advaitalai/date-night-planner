@@ -179,6 +179,14 @@ export async function tcShopInfo(slug: string): Promise<TcShopInfo> {
 }
 
 /** TableCheck's post-submit page, e.g. "Your Reservation is Accepted … Status Accepted". */
+/**
+ * TableCheck's review page: everything was accepted and the table is held for
+ * 10 minutes, waiting for the final Confirm. Where a dry run stops.
+ */
+export function isReviewPage(body: string): boolean {
+  return /time remaining to confirm|reservation is not yet booked/i.test(body);
+}
+
 export function isBookedPage(body: string): boolean {
   return /reservation is (accepted|confirmed)|status\s+(accepted|confirmed)|confirmed|thank you|complete|予約が(完了|確定)|予約を受け付け/i.test(body);
 }
@@ -379,8 +387,10 @@ async function bookClassic(page: Page, slot: Slot, contact: Contact, notes?: str
   await page.locator("input[type=submit][value='Next Step']").first().click();
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(2000);
-  const confirmBtn = page.locator("input[type=submit][value='Confirm']");
-  if (!(await confirmBtn.isVisible().catch(() => false))) {
+  // The button reads "Confirm" or "CONFIRM" depending on the venue's layout (SMOKEHOUSE: "CONFIRM").
+  const confirmBtn = page.getByRole("button", { name: /^\s*confirm\s*$/i }).first();
+  const reviewing = (await confirmBtn.isVisible().catch(() => false)) || isReviewPage(await page.locator("body").innerText().catch(() => ""));
+  if (!reviewing) {
     const errors = (await page.locator(".has-error, .alert-danger, .error, .help-block").allInnerTexts().catch(() => [])).join(" / ");
     // TableCheck adds "selected time is unavailable" to other form errors too (a missing answer, an
     // invalid phone), so it only means full when nothing else is wrong.

@@ -16,6 +16,7 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
 
 - Calls scheduled for later ("call at 11", "call in 30") and rescheduling them.
 - Vote counting ("you both picked") and the Sunday auto-book.
+- (20 Oct) The Saturday trigger, the Sunday reminder and "skip a week".
 - Email booking and the Gmail reply watcher; Tabelog booking.
 - Automatic Takeout pickup from Drive; the Google onboarding web page.
 - WhatsApp polls.
@@ -59,7 +60,7 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
    - calling back to accept an offered alternative time.
 5. **More booking platforms:** Hot Pepper Gourmet (its search API is free; booking would go through the browser), OMAKASE, ebica, Toreta and Ikyu. `detect.ts` already marks these places as `other_online`.
 7. **Watch fully booked places for cancellations.** Poll TableCheck availability for places they both want that are full, and book automatically when a table frees up.
-8. **Book sought-after places further ahead.** For places that fill up weeks in advance, book further out than the Saturday-before rhythm.
+8. **Book sought-after places further ahead.** For places that fill up weeks in advance, book further out than a few days ahead.
 
 ## Planning & recommendations
 
@@ -91,7 +92,6 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
   - writes pitches using only stored facts.
 - Booking through TableCheck, else an AI phone call: book, change and cancel. Cancellation policies are read from the booking, the call or the website, and turned into a deadline reminder.
 - Weekly rhythm:
-  - Saturday kickoff and a Sunday reminder if nobody picked (never books by itself);
   - one "still on?" a day before the free-cancellation deadline;
   - reminder on the day;
   - visit log after the date.

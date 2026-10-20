@@ -44,14 +44,13 @@ const MAX_ATTEMPTS = 3;
  * Jobs that post a message are not retried: if WhatsApp times out after
  * delivering, a retry sends it twice (the day-of reminder did).
  */
-const NO_RETRY = new Set(["dayof_reminder", "cancel_guard", "nudge", "kickoff"]);
+const NO_RETRY = new Set(["dayof_reminder", "cancel_guard"]);
 
 /**
  * Reminders that are pointless once they're this late (e.g. the app was off
  * when they were due). They're dropped instead of all firing at startup.
  */
 const STALE_AFTER_MS: Record<string, number> = {
-  nudge: 2 * 3600_000,
   dayof_reminder: 6 * 3600_000,
 };
 

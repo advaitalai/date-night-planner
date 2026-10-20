@@ -2,7 +2,7 @@
 
 A WhatsApp agent for Advait and Emily that plans the weekly date night and handles reservations from start to finish.
 
-Every Saturday it posts three options for the following Wednesday, each with a short pitch. Talk it over between you; when either of you decides (or the bot hears you settle it and you confirm), it books: on TableCheck if it can, otherwise by an AI phone call in Japanese. After that it reminds you a day before free cancellation ends, changes or cancels the booking if you ask, and reminds you on the day.
+Ask it for options ("plan Wednesday", "something Thai near work on Friday") and it posts three, each with a short pitch. Talk it over between you; when either of you decides (or the bot hears you settle it and you confirm), it books: on TableCheck if it can, otherwise by an AI phone call in Japanese. After that it reminds you a day before free cancellation ends, changes or cancels the booking if you ask, and reminds you on the day.
 
 The bot answers when you **reply inline to one of its messages** or say "planner":
 
@@ -30,7 +30,7 @@ Scheduler (SQLite jobs) ──┘                                              �
 | Booking | `src/booking/` | TableCheck availability from its public diner API, bookings as a guest in a headless browser. Phone-only places get an AI call (`calls.ts` decides when, `phone.ts` makes it). |
 | Policies | `src/booking/service.ts` | The cancellation policy is read with an LLM and turned into a free-cancel deadline. One "still on?" a day before it. |
 | Saved lists | `src/places/takeout.ts` | Takeout CSV/zip import (`npm run import-csv`). Each place is matched to Google Places by its Maps ID. |
-| Schedule | `src/jobs/` | Sat 10:00 kickoff, Sun 10:00 reminder if nobody picked (never books by itself), still-on and day-of reminders, visit log. Times can be changed from the chat. |
+| Reminders | `src/jobs/` | For every booking: one "still on?" a day before free cancellation ends, the day-of reminder, the visit log. No weekly trigger. |
 
 ## Setup
 

@@ -108,6 +108,12 @@ describe("TableCheck booked page", () => {
     expect(isBookedPage("Your Reservation is Accepted\nAt\nh:armonia\nStatus\nAccepted")).toBe(true);
     expect(isBookedPage("Your selected time is unavailable.")).toBe(false);
   });
+
+  it("recognises the review page a dry run stops on, whatever the button says", async () => {
+    const { isReviewPage } = await import("../src/booking/tablecheck");
+    expect(isReviewPage('Your reservation is not yet booked. Please review details below and click "Confirm".\nTime Remaining to Confirm:\n9:58\nCONFIRM')).toBe(true);
+    expect(isReviewPage("Your selected time is unavailable. Please choose a different time.")).toBe(false);
+  });
 });
 
 describe("TableCheck classic menu check", () => {
