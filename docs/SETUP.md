@@ -141,7 +141,8 @@ How Claude reads them (for future sessions):
 # The key is base64 (one line) or raw JSON.
 (echo "$GCP_LOG_READER_KEY" | base64 -d 2>/dev/null || echo "$GCP_LOG_READER_KEY") > /tmp/log-reader.json
 gcloud auth activate-service-account --key-file=/tmp/log-reader.json
-gcloud logging read 'logName="projects/<project>/logs/date-night-planner" AND timestamp>="2026-10-20T12:00:00Z"' --project <project> --order=asc --format='value(timestamp,textPayload)' --limit 2000
+# Cloud sessions set CLOUDSDK_AUTH_ACCESS_TOKEN, which overrides the key: unset it.
+env -u CLOUDSDK_AUTH_ACCESS_TOKEN gcloud logging read 'logName="projects/<project>/logs/date-night-planner" AND timestamp>="2026-10-20T12:00:00Z"' --project <project> --order=asc --format='value(timestamp,textPayload)' --limit 2000
 ```
 (`<project>` is `project_id` in the key.) Every call's outcome and transcript are in the log too (`[call]` lines).
 
