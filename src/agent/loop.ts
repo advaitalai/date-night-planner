@@ -63,11 +63,17 @@ let queue: Promise<unknown> = Promise.resolve();
 /** Longest a single message may take (a phone call can take ~8 min) before the chat is freed. */
 const TURN_LIMIT_MS = 10 * 60_000;
 
-export function handleMessage(sender: string, text: string, opts: { addressed?: boolean } = {}): Promise<string | null> {
+export function handleMessage(sender: string, text: string, opts: { addressed?: boolean; onForBot?: () => Promise<void> } = {}): Promise<string | null> {
   const addressed = opts.addressed ?? true;
   const run = queue.then(() =>
     Promise.race([
-      addressed ? runAgent(sender, text) : listen(sender, text).then((r) => (r === FOR_BOT ? runAgent(sender, text) : r)),
+      addressed
+        ? runAgent(sender, text)
+        : listen(sender, text).then(async (r) => {
+            if (r !== FOR_BOT) return r;
+            await opts.onForBot?.();
+            return runAgent(sender, text);
+          }),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("that took too long, so I stopped waiting")), TURN_LIMIT_MS)),
     ]),
   );

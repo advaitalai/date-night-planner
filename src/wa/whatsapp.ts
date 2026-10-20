@@ -181,37 +181,38 @@ async function onMessage(m: WAMessage): Promise<void> {
   if (text.startsWith(BOT_PREFIX.trim())) return;
   const person = m.key.fromMe ? config.wa.selfName : (identify(getKeyAuthor(m.key), m.pushName, text, (m.key as { participantPn?: string }).participantPn) ?? m.pushName ?? "someone");
   logMessage(person, text, m.key.id ?? undefined);
-  if (!isAddressed(m, text)) {
-    // Not for the bot: it only listens, and may ask to confirm a decision on open options.
-    console.log(`[heard] ${person}: ${text.slice(0, 200)}`);
-    try {
-      const reply = await handleMessage(person, text, { addressed: false });
-      if (reply) await say(reply);
-    } catch (err) {
-      console.error("agent error (listening):", err);
-    }
-    return;
-  }
-
-  console.log(`[in] ${person}: ${text}`);
-  // Visible "working on it" signal: ⏳ on their message, ✅ when answered (❌ on error).
+  // Not addressed (no reply, no name): the bot listens, and works on it only if it judges the
+  // message is for it. Either way the same "working on it" signals apply once it does: ⏳ on
+  // the message, a status line, ✅ when answered. (The status line used to be left behind for
+  // judged messages, so the next request edited an old message far up the chat.)
+  const addressed = isAddressed(m, text);
+  console.log(`${addressed ? "[in]" : "[heard]"} ${person}: ${text.slice(0, 200)}`);
   // Typing indicators don't show in self-chats, and fade after ~25s elsewhere.
   const react = (emoji: string) => sock?.sendMessage(chatJid(), { react: { text: emoji, key: m.key } }).catch(() => {});
-  await react("⏳");
-  await status("Reading your message…");
-  const typing = setInterval(() => void sock?.sendPresenceUpdate("composing", chatJid()).catch(() => {}), 10_000);
+  let working = false;
+  let typing: NodeJS.Timeout | undefined;
+  const startWorking = async () => {
+    if (working) return;
+    working = true;
+    await react("⏳");
+    await status("Reading your message…");
+    typing = setInterval(() => void sock?.sendPresenceUpdate("composing", chatJid()).catch(() => {}), 10_000);
+  };
+  if (addressed) await startWorking();
   const before = saidCount();
   try {
-    const reply = await handleMessage(person, text);
+    const reply = await handleMessage(person, text, { addressed, onForBot: startWorking });
     if (reply) await say(reply);
     // Nothing to say (e.g. "thanks"): take the ⏳ back off, no ✅.
-    await react(saidCount() > before ? "✅" : "");
+    if (working) await react(saidCount() > before ? "✅" : "");
   } catch (err) {
-    console.error("agent error:", err);
-    await react("❌");
-    await say(`Sorry, something went wrong on my side (${(err as Error).message.slice(0, 120)}). Try again?`);
+    console.error(working ? "agent error:" : "agent error (listening):", err);
+    if (working) {
+      await react("❌");
+      await say(`Sorry, something went wrong on my side (${(err as Error).message.slice(0, 120)}). Try again?`);
+    }
   } finally {
-    clearInterval(typing);
+    if (typing) clearInterval(typing);
     await clearStatus();
     void sock?.sendPresenceUpdate("paused", chatJid()).catch(() => {});
   }

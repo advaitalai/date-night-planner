@@ -195,6 +195,27 @@ describe("status line", () => {
   });
 });
 
+describe("status line freshness", () => {
+  it("never edits a status line that has scrolled away: removes it and posts a new one", async () => {
+    const { vi } = await import("vitest");
+    const { setSender, status, clearStatus } = await import("../src/notify");
+    const log: string[] = [];
+    let n = 0;
+    setSender({
+      text: async (t) => (log.push(`send ${t}`), `s${++n}`),
+      edit: async (id, t) => void log.push(`edit ${id} ${t}`),
+      remove: async (id) => void log.push(`remove ${id}`),
+    });
+    vi.useFakeTimers();
+    await status("Searching places…");
+    vi.advanceTimersByTime(4 * 60_000); // left behind 4 min ago
+    await status("Checking the table and booking…");
+    vi.useRealTimers();
+    await clearStatus();
+    expect(log).toEqual(["send ⏳ Searching places…", "remove s1", "send ⏳ Checking the table and booking…", "remove s2"]);
+  });
+});
+
 describe("tell me more", () => {
   it("returns the option's facts and how it would be booked", async () => {
     const { tools } = await import("../src/agent/tools");

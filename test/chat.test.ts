@@ -75,6 +75,18 @@ describe("listening to the two of them", () => {
     expect(decided.agentRuns).toBe(1);
   });
 
+  it("shows it's working (⏳ and status line) once it judges a message is for it, and not for chat between them", async () => {
+    const { handleMessage } = await import("../src/agent/loop");
+    let started = 0;
+    const onForBot = async () => void started++;
+    decided.forBot = true;
+    await handleMessage("Advait", "Show me Latin American food near home", { addressed: false, onForBot });
+    expect(started).toBe(1);
+    decided.forBot = false;
+    await handleMessage("Advait", "Emily did you have a busy day?", { addressed: false, onForBot });
+    expect(started).toBe(1);
+  });
+
   it("doesn't wake the agent for messages between the two of them", async () => {
     const { handleMessage } = await import("../src/agent/loop");
     await openPlan();

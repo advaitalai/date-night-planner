@@ -55,6 +55,8 @@ async function main(): Promise<void> {
   const cloudProject = await startCloudLogging();
   if (cloudProject) console.log(`Sending logs to Cloud Logging (project ${cloudProject}, log "date-night-planner")`);
   console.log(`date-night-planner starting (DRY_RUN=${config.dryRun ? "on" : "off"}, model ${config.anthropicModel})`);
+  const prefs = getPrefs();
+  console.log(`Preferences: usual ${["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][prefs.defaultWeekday]} ${prefs.defaultTime}, max ${prefs.maxTravelMin} min travel (+10/+20 when widening), budget ¥${prefs.budgetPerPersonMaxJpy ?? "any"}/person`);
   registerReminderJobs();
   startScheduler();
   await geocodeAnchors();

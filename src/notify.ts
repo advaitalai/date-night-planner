@@ -54,6 +54,9 @@ export async function say(text: string): Promise<string | undefined> {
 
 let statusId: string | undefined;
 let statusText = "";
+let statusAt = 0;
+/** Never edit a status line older than this: it has scrolled out of sight (and WhatsApp limits edits). */
+const STATUS_FRESH_MS = 3 * 60_000;
 
 export async function status(text: string): Promise<void> {
   const line = `⏳ ${text}`;
@@ -61,8 +64,16 @@ export async function status(text: string): Promise<void> {
   statusText = line;
   console.log(`[status] ${text}`);
   try {
+    if (statusId && Date.now() - statusAt > STATUS_FRESH_MS) {
+      const old = statusId;
+      statusId = undefined;
+      await sender.remove(old).catch(() => {});
+    }
     if (statusId) await sender.edit(statusId, line);
-    else statusId = await sender.text(line);
+    else {
+      statusId = await sender.text(line);
+      statusAt = Date.now();
+    }
   } catch {
     // Status lines are best-effort.
   }
