@@ -16,7 +16,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const slot = { date: "2026-10-21", time: "18:30", partySize: 2 };
+// A few days ahead, so the assumed 24h free-cancellation deadline is still in the future.
+const slot = { date: DateTime.now().setZone(ZONE).plus({ days: 5 }).toISODate()!, time: "18:30", partySize: 2 };
 
 /** Open in a few hours, closed right now. */
 function closedNowHours(): OpeningPeriod[] {

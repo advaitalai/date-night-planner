@@ -6,7 +6,7 @@ import { db } from "../db";
 import { addVisit, findPlaceByName, getPlace, getPlan, getPrefs, getReservation, upcomingReservations, updatePrefs, updateReservation, upsertPlace } from "../db/repo";
 import { cancelJobs } from "../jobs/scheduler";
 import { say, status } from "../notify";
-import { clearPendingCall, pendingCall, runCall } from "../booking/calls";
+import { clearPendingCall, closedNow, opensAt, pendingCall, runCall, setPending } from "../booking/calls";
 import { placeDetails, reviewSnippets, textSearch, toPlaceFields } from "../places/google";
 import { bookOption } from "../plans/decide";
 import { proposePlan } from "../recommender";
@@ -73,14 +73,22 @@ const rawTools = [
   betaZodTool({
     name: "place_call",
     description:
-      "Place the phone call the bot is waiting on (see 'Pending call' in <state>) when they say go ahead, in any words: 'call', 'ok call then', 'go for it', 'sure', 'try 19:00'. Calls right away (there are no calls for later; if they want a later time, tell them to reply when they're ready). If you're unsure they mean yes, ask instead.",
+      "Place the phone call the bot is waiting on (see 'Pending call' in <state>) when they say go ahead, in any words: 'call', 'ok call then', 'go for it', 'sure', 'do 7 instead' (pass time). Calls right away (there are no calls for later). If the restaurant is closed, it doesn't call unless they explicitly said to call now / anyway: it keeps the call (with any new time) waiting and tells you when they open. If you're unsure they mean yes, ask instead.",
     inputSchema: z.object({
       time: z.string().optional().describe("HH:mm to book instead of the original time, e.g. a time the restaurant offered"),
+      even_if_closed: z.boolean().optional().describe("True only if the latest message explicitly says to call now or anyway, even though they're closed ('try now anyway'). A new time or a 'yes' is not that."),
     }),
-    run: async ({ time }) => {
+    run: async ({ time, even_if_closed }) => {
       const call = pendingCall();
       if (!call) return "There's no call waiting for a go-ahead. If they asked to call a place, use book_place, cancel_reservation or modify_reservation with call_go_ahead.";
-      const out = await runCall({ ...call, slot: time ? { ...call.slot, time } : call.slot, alternatives: undefined });
+      const next = { ...call, slot: time ? { ...call.slot, time } : call.slot, alternatives: undefined };
+      const place = getPlace(call.placeId);
+      // Emily asked for 7pm at Kimmy before it opened, and the bot called anyway (21 Oct).
+      if (place && closedNow(place) && !even_if_closed) {
+        setPending(next);
+        return `NOT called: ${place.name} is closed. ${opensAt(place)} The call${time ? ` (now for ${time})` : ""} is kept waiting. Tell them in a line, and that they can reply once it's open (or say "call now" to try anyway).`;
+      }
+      const out = await runCall(next);
       await say(out.message);
       return "Called; the outcome was posted to the chat. Reply NO_REPLY.";
     },

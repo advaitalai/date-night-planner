@@ -250,6 +250,10 @@ export function policyLine(r: Reservation): string {
   if (!r.free_cancel_deadline) return "";
   const d = DateTime.fromISO(r.free_cancel_deadline, { zone: ZONE }).toFormat("ccc d LLL HH:mm");
   const checked = r.notes?.match(/policy not found \(checked ([^)]+)\)/)?.[1];
+  // A same-day booking with an assumed 24h policy: the deadline is already behind us (said "until Tue" for a Wed booking made Wed morning).
+  if (DateTime.fromISO(r.free_cancel_deadline, { zone: ZONE }) <= now()) {
+    return `The free-cancellation window has already passed${r.notes?.includes("assuming 24h") ? " (assuming 24h, as no policy was found)" : ""}, so cancelling now may cost a fee${r.cancel_fee ? ` (${r.cancel_fee})` : ""}.`;
+  }
   const assumed = r.notes?.includes("assuming 24h") ? (checked ? ` (no policy on ${checked.replace(/, ([^,]+)$/, " or $1")}; assuming 24h)` : " (policy not stated, assuming 24h)") : "";
   return `Free cancellation until ${d}${assumed}${r.cancel_fee ? `; after that: ${r.cancel_fee}` : ""}.`;
 }

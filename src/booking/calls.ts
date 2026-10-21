@@ -43,7 +43,7 @@ export function pendingCall(): PendingCall | null {
   return p;
 }
 
-function setPending(call: PendingCall): void {
+export function setPending(call: PendingCall): void {
   kvSet(KEY, { ...call, askedAt: new Date().toISOString() });
 }
 
@@ -82,7 +82,7 @@ export function closedNow(place: Place): boolean {
   return isOpenFor(place.opening_periods, now(), 15) === false;
 }
 
-function opensAt(place: Place): string {
+export function opensAt(place: Place): string {
   const next = nextOpening(place);
   if (!next) return "They're closed right now.";
   return `They're closed right now and open ${next.hasSame(now(), "day") ? "at" : next.toFormat("ccc")} ${next.toFormat("HH:mm")}.`;

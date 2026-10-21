@@ -60,7 +60,9 @@ const NOT_DINNER_WORDS = /dessert|sweets|patisserie|pâtisserie|parfait|cafe|caf
 /** Dessert bars, cafés and bakeries aren't dinner, unless that's what they asked for. */
 export function isDinnerPlace(p: Place, k: Constraints): boolean {
   if (k.cuisines.some((c) => NOT_DINNER_WORDS.test(c))) return true;
-  if (p.features?.servesDinner === false) return false;
+  // Google's "no dinner" is ignored for places you saved yourselves (cado, a wine bar with food, was never
+  // suggested); cafés, bakeries and dessert shops are still out by type below.
+  if (p.features?.servesDinner === false && !p.saved_by.length) return false;
   if (p.primary_type && NOT_DINNER_TYPES.has(p.primary_type)) return false;
   const label = `${p.cuisine ?? ""} ${p.profile?.cuisine ?? ""}`;
   return !NOT_DINNER_WORDS.test(label);

@@ -86,14 +86,11 @@ describe("change-a-booking call script", () => {
     const r = { id: 1, date: "2026-10-22", time: "19:00", party_size: 2 } as never;
     const contact = { name: "Advait", nameKana: "", phone: "090-1234-5678", email: "a@example.com" };
     const en = modifyScript(r, place({ name: "Shiva Curry Wara" }), { date: "2026-10-22", time: "20:00", partySize: 2 }, contact);
-    expect(en.firstMessage).toContain("about a reservation");
-    expect(en.systemPrompt).toContain("Thursday, October 22nd at 7 p.m., two people");
-    expect(en.systemPrompt).toContain("changed to Thursday, October 22nd at 8 p.m. for two people");
-    expect(en.systemPrompt).not.toMatch(/\b20:00\b|\b19:00\b/);
+    expect(en.firstMessage).toContain("about a reservation: two people on Thursday, October 22nd at 7 p.m. Could we change it to Thursday, October 22nd at 8 p.m. for two people?");
+    expect(en.firstMessage + en.systemPrompt).not.toMatch(/\b20:00\b|\b19:00\b/);
     config.dryRun = false; // real calls are Japanese
     const ja = modifyScript(r, place({ name: "Shiva Curry Wara" }), { date: "2026-10-22", time: "20:00", partySize: 2 }, contact);
-    expect(ja.systemPrompt).toContain("10月22日、木曜日、午後7時、2名）を、10月22日、木曜日、午後8時、2名に変更");
-    expect(ja.firstMessage).toContain("予約の件でお電話");
+    expect(ja.firstMessage).toContain("10月22日、木曜日、午後7時から2名の予約を、10月22日、木曜日、午後8時から2名に変更できますでしょうか");
     if (before.lang === undefined) delete process.env.CALL_LANGUAGE;
     else process.env.CALL_LANGUAGE = before.lang;
     config.dryRun = before.dry;
@@ -149,5 +146,61 @@ describe("cuisine matching (round 4: 'Latin American' offered American barbecue)
     expect(cuisineMatch("japanese curry", "japanese")).toBe(0.5);
     expect(cuisineMatch("thai", "southeast asian")).toBe(0.5);
     expect(cuisineMatch("thai", "thai")).toBe(1);
+  });
+});
+
+describe("real-call fixes (21 Oct, Kimmy)", () => {
+  it("says the booking request in the fixed opening line, so the AI never phrases the date itself", async () => {
+    const { bookingScript } = await import("../src/booking/phone");
+    const c = { name: "Advait", nameKana: "", phone: "070-1234-5678", email: "a@example.com" };
+    const kimmy = place({ name: "Kimmy", name_local: "キミー" });
+    const slot = { date: "2026-10-21", time: "19:00", partySize: 2 };
+    const ja = bookingScript(kimmy, slot, c, "ja");
+    expect(ja.firstMessage).toContain("キミー様でしょうか");
+    expect(ja.firstMessage).toContain("10月21日、水曜日、午後7時から2名、席のみで予約をお願いしたいのですが");
+    expect(ja.systemPrompt).toContain("ゼロナナゼロ、イチニーサンヨン、ゴーロクナナハチ");
+    const en = bookingScript(kimmy, slot, c, "en");
+    expect(en.firstMessage).toContain("I'd like to book seats for two people on Wednesday, October 21st at 7 p.m.");
+  });
+
+  it("doesn't call a closed restaurant on a 'yes' or a new time, only on an explicit 'call now'", async () => {
+    process.env.CALL_FAKE = "booked";
+    const { DateTime } = await import("luxon");
+    const { ZONE } = await import("../src/util/time");
+    const { askToCall, pendingCall } = await import("../src/booking/calls");
+    const { tools } = await import("../src/agent/tools");
+    const { db } = await import("../src/db");
+    const o = DateTime.now().setZone(ZONE).plus({ hours: 3 });
+    const c2 = o.plus({ hours: 3 });
+    const kimmy = await saved({ name: "Kimmy", booking_channel: "phone", tablecheck_slug: null, phone: "03-0000-0000", opening_periods: [{ open: { day: o.weekday % 7, hour: o.hour, minute: 0 }, close: { day: c2.weekday % 7, hour: c2.hour, minute: 0 } }] });
+    askToCall({ kind: "book", placeId: kimmy.id, slot: { date: "2026-10-21", time: "18:30", partySize: 2 } }, kimmy, []);
+    const placeCall = tools.find((t) => t.name === "place_call")!;
+    const run = placeCall.run as (i: unknown) => Promise<string>;
+    const calls = () => (db().prepare("SELECT COUNT(*) AS n FROM call_log").get() as { n: number }).n;
+    expect(await run({ time: "19:00" })).toMatch(/^NOT called: Kimmy is closed/);
+    expect(calls()).toBe(0);
+    expect(pendingCall()?.slot.time).toBe("19:00"); // the new time is kept for when they're open
+    await run({ even_if_closed: true });
+    expect(calls()).toBe(1);
+  });
+
+  it("never shows a free-cancellation deadline that has already passed", async () => {
+    const { policyLine } = await import("../src/booking/service");
+    const { DateTime } = await import("luxon");
+    const past = { free_cancel_deadline: DateTime.now().minus({ hours: 14 }).toISO(), notes: "cancellation policy not found (checked the call, their website); assuming 24h", cancel_fee: null } as never;
+    const line = policyLine(past);
+    expect(line).not.toMatch(/Free cancellation until/);
+    expect(line).toMatch(/free-cancellation window has already passed/i);
+  });
+
+  it("keeps a place you saved even if Google says it doesn't serve dinner (cado, a wine bar with food)", async () => {
+    const { isDinnerPlace } = await import("../src/recommender/filters");
+    const { EMPTY_CONSTRAINTS } = await import("../src/recommender/parseRequest");
+    const cado = place({ name: "cado", primary_type: "wine_bar", saved_by: ["Emily"], features: { servesDinner: false } });
+    const notSaved = place({ name: "Some wine bar", primary_type: "wine_bar", saved_by: [], features: { servesDinner: false } });
+    const savedCafe = place({ name: "Coffee", primary_type: "cafe", saved_by: ["Emily"], features: { servesDinner: false } });
+    expect(isDinnerPlace(cado, EMPTY_CONSTRAINTS)).toBe(true);
+    expect(isDinnerPlace(notSaved, EMPTY_CONSTRAINTS)).toBe(false);
+    expect(isDinnerPlace(savedCafe, EMPTY_CONSTRAINTS)).toBe(false);
   });
 });

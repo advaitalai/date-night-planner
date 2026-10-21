@@ -98,6 +98,9 @@ export function spokenPhone(phone: string, lang: CallLanguage): string {
   const groups = domesticPhone(phone).split(/[^0-9]+/).filter(Boolean);
   return lang === "en" ? groups.map((g) => [...g].map((d) => DIGITS_EN[+d]).join(" ")).join(", ") : groups.map((g) => [...g].map((d) => DIGITS_JA[+d]).join("")).join("、");
 }
+/** End a sentence without doubling the full stop of "p.m.". */
+const stop = (s: string) => (s.endsWith(".") ? s : `${s}.`);
+
 export function spokenDateJa(date: string): string {
   const d = DateTime.fromISO(date, { zone: ZONE });
   return `${d.month}月${d.day}日、${"月火水木金土日"[d.weekday - 1]}曜日`;
@@ -118,7 +121,12 @@ export function bookingScript(place: Place, slot: Slot, c: Contact, language: Ca
     const at = spokenTimeEn;
     return {
       language,
-      firstMessage: `Hello, is this ${place.name}? I'm an AI assistant calling for ${name} ${task === "book" ? "to make a reservation" : "about a reservation"}.`,
+      // The request is in this fixed line, read out exactly: when the AI phrased it itself it said
+      // the wrong date ("24th", and on a real Japanese call 24日 and 20日 for the 21st).
+      firstMessage:
+        task === "book"
+          ? `Hello, is this ${place.name}? I'm an AI assistant calling for ${name}. I'd like to book seats for ${DIGITS_EN[slot.partySize] ?? slot.partySize} people on ${day(slot.date)} at ${stop(at(slot.time))} Do you have a table?`
+          : `Hello, is this ${place.name}? I'm an AI assistant calling for ${name}. I'd like to cancel the reservation for ${DIGITS_EN[existing?.party_size ?? 2] ?? existing?.party_size} people on ${existing ? day(existing.date) : ""} at ${existing ? at(existing.time) : ""}, under the name ${name}.`,
       systemPrompt: `You are a polite AI assistant on a phone call with the restaurant ${place.name}, calling for ${name}. Keep it short and friendly.
 Today is ${today.setLocale("en").toFormat("cccc d LLLL yyyy")}.
 Goal: ${
@@ -133,6 +141,7 @@ Anything else (another date, a time outside that, a condition): thank them, note
 If they seem to mean a different date (or a date that has passed), politely restate: "It's for ${day(slot.date)}."
 If they accept, confirm the date, time, number of people, the name ${name} and the phone number: ${spokenPhone(c.phone, "en")}.
 Say dates, times and numbers exactly as written in these instructions (e.g. "${day(slot.date)}", "${at(slot.time)}"): never a different day, never 24-hour times, never digits.
+You already made the request in your first message. Don't repeat it unless they ask; if you do, use exactly the same words. Give the phone number only when asked, slowly, in its three groups.
 Say you are an AI assistant if asked. When done, thank them and end with "Goodbye." (only then).`,
     };
   }
@@ -144,7 +153,10 @@ Say you are an AI assistant if asked. When done, thank them and end with "Goodby
   return {
     language,
     // No 失礼いたします in the greeting: it's an end-call phrase, and Vapi hung up right after the greeting.
-    firstMessage: `お忙しいところ恐れ入ります。${place.name_local ?? place.name}様でしょうか。${who}様の${task === "book" ? "ご予約" : "予約の件"}でお電話しております、AIアシスタントです。`,
+    firstMessage:
+      task === "book"
+        ? `お忙しいところ恐れ入ります。${place.name_local ?? place.name}様でしょうか。${who}様の代理でお電話しております、AIアシスタントです。${spokenDateJa(slot.date)}、${spokenTimeJa(slot.time)}から${slot.partySize}名、席のみで予約をお願いしたいのですが、お席はございますでしょうか。`
+        : `お忙しいところ恐れ入ります。${place.name_local ?? place.name}様でしょうか。${who}様の代理でお電話しております、AIアシスタントです。${existing ? spokenDateJa(existing.date) : ""}、${existing ? spokenTimeJa(existing.time) : ""}から${existing?.party_size}名、${who}名義の予約をキャンセルしたく、お電話いたしました。`,
     systemPrompt: `あなたは${who}様の代理でレストラン「${place.name_local ?? place.name}」に電話している、丁寧なAIアシスタントです。日本語の敬語で、短く自然に話してください。
 今日は${today.year}年${jaDay(today.toISODate()!)}です。
 目的：${
@@ -159,6 +171,8 @@ Say you are an AI assistant if asked. When done, thank them and end with "Goodby
 相手が別の日付（過去の日付など）を言った場合は、「${spokenDateJa(slot.date)}でございます」と丁寧に言い直す。
 予約できたら、日時・人数・お名前（${who}）・電話番号（${spokenPhone(c.phone, "ja")}）を確認する。
 日付・時間・番号は、この指示に書いてある通りの言い方で話す（例：「${spokenDateJa(slot.date)}」「${spokenTimeJa(slot.time)}」）。別の日付や24時間表記、数字の羅列は使わない。
+用件は最初の挨拶ですでに伝えてある。聞かれない限り繰り返さない。繰り返す場合は、同じ言い方をそのまま使う。
+電話番号は聞かれたときだけ、「${spokenPhone(c.phone, "ja")}」とカタカナのまま、区切りごとに間を置いてゆっくり読む（数字に直さない）。
 AIかと聞かれたら正直に答える。用件が済んだら、最後に必ず「本日はありがとうございました。失礼いたします。」と言って電話を終える（途中では「失礼いたします」と言わない）。`,
   };
 }
@@ -189,11 +203,13 @@ export async function startCall(to: string, script: CallScript): Promise<VapiCal
         model: {
           provider: "anthropic",
           model: process.env.VAPI_MODEL || "claude-sonnet-5",
+          temperature: 0.2, // stick to the script's dates and numbers
           messages: [{ role: "system", content: script.systemPrompt }],
         },
         transcriber: { provider: "deepgram", model: "nova-2", language: script.language },
-        // Flash: ElevenLabs' low-latency model (speaks Japanese too); VAPI_VOICE_MODEL=eleven_multilingual_v2 for the slower, richer one.
-        voice: { provider: "11labs", voiceId: process.env.VAPI_VOICE_ID || "sarah", model: process.env.VAPI_VOICE_MODEL || "eleven_flash_v2_5" },
+        // Japanese (real restaurant calls): the clearer multilingual voice; flash garbled numbers on the first
+        // real call (21 Oct). English (dry-run tests): flash, for less delay. VAPI_VOICE_MODEL overrides both.
+        voice: { provider: "11labs", voiceId: process.env.VAPI_VOICE_ID || "sarah", model: process.env.VAPI_VOICE_MODEL || (script.language === "ja" ? "eleven_multilingual_v2" : "eleven_flash_v2_5") },
         // Only the closing line ends the call (a greeting like お忙しいところ失礼いたします used to).
         endCallPhrases: script.language === "ja" ? ["本日はありがとうございました"] : ["goodbye"],
       },
@@ -396,13 +412,15 @@ export function callToBook(place: Place, slot: Slot, c: Contact): Promise<CallRe
 export function modifyScript(r: Reservation, place: Place, slot: Slot, c: Contact): CallScript {
   const lang = config.call.language;
   const script = bookingScript(place, slot, c, lang);
-  // Spoken forms here too: this call said "change that to 20 dollars" for 20:00 (round 2).
+  const { name, kana } = callName();
+  // The change itself is in the fixed opening line too (the AI said "20 dollars" and misstated dates when phrasing it).
   if (lang === "en") {
-    script.firstMessage = script.firstMessage.replace("to make a reservation", "about a reservation");
-    script.systemPrompt += `\nThis is about an existing booking: ${spokenDateEn(r.date)} at ${spokenTimeEn(r.time)}, ${DIGITS_EN[r.party_size] ?? r.party_size} people, under ${callName().name}. Ask whether it can be changed to ${spokenDateEn(slot.date)} at ${spokenTimeEn(slot.time)} for ${DIGITS_EN[slot.partySize] ?? slot.partySize} people. Say these exactly as written.`;
+    script.firstMessage = `Hello, is this ${place.name}? I'm an AI assistant calling for ${name} about a reservation: ${DIGITS_EN[r.party_size] ?? r.party_size} people on ${spokenDateEn(r.date)} at ${stop(spokenTimeEn(r.time))} Could we change it to ${spokenDateEn(slot.date)} at ${spokenTimeEn(slot.time)} for ${DIGITS_EN[slot.partySize] ?? slot.partySize} people?`;
+    script.systemPrompt += `\nThis call is to change that existing booking (you asked in your first message). If the new time is full, you may accept any time in the range above on that day; otherwise keep the original booking and say you'll check with ${name}.`;
   } else {
-    script.firstMessage = script.firstMessage.replace("ご予約でお電話", "予約の件でお電話");
-    script.systemPrompt += `\n既存の予約（${spokenDateJa(r.date)}、${spokenTimeJa(r.time)}、${r.party_size}名）を、${spokenDateJa(slot.date)}、${spokenTimeJa(slot.time)}、${slot.partySize}名に変更できるか伺ってください。日時はこの通りの言い方で話してください。`;
+    const who = kana || name;
+    script.firstMessage = `お忙しいところ恐れ入ります。${place.name_local ?? place.name}様でしょうか。${who}様の代理でお電話しております、AIアシスタントです。${spokenDateJa(r.date)}、${spokenTimeJa(r.time)}から${r.party_size}名の予約を、${spokenDateJa(slot.date)}、${spokenTimeJa(slot.time)}から${slot.partySize}名に変更できますでしょうか。`;
+    script.systemPrompt += `\nこの電話は既存の予約の変更です（最初の挨拶で伝えてあります）。新しい時間が満席なら上の範囲内の時間は可。それ以外は元の予約のままにし、本人に確認すると伝える。`;
   }
   return script;
 }

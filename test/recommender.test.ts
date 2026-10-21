@@ -56,7 +56,7 @@ describe("filters", () => {
   it.each([
     ["a dessert-course counter", cand({ cuisine: "Dessert Course" })],
     ["a café", cand({ primary_type: "cafe" })],
-    ["a place Google says doesn't serve dinner", cand({ features: { servesDinner: false } })],
+    ["a place Google says doesn't serve dinner", cand({ features: { servesDinner: false }, saved_by: [] })],
   ])("drops %s for dinner", (_label, c) => {
     expect(applyFilters([c], EMPTY_CONSTRAINTS, settings).rejected[0].reason).toBe("not_dinner");
   });
