@@ -64,8 +64,12 @@ The bot has to run all the time, to stay connected to WhatsApp and send the remi
    echo '<the public key>' >> ~/.ssh/authorized_keys2
    chmod 600 ~/.ssh/authorized_keys2
    ```
-3. Add a host in Termius: the VM's external IP, your Google username, that key.
-4. Save snippets:
+3. Still in the browser window, let the update script restart the bot without a password (your account has none; only the browser SSH gets passwordless sudo):
+   ```
+   echo "$USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart date-night-planner" | sudo tee /etc/sudoers.d/date-night && sudo chmod 440 /etc/sudoers.d/date-night && sudo visudo -c
+   ```
+4. Add a host in Termius: the VM's external IP, your Google username, that key.
+5. Save snippets:
    - **Update bot:** `cd ~/date-night-planner && bash deploy/update.sh`
    - **Bot status:** `journalctl -u date-night-planner -n 15 --no-pager`
 
