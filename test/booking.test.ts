@@ -97,9 +97,9 @@ describe("dates and numbers for the call script", () => {
   });
 
   it("formats phone numbers for Japanese and English text", () => {
-    expect(intlPhone("070-1568-0178")).toBe("+81 70-1568-0178");
-    expect(domesticPhone("+81 070 1568 0178")).toBe("070-1568-0178");
-    expect(domesticPhone("+81 70-1568-0178")).toBe("070-1568-0178");
+    expect(intlPhone("090-1234-5678")).toBe("+81 90-1234-5678");
+    expect(domesticPhone("+81 090 1234 5678")).toBe("090-1234-5678");
+    expect(domesticPhone("+81 90-1234-5678")).toBe("090-1234-5678");
   });
 });
 
@@ -153,8 +153,8 @@ describe("AI phone calls", () => {
   it("formats numbers as E.164 for Vapi", async () => {
     const { toE164 } = await import("../src/booking/phone");
     expect(toE164("03-6431-8960")).toBe("+81364318960");
-    expect(toE164("070-1568-0178")).toBe("+817015680178");
-    expect(toE164("+81 70-1568-0178")).toBe("+817015680178");
+    expect(toE164("090-1234-5678")).toBe("+819012345678");
+    expect(toE164("+81 90-1234-5678")).toBe("+819012345678");
   });
 
   it("writes a seats-only Japanese script that admits being an AI", async () => {

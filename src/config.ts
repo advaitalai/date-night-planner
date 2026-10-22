@@ -67,14 +67,14 @@ export const config = {
 
 export type Contact = typeof config.booking.contact;
 
-/** "070-1568-0178" → "+81 70-1568-0178" for English text and international forms. */
+/** "090-1234-5678" → "+81 90-1234-5678" for English text and international forms. */
 export function intlPhone(phone: string): string {
   const p = phone.trim();
   if (p.startsWith("+")) return p;
   return p.startsWith("0") ? `+81 ${p.slice(1)}` : p;
 }
 
-/** "070-1568-0178" / "+81 70 1568 0178" → domestic "070-1568-0178" for Japanese text. */
+/** "090-1234-5678" / "+81 90 1234 5678" → domestic "090-1234-5678" for Japanese text. */
 export function domesticPhone(phone: string): string {
   const p = phone.trim();
   const m = p.match(/^\+81[\s-]*0?(.*)$/);

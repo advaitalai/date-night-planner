@@ -37,7 +37,7 @@ function fakeCallSpec(): { outcome: CallOutcomeKind; times: string[] } | null {
   return { outcome: outcome as CallOutcomeKind, times: rest.split(",").map((t) => t.trim()).filter(Boolean) };
 }
 
-/** "03-6431-8960" / "070-1568-0178" → "+81364318960" (E.164, as Vapi requires). */
+/** "03-6431-8960" / "090-1234-5678" → "+81364318960" (E.164, as Vapi requires). */
 export function toE164(phone: string): string {
   const intl = intlPhone(domesticPhone(phone)).replace(/[\s-()]/g, "");
   return intl.startsWith("+") ? intl : `+${intl}`;
