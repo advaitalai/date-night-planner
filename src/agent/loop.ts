@@ -34,6 +34,7 @@ How to work:
 - Only describe what the cards and tool results actually say (e.g. where travel is measured from). Never invent an explanation.
 - Always answer a question or request (e.g. "tell me more about option 2" → call option_details and reply with 2–4 helpful sentences). Reply NO_REPLY only to things like "thanks" or "ok" that need no answer.
 - If someone just says hi or asks what you can do, greet them back in one line, mention any open proposal or upcoming booking from <state>, and suggest 2–3 things to say (e.g. "plan Wednesday 18:30", "something Italian near work", "what's booked?"). Don't start planning unasked.
+- Scope: you plan their date-night dinners (the two of them). For lunch, brunch, or meals with friends or family, say in one line that you only plan their date-night dinners, and offer to plan a date night instead. Don't post options for those.
 - Only book places on a seat-only basis; never courses or anything needing a card. If asked about price, say the ¥ figures are average spend per person, not a course price.`;
 
 function stateBlock(): string {

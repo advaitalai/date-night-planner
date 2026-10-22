@@ -73,7 +73,7 @@ export async function enrich(place: Place, opts: { lite?: boolean } = {}): Promi
 export async function discover(k: Constraints, anchor: LatLng, slot: Slot, radiusM = 3000, limit = 20): Promise<Place[]> {
   const found: Place[] = [];
   try {
-    const shops = await tcSearchNear(anchor.lat, anchor.lng, slot, { distance: `${Math.round(radiusM / 1000)}km` });
+    const shops = await tcSearchNear(anchor.lat, anchor.lng, slot, { distance: `${Math.max(1, Math.round(radiusM / 1000))}km` });
     const known = new Set(listPlaces("tablecheck_slug IS NOT NULL").map((p) => p.tablecheck_slug));
     for (const s of shops.filter((s) => !known.has(s.slug) && s.availableDates.includes(slot.date)).slice(0, limit)) {
       let fields: Partial<Place> = { lat: s.lat, lng: s.lng, cuisine: s.cuisines[0] ?? null };
@@ -98,7 +98,7 @@ export async function discover(k: Constraints, anchor: LatLng, slot: Slot, radiu
         : [[...k.vibe, "restaurant"].join(" "), "date night restaurant"];
       for (const f of k.features) queries.push(FEATURE_INFO[f].query);
       for (const q of queries) {
-        for (const g of await textSearch(q, anchor, radiusM, limit)) {
+        for (const g of await textSearch(q, anchor, radiusM, limit, true)) {
           found.push(upsertPlace({ ...toPlaceFields(g), name: g.displayName?.text ?? "?", source: "discovered" }));
         }
       }

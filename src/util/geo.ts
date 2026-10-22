@@ -30,6 +30,16 @@ export function namesFor(saved: string, google: string | null | undefined): { na
   return hasJapanese(saved) && google && !hasJapanese(google) ? { name: google, name_local: saved } : { name: saved };
 }
 
+/**
+ * How far to search for new places so they can be within `minutes` (the inverse of
+ * estimateTravelMin): a 10-min walk is ~600 m, 35 min by train ~6 km.
+ */
+export function searchRadiusM(minutes: number): number {
+  const walkKm = ((minutes / 60) * 4.8) / 1.3;
+  const transitKm = (Math.max(0, minutes - 12) * 20) / 60 / 1.3;
+  return Math.round(Math.min(6000, Math.max(500, Math.max(walkKm, transitKm) * 1000)));
+}
+
 export function estimateTravelMin(a: LatLng, b: LatLng): number {
   const km = haversineKm(a, b) * 1.3; // streets aren't straight lines
   if (km <= 1.2) return Math.round((km / 4.8) * 60);

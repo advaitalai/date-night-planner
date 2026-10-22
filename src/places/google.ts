@@ -97,7 +97,16 @@ async function placesPost(path: string, body: unknown, fields: string[]): Promis
   return (await res.json()) as { places?: GPlace[] };
 }
 
-export async function textSearch(query: string, near: LatLng, radiusM = 5000, max = 10): Promise<GPlace[]> {
+/**
+ * `restrict`: only places inside the area (a box around the circle). Without it Google merely
+ * favours the area, and a "10 min walk" search came back with places 15–40 min away (22 Oct).
+ */
+export async function textSearch(query: string, near: LatLng, radiusM = 5000, max = 10, restrict = false): Promise<GPlace[]> {
+  const dLat = radiusM / 111_320;
+  const dLng = radiusM / (111_320 * Math.cos((near.lat * Math.PI) / 180));
+  const area = restrict
+    ? { locationRestriction: { rectangle: { low: { latitude: near.lat - dLat, longitude: near.lng - dLng }, high: { latitude: near.lat + dLat, longitude: near.lng + dLng } } } }
+    : { locationBias: { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: radiusM } } };
   const data = await placesPost(
     "places:searchText",
     {
@@ -105,7 +114,7 @@ export async function textSearch(query: string, near: LatLng, radiusM = 5000, ma
       languageCode: "en",
       regionCode: "JP",
       pageSize: max,
-      locationBias: { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: radiusM } },
+      ...area,
     },
     SEARCH_FIELDS,
   );

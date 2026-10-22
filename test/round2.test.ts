@@ -204,3 +204,25 @@ describe("real-call fixes (21 Oct, Kimmy)", () => {
     expect(isDinnerPlace(savedCafe, EMPTY_CONSTRAINTS)).toBe(false);
   });
 });
+
+describe("search area follows the travel limit (22 Oct: '10 min walk' searched 2.7 km)", () => {
+  it("sizes the search to what's reachable, and restricts Google to it", async () => {
+    const { searchRadiusM, estimateTravelMin } = await import("../src/util/geo");
+    expect(searchRadiusM(10)).toBeLessThan(800);
+    expect(searchRadiusM(35)).toBeGreaterThan(5000);
+    // The edge of the search area is about the travel limit away (by the same estimate the filter uses).
+    const edge = { lat: 35.6683 + searchRadiusM(10) / 111_320, lng: 139.6798 };
+    expect(estimateTravelMin({ lat: 35.6683, lng: 139.6798 }, edge)).toBeLessThanOrEqual(10);
+
+    const { config } = await import("../src/config");
+    const { textSearch } = await import("../src/places/google");
+    const before = config.google.mapsKey;
+    config.google.mapsKey = "test";
+    let body: Record<string, unknown> = {};
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_u, init) => ((body = JSON.parse(String(init?.body))), new Response(JSON.stringify({ places: [] }))));
+    await textSearch("japanese restaurant", { lat: 35.6683, lng: 139.6798 }, 600, 20, true);
+    config.google.mapsKey = before;
+    expect(body.locationRestriction).toBeTruthy();
+    expect(body.locationBias).toBeUndefined();
+  });
+});

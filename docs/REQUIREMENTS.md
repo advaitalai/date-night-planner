@@ -42,6 +42,8 @@ Cut on 16 Oct, and why:
 
 Kept on purpose: changing a booking (one call to the restaurant beats cancel + rebook), the visit log, the cancellation policy lookup.
 
+**Scope (22 Oct):** date-night dinners for the two of them. Lunch, brunch and meals with friends or family are out of scope (the bot says so); the full change list is parked in BACKLOG.
+
 ### 4.1 Chat (WhatsApp)
 - R1. The bot lives in a WhatsApp group with Advait and Emily.
 - R2. Self mode (today) links the bot to Advait's own WhatsApp as a linked device; its messages are prefixed with 🤖. **Planned: its own number** (fixes the linked-device outages and makes @mentions work). **Addressing (changed 20 Oct):** inline replies to the bot, its name ("Concierge", "planner") and @mentions always count. For anything else the bot judges whether it's meant for it ("What's booked?" yes; "babe, which one?" no; unsure → stay quiet) and answers those like any other. (16 Oct it answered only replies and its name: in the first live test it ignored "What's booked?", which its own greeting had suggested.)

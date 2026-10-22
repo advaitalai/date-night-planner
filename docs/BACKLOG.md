@@ -12,6 +12,30 @@ The MVP covers the items in "Done" below. Everything else is ordered roughly by 
    - stop places rated 👎 from being suggested again;
    - feed the cuisine rotation.
 
+## Parked: meals beyond date night (lunch, brunch, friends, family)
+
+Decided 22 Oct (Advait): **out of scope** for now. The bot says it plans their date-night dinners and offers a date night instead. Revisit if lunch or group meals come up often. Scope as swept on 22 Oct:
+
+| # | Area | Today | Change needed |
+|---|---|---|---|
+| 1 | Request parsing (`parseRequest.ts`) | "lunch" isn't a time | Meal → time (lunch ≈ 12:30) |
+| 2 | Dinner filter (`filters.ts` isDinnerPlace, NOT_DINNER_TYPES) | Drops cafés and "no dinner" places | Meal-aware: lunch allows cafés, uses Google's servesLunch |
+| 3 | Import (`takeout.ts` isDinnerType) | 954 of Emily's places skipped (cafés etc.) | Re-import with a lunch-friendly rule (some Google lookups) |
+| 4 | TableCheck menu picker (`tablecheck.ts`) | Refuses lunch/ランチ items | Allow lunch seat items for lunch slots |
+| 5 | Free times when full (`service.ts` nearbyTimes) | Only 17:00–21:30 | Window around the asked meal |
+| 6 | Plans per date (`repo.ts` activePlanFor, shownForDate) | One plan per date | Key by date + meal |
+| 7 | Day-of reminder (`service.ts`, `reminders.ts`) | 11:00, "Tonight 🥂" | Time and wording by meal |
+| 8 | Budget (`filters.ts`, TableCheck budgetDinnerAvg) | Dinner prices | Lunch budget / lunch averages |
+| 9–12 | Bot instructions, listener, tool texts, pitches, cards, discovery query | "Date night for a couple", 🍷, "you two" | Wording by occasion and party |
+| 13 | Rotation and visit log | Every booking counts as a date | Only date nights count |
+| 14 | Japanese call script | 12:30 read as 午後12時半 | 午後0時半 / お昼の12時半 |
+
+Options when revisited: **B. Lunch-lite** (1, 4, 5, 7 only: plan and book a lunch, date-flavoured wording) or **C. Full** (all 14, a second product mode). Size: medium; ~10 files, a re-import, new tests.
+
+## Open decision: TableCheck's newer booking pages
+
+Kiito and Kimmy (and 6 of 15 TableCheck places on Advait's list) use TableCheck's newer flow, which the bot can't book, so they fall back to a phone call. Decide after a week of real use (from 21 Oct): **A.** script the newer flow (steps mapped in REQUIREMENTS §7), **B.** keep calling them, or **C.** Claude computer use for those pages only (adaptive, ~$0.20–1 per booking, needs firm guardrails). Count how many bookings end up as calls because of it.
+
 ## Cut on 16 Oct (don't rebuild without a clear reason)
 
 - Calls scheduled for later ("call at 11", "call in 30") and rescheduling them.

@@ -6,7 +6,7 @@ import { createPlan, findPlaceByName, getPrefs, getPlace, recentVisits, shownFor
 import { clearStatus, say, status } from "../notify";
 import { geocode } from "../places/google";
 import type { Anchor, Place, Plan, PlanOption } from "../types";
-import { areaOf, estimateTravelMin, travelLabel } from "../util/geo";
+import { areaOf, estimateTravelMin, searchRadiusM, travelLabel } from "../util/geo";
 import { fmtDate, nextWeekday, now } from "../util/time";
 import { discover, enrich, ensureFeatures, savedPool, takeLookupCount, toCandidate } from "./candidates";
 import { applyFilters, FEATURE_INFO, hasFeature, type Candidate, type FilterResult, type RejectReason } from "./filters";
@@ -95,7 +95,8 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   // 1. Candidates: both saved lists, plus new places found around the anchor.
   await status(`Looking through your saved places and new spots near ${anchor.label} for ${fmtDate(slot.date)} ${slot.time}…`);
   let pool = savedPool();
-  if (!k.onlySaved) pool = [...pool, ...(await discover(k, anchor, slot, Math.min(6000, 1500 + widest * 120)))];
+  // Search only as far as the travel limit reaches (a "10 min walk" searched 2.7 km and found mostly places too far).
+  if (!k.onlySaved) pool = [...pool, ...(await discover(k, anchor, slot, searchRadiusM(widest)))];
   const unique = new Map(pool.map((p) => [p.id, p]));
   const near = [...unique.values()].filter((p) => p.lat == null || estimateTravelMin(anchor, { lat: p.lat, lng: p.lng! }) <= widest + 10);
   takeLookupCount();
@@ -140,6 +141,8 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
     if (ex.length < 3) ex.push(r.candidate.place.name);
     if (r.reason === "not_bookable") notBookableChannels[r.candidate.place.booking_channel] = (notBookableChannels[r.candidate.place.booking_channel] ?? 0) + 1;
   }
+  // Why places were left out, so a thin result ("only a ★3.4 chain fit") can be explained from the logs.
+  console.log(`[plan] ${kept.length} kept, ${rejected.length} left out (${Object.entries(rejectedCounts).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}), search radius ${searchRadiusM(widest)} m`);
 
   // 3. Score (cuisine rotation, lists, ratings, similarity, distance) and pick varied options.
   const recentCuisines = recentVisits(prefs.cuisineCooldownDates)
