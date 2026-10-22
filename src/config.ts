@@ -1,0 +1,139 @@
+import "dotenv/config";
+import path from "node:path";
+
+function env(name: string, fallback = ""): string {
+  return process.env[name] ?? fallback;
+}
+
+export const config = {
+  anthropicModel: env("CLAUDE_MODEL", "claude-opus-5-5"),
+  dataDir: path.resolve(env("DATA_DIR", "./data")),
+  timezone: "Asia/Tokyo",
+
+  wa: {
+    groupJid: env("WA_GROUP_JID"),
+    /**
+     * Run on Advait's own WhatsApp as a linked device instead of a separate
+     * number. Bot messages then come from Advait, prefixed with 🤖.
+     */
+    selfMode: env("WA_SELF_MODE", "1") === "1",
+    selfName: "Advait",
+    /** The bot's name in the group (its WhatsApp profile name). Saying it, or "planner", addresses the bot. */
+    botName: env("WA_BOT_NAME", "Planner"),
+    /** Solo test: only Advait votes and every message is for the bot (any chat, e.g. a group with just him). */
+    solo: env("WA_SOLO", "0") === "1",
+    phones: { Advait: env("ADVAIT_PHONE"), Emily: env("EMILY_PHONE") } as Record<string, string>,
+  },
+
+  google: {
+    mapsKey: env("GOOGLE_MAPS_API_KEY"),
+  },
+
+  booking: {
+    contact: {
+      name: env("BOOKING_NAME"),
+      nameKana: env("BOOKING_NAME_KANA"),
+      phone: env("BOOKING_PHONE"),
+      email: env("BOOKING_EMAIL"),
+    },
+    tablecheck: { email: env("TABLECHECK_EMAIL"), password: env("TABLECHECK_PASSWORD") },
+    /**
+     * Restrict booking to these channels, e.g. "phone" to test the AI call end to
+     * end from WhatsApp (with DRY_RUN=1 the call comes to BOOKING_PHONE). Empty = all.
+     */
+    only: env("BOOKING_ONLY").split(",").map((s) => s.trim()).filter(Boolean),
+  },
+
+  call: {
+    /**
+     * Language the AI caller speaks. CALL_LANGUAGE=en is for dry runs (the call comes to
+     * you); real calls to restaurants are always Japanese, whatever it says.
+     */
+    get language(): "ja" | "en" {
+      return env("CALL_LANGUAGE", "ja") === "en" && config.dryRun ? "en" : "ja";
+    },
+    /**
+     * Dry run only: who plays the restaurant. "Emily" / "Advait" (their *_PHONE),
+     * or a number. Empty = BOOKING_PHONE (you).
+     */
+    testTo: env("CALL_TEST_TO"),
+    /** Name phone bookings go under: short and easy to write in katakana. Sites keep BOOKING_NAME. */
+    bookingName: env("CALL_BOOKING_NAME", "Emily"),
+    bookingNameKana: env("CALL_BOOKING_NAME_KANA", "エミリー"),
+  },
+
+  dryRun: env("DRY_RUN", "1") === "1",
+};
+
+export type Contact = typeof config.booking.contact;
+
+/** "090-1234-5678" → "+81 90-1234-5678" for English text and international forms. */
+export function intlPhone(phone: string): string {
+  const p = phone.trim();
+  if (p.startsWith("+")) return p;
+  return p.startsWith("0") ? `+81 ${p.slice(1)}` : p;
+}
+
+/** "090-1234-5678" / "+81 90 1234 5678" → domestic "090-1234-5678" for Japanese text. */
+export function domesticPhone(phone: string): string {
+  const p = phone.trim();
+  const m = p.match(/^\+81[\s-]*0?(.*)$/);
+  return m ? `0${m[1]}`.replace(/\s+/g, "-") : p;
+}
+
+/**
+ * Dry-run calls go to a stand-in instead of the restaurant. Returns who and
+ * which number, from CALL_TEST_TO (a name or a number) or BOOKING_PHONE.
+ */
+export function testCallee(who = config.call.testTo): { label: string; phone: string } {
+  const name = PEOPLE.find((p) => p.toLowerCase() === who.trim().toLowerCase());
+  if (name) return { label: name === config.wa.selfName ? "you" : name, phone: config.wa.phones[name] || (name === config.wa.selfName ? config.booking.contact.phone : "") };
+  if (who.trim()) return { label: who.trim(), phone: who.trim() };
+  return { label: "you", phone: config.booking.contact.phone };
+}
+
+/** Phone number as WhatsApp writes it: country code + number, digits only ("+81 090-1234-5678" → "819012345678"). */
+export function waDigits(phone: string): string {
+  const d = phone.replace(/\D/g, "");
+  if (d.startsWith("810")) return `81${d.slice(3)}`; // drop the domestic trunk 0 after +81
+  if (d.startsWith("0")) return `81${d.slice(1)}`; // domestic Japanese number
+  return d;
+}
+
+/** People in the group. Names are used as identifiers everywhere (saved_by, votes). */
+export const PEOPLE = ["Advait", "Emily"] as const;
+export type Person = (typeof PEOPLE)[number];
+
+/**
+ * WA_GROUP_JID=self runs the bot in Advait's "Message yourself" chat: a private
+ * 1-1 test channel. Only Advait votes there, and every message is for the bot.
+ */
+export function isSelfChat(): boolean {
+  return config.wa.groupJid === "self";
+}
+
+/** Solo testing: Advait alone, either in "Message yourself" or with WA_SOLO=1. */
+export function isSolo(): boolean {
+  return isSelfChat() || config.wa.solo;
+}
+
+/** The people in the chat (just Advait when testing solo). */
+export function voters(): readonly Person[] {
+  return isSolo() ? [config.wa.selfName as Person] : PEOPLE;
+}
+
+/** Default anchors. Coordinates are approximate and refined by geocoding on first run. */
+export const DEFAULT_ANCHORS = {
+  home: {
+    label: "home",
+    address: "Residia Tower Meguro Fudomae, 3-7-6 Nishigotanda, Shinagawa, Tokyo",
+    lat: 35.6227,
+    lng: 139.7163,
+  },
+  office: {
+    label: "work",
+    address: "Arco Tower Annex, 1-8-1 Shimomeguro, Meguro, Tokyo",
+    lat: 35.6331,
+    lng: 139.7128,
+  },
+};
