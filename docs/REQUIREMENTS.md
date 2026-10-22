@@ -113,13 +113,12 @@ Kept on purpose: changing a booking (one call to the restaurant beats cancel + r
 
 ## 6. Out of scope for the MVP
 
-See `docs/BACKLOG.md`. Highlights:
-- 👍/👎 rating cards after each date;
-- AI phone calls to restaurants;
-- Hot Pepper, OMAKASE, ebica and Toreta;
-- calendar invites;
+See `docs/BACKLOG.md` (prioritised 22 Oct). Highlights:
+- 👍/👎 after each date;
+- lunch and group meals;
 - watching full places for cancellations;
-- non-dinner date ideas.
+- calendar invites.
+- Not doing: email booking, more booking sites.
 
 ## 7. Known gaps and risks (update as they're resolved)
 

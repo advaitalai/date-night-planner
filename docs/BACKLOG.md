@@ -1,123 +1,89 @@
 # Product backlog
 
-The MVP covers the items in "Done" below. Everything else is ordered roughly by value. Each entry says what it is, why it matters and any known constraint.
+Simplified and prioritised 22 Oct. Older triage tables (dialer and recommender QA, all but two items done) are in git history.
 
-**Lean rule (16 Oct, Advait):** the product stays small so it doesn't need constant testing. Before adding anything, ask whether it's worth testing for as long as it exists, and prefer the agent's judgement over new rules in code.
+**Lean rule (16 Oct, Advait):** the product stays small so it doesn't need constant testing. Before adding anything, ask:
+- Is it worth testing for as long as it exists?
+- Could the agent's judgement do it instead of new code?
 
-## Next up
+**How items move up:** real use. Each item says what would show it's needed.
 
-1. **Give the bot its own WhatsApp number** (agreed 16 Oct). Steps in SETUP §4. Fixes the linked-device outages; @mentions work.
-2. **👍 / 👎 rating cards after each date** (phase 2). This could be a message the morning after ("How was X?"), stored in `visits.rating`. Ratings would then:
-   - boost similar places in scoring;
-   - stop places rated 👎 from being suggested again;
-   - feed the cuisine rotation.
+## P1: this week (decide from live use)
 
-## Parked: meals beyond date night (lunch, brunch, friends, family)
+1. **Prove a TableCheck booking from the server.**
+   - Still unverified live; the Kimmy booking was a call.
+   - Needed for: everything below on TableCheck.
+2. **Decide TableCheck's newer booking pages** (due ~28 Oct).
+   - 6 of 15 TableCheck places on Advait's list use them (Kiito, Kimmy, Kuss, Picica Picica, BROWNSTONE, Peter Luger…). Today they fall back to a phone call.
+   - **A.** Script the newer flow (steps in REQUIREMENTS §7). Breaks when TableCheck changes the page.
+   - **B.** Keep calling them. Nothing to build.
+   - **C.** Claude computer use for those pages only. Adapts to changes; ~$0.20–1 a booking; needs guardrails (seats only, no card, stop before anything unexpected).
+   - **Recommendation: B**, unless calls to these places fail or annoy staff. Then **C**, not A.
+   - Signal: count how many bookings became calls because of it, and how those calls went.
 
-Decided 22 Oct (Advait): **out of scope** for now. The bot says it plans their date-night dinners and offers a date night instead. Revisit if lunch or group meals come up often. Scope as swept on 22 Oct:
+## P2: next
+
+3. **👍 / 👎 after each date.**
+   - The morning-after visit log asks "How was X?" and stores the answer.
+   - 👎 places aren't suggested again; 👍 ones lift similar places.
+   - The only item that makes picks better over time. Small: one message, one column.
+4. **Fresh opening hours.**
+   - Hours come from Google once and are never refreshed; holidays are ignored.
+   - Refresh when older than 30 days; use Google's holiday hours.
+   - Signal: a booking or call at a place that turned out closed.
+5. **TableCheck "seating only, pay optional" items** (`postpay_optional`).
+   - The bot skips them as "needs a card". Check one by hand (The Public Place); allow them if no card is taken.
+   - Small. More places bookable online, fewer calls.
+
+## P3: later, only if it comes up
+
+6. **Lunch, brunch, friends, family.** Out of scope since 22 Oct. Options and the 14-point sweep are below.
+   - Signal: they ask for it more than a couple of times.
+7. **Watch full places for cancellations,** and book when a table frees up.
+   - Signal: a place they both want keeps coming back full.
+8. **Book sought-after places weeks ahead.**
+   - Signal: same as 7.
+9. **Calendar invites** for both when a booking is confirmed, updated on change or cancel.
+   - Signal: they forget a booking despite the day-of reminder.
+10. **A "midway" starting point** (between home and the office, or two places they'll be that day).
+
+## Watch, don't build
+
+- **Places API cost.** Searches include atmosphere attributes (pricier tier). Check the Cloud console bill in early November.
+- **WhatsApp ban risk.** The bot uses an unofficial library on its own number. Move to Meta's official API if group support becomes generally available.
+
+## Not doing (cut, with the reason)
+
+- **Email booking** (cut 16 Oct). Tokyo restaurants book by TableCheck, other sites or phone; email-only places are rare, and replies need a Gmail watcher. Revisit only if a place they want takes email only.
+- **More booking sites** (Hot Pepper, OMAKASE, ebica, Toreta, Ikyu, Tabelog). The phone call covers them.
+- **Live help mid-call** ("they offer 19:00, OK?"). The call already reports offered times and the bot calls back.
+- **Learning vibes from chat, weather-aware picks, non-dinner date ideas, an admin page, "already visited" from Timeline.** Nice, but each adds rules to test.
+- From 16 and 20 Oct: scheduled calls, vote counting and the Sunday auto-book, the Saturday trigger and Sunday reminder, "skip a week", saving Maps links from chat, Drive pickup and the onboarding page, WhatsApp polls, auto-cancel and the 48h "still on?", the detailed call outcome tree.
+
+## Reference: lunch and group meals scope (swept 22 Oct)
 
 | # | Area | Today | Change needed |
 |---|---|---|---|
 | 1 | Request parsing (`parseRequest.ts`) | "lunch" isn't a time | Meal → time (lunch ≈ 12:30) |
-| 2 | Dinner filter (`filters.ts` isDinnerPlace, NOT_DINNER_TYPES) | Drops cafés and "no dinner" places | Meal-aware: lunch allows cafés, uses Google's servesLunch |
-| 3 | Import (`takeout.ts` isDinnerType) | 954 of Emily's places skipped (cafés etc.) | Re-import with a lunch-friendly rule (some Google lookups) |
-| 4 | TableCheck menu picker (`tablecheck.ts`) | Refuses lunch/ランチ items | Allow lunch seat items for lunch slots |
-| 5 | Free times when full (`service.ts` nearbyTimes) | Only 17:00–21:30 | Window around the asked meal |
-| 6 | Plans per date (`repo.ts` activePlanFor, shownForDate) | One plan per date | Key by date + meal |
-| 7 | Day-of reminder (`service.ts`, `reminders.ts`) | 11:00, "Tonight 🥂" | Time and wording by meal |
-| 8 | Budget (`filters.ts`, TableCheck budgetDinnerAvg) | Dinner prices | Lunch budget / lunch averages |
-| 9–12 | Bot instructions, listener, tool texts, pitches, cards, discovery query | "Date night for a couple", 🍷, "you two" | Wording by occasion and party |
-| 13 | Rotation and visit log | Every booking counts as a date | Only date nights count |
-| 14 | Japanese call script | 12:30 read as 午後12時半 | 午後0時半 / お昼の12時半 |
+| 2 | Dinner filter (`filters.ts`) | Drops cafés and "no dinner" places | Meal-aware; Google's servesLunch |
+| 3 | Import (`takeout.ts`) | 954 of Emily's places skipped | Re-import with a lunch-friendly rule |
+| 4 | TableCheck menu picker | Refuses lunch items | Allow lunch seat items for lunch slots |
+| 5 | Free times when full (`service.ts`) | Only 17:00–21:30 | Window around the meal |
+| 6 | Plans per date (`repo.ts`) | One plan per date | Key by date + meal |
+| 7 | Day-of reminder | 11:00, "Tonight 🥂" | Time and wording by meal |
+| 8 | Budget | Dinner prices | Lunch budget |
+| 9–12 | Bot instructions, listener, tools, pitches, cards, discovery | "Date night for a couple" | Wording by occasion and party |
+| 13 | Rotation and visit log | Every booking is a date | Only date nights count |
+| 14 | Japanese call script | 12:30 as 午後12時半 | 午後0時半 |
 
-Options when revisited: **B. Lunch-lite** (1, 4, 5, 7 only: plan and book a lunch, date-flavoured wording) or **C. Full** (all 14, a second product mode). Size: medium; ~10 files, a re-import, new tests.
+- **B. Lunch-lite:** 1, 4, 5, 7 only. Plan and book a lunch with date wording.
+- **C. Full:** all 14, a second product mode. ~10 files, a re-import, new tests.
 
-## Open decision: TableCheck's newer booking pages
+## Done (MVP, live since 20 Oct)
 
-Kiito and Kimmy (and 6 of 15 TableCheck places on Advait's list) use TableCheck's newer flow, which the bot can't book, so they fall back to a phone call. Decide after a week of real use (from 21 Oct): **A.** script the newer flow (steps mapped in REQUIREMENTS §7), **B.** keep calling them, or **C.** Claude computer use for those pages only (adaptive, ~$0.20–1 per booking, needs firm guardrails). Count how many bookings end up as calls because of it.
-
-## Cut on 16 Oct (don't rebuild without a clear reason)
-
-- Calls scheduled for later ("call at 11", "call in 30") and rescheduling them.
-- Vote counting ("you both picked") and the Sunday auto-book.
-- (20 Oct) The Saturday trigger, the Sunday reminder and "skip a week".
-- (20 Oct) Saving a Google Maps link from the chat: save it in Google Maps; it comes in with the next CSV import.
-- Email booking and the Gmail reply watcher; Tabelog booking.
-- Automatic Takeout pickup from Drive; the Google onboarding web page.
-- WhatsApp polls.
-- Auto-cancel; the 48h "still on?".
-- The detailed call outcome tree; "recap the last call" in chat.
-
-## Dialer QA (Advait, 12 Oct): triaged (D1–D4 done 12 Oct)
-
-| # | Item | Priority | Size | Plan |
-|---|---|---|---|---|
-| D1 | ✅ Name on the call is hard to write down ("Advait Alai") | P1 | S | Book under a short name staff can write in katakana: **Emily (エミリー)**. New `CALL_BOOKING_NAME`/`_KANA`; sites keep the full name. |
-| D2 | ✅ Shorter opening: "seat reservation" only | P1 | S | Say 席のみ / "just seats". Mention "no set course" only if they bring up courses. |
-| D3 | ✅ Don't ask the cancellation policy on the call | P1 | S–M | Look it up first (TableCheck/Tabelog page, website) with Claude. If not found, don't ask; assume 24h and say so (already the fallback). Saves ~15–20 s a call. |
-| D4 | ✅ Fix mix-ups on the call (they offered 2 Oct, a past date) | P1 | S–M | Give the caller today's date, the target date with weekday, and an "authority envelope": same date only, never past dates; restate the date if they get it wrong; anything outside → note it and say we'll call back. Plus an optional flexibility window set in chat ("18:30, fine 18:00–19:30") that the caller may accept without a call back. |
-| D5 | Know when they open (and good times to call) | P2 | M | Hours come from Google (cached in SQLite `places.opening_periods`, never refreshed). Refresh if >30 days old; add Google's holiday hours (`currentOpeningHours`); suggest calls just after opening or 15:00–17:00, never at peak dinner. |
-| D6 | Live help mid-call (check facts, ask the couple) | P3 | L | Vapi tools/webhooks need a public URL, so after the VM. Then: a `check_slot` tool, and a WhatsApp ping "they offer 19:00, OK?" with a 30 s timeout. |
-
-## Recommender QA (Advait, 12 Oct): triaged (W2–W4, W7, W8 done 12 Oct)
-
-| # | Item | Status / priority | Size | Plan |
-|---|---|---|---|---|
-| W1 | Dessert places offered for dinner | ✅ fixed 11 Oct (`not_dinner` filter) | | Verify in the next run. |
-| W2 | Say the area (Ebisu, Shibuya…) | ✅ done | S | Area from the Google address on each card: "Ebisu · 22 min by train". |
-| W3 | Which travel mode is "22 min"? | ✅ done | S | Already public transport (Routes API, transit incl. walking), but when Routes fails it falls back to a straight-line guess that isn't labelled. Show "by train" / "walk" (walk when ≤ 15 min), "~" for estimates. |
-| W4 | The "why" is weak ("29 min", "book ahead for weekends") | ✅ done | S–M | Pitch rules: why = why *you two*: on whose list, like a place you saved, matches the ask, a cuisine you haven't had lately, the standout dish/vibe from reviews. Never distance (own line), never booking advice. Good/bad examples in the prompt. |
-| W5 | Already visited a recommended place | P2 | M | Google Places has no "visited". Maps knows from Timeline, now stored on the phone only (not in Takeout). Options: one-off Timeline export from the phone (Maps → Timeline → Export) → visits; scan Gmail for past booking confirmations → visits; `log_visit` in chat (done). |
-| W6 | Live music request didn't change the options | ✅ fixed 11 Oct (must-have filter + searches + honest notes) | | Verify in the next run. |
-| W7 | Live music places came as plain text (no cards, why, maps) | ✅ done | S | The bot used the `search_places` lookup and wrote freeform text. Rule: every suggestion goes through `recommend_options` cards; `search_places` only answers questions about a named place. |
-| W8 | (found in triage) ~150–230 Routes calls per planning run | ✅ done | S | One per candidate. Cache travel time per place and starting point (30 days). Keeps Routes inside the free monthly cap during heavy testing. |
-
-## Booking coverage
-
-- **TableCheck newer flow** (`/reserve/message` → landing → menu): finish the booking steps. Decide after a week of real use (20 Oct): today those places are booked by phone. The flow is mapped in REQUIREMENTS §7. Kuss Daikanyama, TUITUI and Taro Yamada use it. On the saved list (12 Oct): 6 of 15 TableCheck places (Kuss, Picica Picica, Nakayoshi, BROWNSTONE, Chef's Theatre, Peter Luger).
-- **TableCheck `postpay_optional` items** (ask Advait): The Public Place offers "【DINNER】Seating only (no meal included)" with payment type `postpay_optional`. The bot treats anything but `none` as "needs a card" and skips it. If `postpay_optional` means "pay at the venue, online payment optional", it's fine to book. Check one by hand before allowing it.
-- ✅ **Wrong TableCheck slug from detection** (fixed 12 Oct): Peter Luger got `peterluger-pickup` (the takeout page). Detection now skips pickup/takeout/delivery slugs. Places detected before keep their slug until re-detected.
-
-4. **AI phone calls: from test to production.** The Vapi adapter and test call are built. Next:
-   - a Japanese caller number, since restaurants may ignore international numbers;
-   - a natural Japanese voice choice;
-   - real-restaurant trials in dry run, then live;
-   - calling back to accept an offered alternative time.
-5. **More booking platforms:** Hot Pepper Gourmet (its search API is free; booking would go through the browser), OMAKASE, ebica, Toreta and Ikyu. `detect.ts` already marks these places as `other_online`.
-7. **Watch fully booked places for cancellations.** Poll TableCheck availability for places they both want that are full, and book automatically when a table frees up.
-8. **Book sought-after places further ahead.** For places that fill up weeks in advance, book further out than a few days ahead.
-
-## Planning & recommendations
-
-- **Places API cost watch.** Searches now include Google's atmosphere attributes (live music, serves dinner…), which bill at the "Enterprise + Atmosphere" tier. Check usage in the Cloud console after a few weeks; drop the attributes from searches and fetch them only for must-have requests if it adds up.
-- **Remember wishes across a conversation.** The agent combines earlier wishes when re-asking ("Thai or Mexican, with live music"); a stored "current wish" per date would make that reliable.
-
-9. **Google Calendar invites** for both people when a booking is confirmed. Update or remove the invite when the booking changes or is cancelled.
-10. **Non-dinner date ideas** from the saved lists (spa, gallery, cafés), e.g. "Saturday afternoon plan".
-11. **A "midway" anchor:** somewhere between home and the office, or between two places where they'll be that day.
-12. **Learn preferences from chat:** turn "too loud", "loved the counter seats" into vibe weights.
-13. **Weather-aware suggestions:** terrace places only when it's dry and mild.
-
-## Platform
-
-14. **Official WhatsApp Business API,** if Meta's group-chat support becomes generally available. That would remove the risk of the unofficial library getting the bot's number banned.
-15. **Admin page:** reservations, jobs, places and their booking channels, with manual overrides (e.g. fix a wrong TableCheck slug).
-
-## Done (MVP)
-
-- WhatsApp group bot with an agent loop. It answers inline replies and "planner", listens to the rest, and either of you can decide (16 Oct).
-- Saved lists: Takeout CSV import.
-- Recommender:
-  - parses free-text requests;
-  - starts from home or the office;
-  - rotates cuisines;
-  - finds places similar to a named one;
-  - discovers places beyond the saved lists;
-  - checks availability before proposing;
-  - writes pitches using only stored facts.
-- Booking through TableCheck, else an AI phone call: book, change and cancel. Cancellation policies are read from the booking, the call or the website, and turned into a deadline reminder.
-- Weekly rhythm:
-  - one "still on?" a day before the free-cancellation deadline;
-  - reminder on the day;
-  - visit log after the date.
-- Bookability audit script.
+- WhatsApp group bot on its own number ("Concierge"). Answers replies, its name and @mentions; listens to the rest; either of you can decide.
+- Saved lists from a Takeout CSV import (both lists in).
+- Recommender: free-text requests, home or office start, cuisine rotation, "like X", discovery beyond the lists, availability checked first, pitches from stored facts only.
+- Booking on TableCheck, else an AI call in Japanese: book, change, cancel. Cancellation policy turned into a deadline.
+- Reminders: one "still on?" a day before free cancellation ends, the day-of reminder, the visit log.
+- Runs on a Google Cloud VM; logs readable by Claude.
