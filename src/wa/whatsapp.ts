@@ -163,6 +163,9 @@ export function isAddressed(m: WAMessage, text: string): boolean {
   // An @mention counts even inside a reply to someone else. In self mode a mention of the bot is a
   // mention of Advait, so only the keyword and replies count there.
   if (!config.wa.selfMode && mentionsBot(ctx?.mentionedJid, text)) return true;
+  // @mentioning the other person makes it a message to them, even as a reply to the bot (Advait replied
+  // to the bot "@Emily babe this seems reasonable to omit?" and the bot answered and took his side).
+  if (!config.wa.selfMode && ctx?.mentionedJid?.length) return false;
   if (ctx?.stanzaId) return quotesBot(ctx);
   return false;
 }

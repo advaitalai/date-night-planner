@@ -39,6 +39,17 @@ describe("who the bot answers", () => {
     expect(isAddressed(msg("planner plan wednesday"), "planner plan wednesday")).toBe(true);
   });
 
+  it("treats a reply to the bot that @mentions the other person as a message to them", async () => {
+    const { config } = await import("../src/config");
+    const { isAddressed } = await import("../src/wa/whatsapp");
+    Object.assign(config.wa, { groupJid: "group@g.us", solo: false, selfMode: false });
+    const m = {
+      key: { remoteJid: "group@g.us", id: "x" },
+      message: { extendedTextMessage: { text: "@211166462767130 babe this seems reasonable to omit?", contextInfo: { stanzaId: "q1", participant: "bot@s.whatsapp.net", mentionedJid: ["211166462767130@lid"], quotedMessage: { conversation: "🤖 cado is a wine bar…" } } } },
+    } as never;
+    expect(isAddressed(m, "@211166462767130 babe this seems reasonable to omit?")).toBe(false);
+  });
+
   it("answers to its WhatsApp name too (e.g. Concierge), as a word", async () => {
     const { config } = await import("../src/config");
     const { isAddressed } = await import("../src/wa/whatsapp");
