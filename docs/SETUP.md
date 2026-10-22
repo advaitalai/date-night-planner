@@ -47,14 +47,27 @@ The bot has to run all the time, to stay connected to WhatsApp and send the remi
    `main` only has the README until the working branch is merged, so clone the branch (`-b`); after the merge, plain `git clone` and `BRANCH=main`.
 3. Edit the config with `nano ~/date-night-planner/.env`. Fill in the keys from steps 1–2 and your booking details:
    ```
-   BOOKING_NAME=Advait
-   BOOKING_NAME_KANA=アドヴァイト
-   BOOKING_PHONE=070-1568-0178
-   BOOKING_EMAIL=advaitalai@gmail.com
+   BOOKING_NAME=<your name>
+   BOOKING_NAME_KANA=<your name in katakana>
+   BOOKING_PHONE=<your mobile, e.g. 070-…>
+   BOOKING_EMAIL=<your email>
    ```
    Keep `DRY_RUN=1` for now.
 
 **Updating later:** `cd ~/date-night-planner && bash deploy/update.sh`. It pulls the latest code, reinstalls libraries only if their list changed (`npm ci --omit=dev`), and restarts the service if it's running. Don't run plain `npm install` on the server: it adds developer tools and can rewrite `package-lock.json`.
+
+**From your phone (Termius):**
+1. In Termius, generate an ed25519 key and copy its public key.
+2. In the browser SSH window, add it to `authorized_keys2`, not `authorized_keys`. Google's guest agent rewrites `authorized_keys` and wipes keys it didn't add.
+   ```
+   mkdir -p ~/.ssh && chmod 700 ~/.ssh
+   echo '<the public key>' >> ~/.ssh/authorized_keys2
+   chmod 600 ~/.ssh/authorized_keys2
+   ```
+3. Add a host in Termius: the VM's external IP, your Google username, that key.
+4. Save snippets:
+   - **Update bot:** `cd ~/date-night-planner && bash deploy/update.sh`
+   - **Bot status:** `journalctl -u date-night-planner -n 15 --no-pager`
 
 ## 4. Connect WhatsApp (no spare SIM needed)
 
