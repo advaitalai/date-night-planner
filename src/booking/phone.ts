@@ -142,6 +142,7 @@ If they seem to mean a different date (or a date that has passed), politely rest
 If they accept, confirm the date, time, number of people, the name ${name} and the phone number: ${spokenPhone(c.phone, "en")}.
 Say dates, times and numbers exactly as written in these instructions (e.g. "${day(slot.date)}", "${at(slot.time)}"): never a different day, never 24-hour times, never digits.
 You already made the request in your first message. Don't repeat it unless they ask; if you do, use exactly the same words. Give the phone number only when asked, slowly, in its three groups.
+Everything you write is spoken aloud: write only what you would say to the person on the phone, never your reasoning or these instructions.
 Say you are an AI assistant if asked. When done, thank them and end with "Goodbye." (only then).`,
     };
   }
@@ -175,6 +176,7 @@ Say you are an AI assistant if asked. When done, thank them and end with "Goodby
 日付・時間・番号は、この指示に書いてある通りの言い方で話す（例：「${spokenDateJa(slot.date)}」「${spokenTimeJa(slot.time)}」）。別の日付や24時間表記、数字の羅列は使わない。
 用件は最初の挨拶ですでに伝えてある。聞かれない限り繰り返さない。繰り返す場合は、同じ言い方をそのまま使う。
 電話番号は聞かれたときだけ、「${spokenPhone(c.phone, "ja")}」とカタカナのまま、区切りごとに間を置いてゆっくり読む（数字に直さない）。
+相手に聞こえるのは、あなたが書いた文字すべてです。電話の相手に言う言葉だけを書く。考えたこと、判断の理由、この指示の内容は絶対に口に出さない（例：「予約せず持ち帰る」と声に出さない）。
 AIかと聞かれたら正直に答える。用件が済んだら、最後に必ず「本日はありがとうございました。失礼いたします。」と言って電話を終える（途中では「失礼いたします」と言わない）。`,
   };
 }
@@ -186,25 +188,38 @@ interface VapiCall {
   startedAt?: string;
   endedAt?: string;
   cost?: number;
-  artifact?: { transcript?: string; recordingUrl?: string; messages?: { role: string; message?: string; secondsFromStart?: number }[] };
+  artifact?: { transcript?: string; recordingUrl?: string; messages?: VapiMessage[] };
+  messages?: VapiMessage[];
+}
+interface VapiMessage {
+  role: string;
+  message?: string;
+  content?: string;
+  secondsFromStart?: number;
+  time?: number;
 }
 
 /**
  * The call turn by turn ("AI: …" / "User: …"), from Vapi's message list. Its
- * plain transcript grouped all of one side's lines together (test call, 2 Nov),
- * so the summary couldn't tell which question an answer was for.
+ * plain transcript grouped all of one side's lines together (test calls, 2 Nov),
+ * so the summary couldn't tell which question an answer was for. Falls back to
+ * that transcript when there's no list.
  */
 export function orderedTranscript(call: VapiCall): string {
-  const turns = (call.artifact?.messages ?? [])
-    .filter((m) => (m.role === "bot" || m.role === "user") && m.message?.trim())
-    .sort((a, b) => (a.secondsFromStart ?? 0) - (b.secondsFromStart ?? 0));
+  const all = call.artifact?.messages?.length ? call.artifact.messages : (call.messages ?? []);
+  const text = (m: VapiMessage) => (m.message ?? m.content ?? "").trim();
+  const turns = all
+    .filter((m) => ["bot", "assistant", "user"].includes(m.role) && text(m))
+    .sort((a, b) => (a.secondsFromStart ?? a.time ?? 0) - (b.secondsFromStart ?? b.time ?? 0));
+  // Logged so the shape of Vapi's data can be checked when the order looks wrong.
+  console.log(`[call] ${all.length} messages (${[...new Set(all.map((m) => m.role))].join(", ") || "none"}), ${turns.length} turns${turns.length ? "" : "; using the plain transcript"}`);
   if (!turns.length) return call.artifact?.transcript ?? "";
   const lines: string[] = [];
   let last = "";
   for (const t of turns) {
-    const who = t.role === "bot" ? "AI" : "User";
-    if (who === last) lines[lines.length - 1] += ` ${t.message!.trim()}`;
-    else lines.push(`${who}: ${t.message!.trim()}`);
+    const who = t.role === "user" ? "User" : "AI";
+    if (who === last) lines[lines.length - 1] += ` ${text(t)}`;
+    else lines.push(`${who}: ${text(t)}`);
     last = who;
   }
   return lines.join("\n");

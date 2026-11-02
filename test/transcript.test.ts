@@ -65,6 +65,16 @@ describe("call transcripts can mishear", () => {
     };
     expect(orderedTranscript(call)).toBe("AI: …6時半…ございますでしょうか。\nUser: その日は満席です。\nAI: かしこまりました。 午後7時までの空きはございますでしょうか？\nUser: 満席です。");
     expect(orderedTranscript({ id: "c", status: "ended", artifact: { transcript: "AI: hi" } })).toBe("AI: hi");
+    // The list can also sit on the call itself, with "assistant" turns.
+    const top = { id: "c", status: "ended", messages: [{ role: "assistant", content: "ございますでしょうか。", time: 1 }, { role: "user", message: "満席です。", time: 2 }] };
+    expect(orderedTranscript(top)).toBe("AI: ございますでしょうか。\nUser: 満席です。");
+  });
+
+  it("tells the caller never to say its reasoning out loud (it said 予約せず持ち帰る on the 2 Nov test)", async () => {
+    const { bookingScript } = await import("../src/booking/phone");
+    const contact = { name: "Advait", nameKana: "", phone: "090-1234-5678", email: "a@example.com" } as never;
+    expect(bookingScript(place({ name: "Pulcino" }), slot, contact, "ja").systemPrompt).toMatch(/判断の理由.*絶対に口に出さない/);
+    expect(bookingScript(place({ name: "Pulcino" }), slot, contact, "en").systemPrompt).toMatch(/never your reasoning/);
   });
 
   it("writes 席 in kana so the voice doesn't say mukashi", async () => {
