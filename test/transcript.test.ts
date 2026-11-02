@@ -20,7 +20,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.VAPI_API_KEY;
   delete process.env.VAPI_PHONE_NUMBER_ID;
-  delete process.env.VAPI_TRANSCRIBER;
+  delete process.env.VAPI_TRANSCRIBER_MODEL;
   vi.restoreAllMocks();
 });
 
@@ -35,16 +35,16 @@ describe("call transcripts can mishear", () => {
     expect(seen[0].system).toMatch(/never report that the assistant misspoke/);
   });
 
-  it("Japanese calls use ElevenLabs Scribe; VAPI_TRANSCRIBER=deepgram goes back", async () => {
+  it("Japanese calls use Deepgram nova-3; VAPI_TRANSCRIBER_MODEL overrides", async () => {
     const bodies: { assistant: { transcriber: Record<string, string> } }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_u, init) => (bodies.push(JSON.parse(String(init?.body))), new Response(JSON.stringify({ id: "c1", status: "queued" }))));
     const { startCall, bookingScript } = await import("../src/booking/phone");
     const contact = { name: "Advait", nameKana: "", phone: "090-1234-5678", email: "a@example.com" } as never;
     await startCall("03-0000-0000", bookingScript(place({ name: "Pulcino" }), slot, contact, "ja"));
-    expect(bodies[0].assistant.transcriber).toEqual({ provider: "11labs", model: "scribe_v2_realtime", language: "ja" });
-    process.env.VAPI_TRANSCRIBER = "deepgram";
+    expect(bodies[0].assistant.transcriber).toEqual({ provider: "deepgram", model: "nova-3", language: "ja" });
+    process.env.VAPI_TRANSCRIBER_MODEL = "nova-2";
     await startCall("03-0000-0000", bookingScript(place({ name: "Pulcino" }), slot, contact, "ja"));
-    expect(bodies[1].assistant.transcriber.provider).toBe("deepgram");
+    expect(bodies[1].assistant.transcriber.model).toBe("nova-2");
   });
 
   it("the transcript keeps the turns in order (Vapi's grouped one lost which answer was for which question)", async () => {

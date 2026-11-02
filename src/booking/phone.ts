@@ -244,12 +244,9 @@ export async function startCall(to: string, script: CallScript): Promise<VapiCal
           temperature: 0.2, // stick to the script's dates and numbers
           messages: [{ role: "system", content: script.systemPrompt }],
         },
-        // Japanese: ElevenLabs Scribe. Deepgram nova-2 misheard both sides (11月1日 → 1月1日, 満席 → 専務; 1 Nov).
-        // VAPI_TRANSCRIBER=deepgram goes back to it.
-        transcriber:
-          script.language === "ja" && process.env.VAPI_TRANSCRIBER !== "deepgram"
-            ? { provider: "11labs", model: "scribe_v2_realtime", language: "ja" }
-            : { provider: "deepgram", model: "nova-2", language: script.language },
+        // Japanese: Deepgram nova-3. nova-2 misheard Japanese (専務 for 満席, 1 Nov); ElevenLabs Scribe (tried 2 Nov)
+        // lost the turns, so the call came back as one long line per side. VAPI_TRANSCRIBER_MODEL overrides (e.g. nova-2).
+        transcriber: { provider: "deepgram", model: process.env.VAPI_TRANSCRIBER_MODEL || (script.language === "ja" ? "nova-3" : "nova-2"), language: script.language },
         // Japanese (real restaurant calls): the clearer multilingual voice; flash garbled numbers on the first
         // real call (21 Oct). English (dry-run tests): flash, for less delay. VAPI_VOICE_MODEL overrides both.
         voice: { provider: "11labs", voiceId: process.env.VAPI_VOICE_ID || "sarah", model: process.env.VAPI_VOICE_MODEL || (script.language === "ja" ? "eleven_multilingual_v2" : "eleven_flash_v2_5") },
