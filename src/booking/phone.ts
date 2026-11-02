@@ -322,7 +322,8 @@ export const OUTCOME_SYSTEM =
 
 export async function readOutcome(transcript: string, endedReason: string | undefined, goal: string, opening?: string): Promise<CallReport["outcome"]> {
   const preset = outcomeFromEndedReason(endedReason, transcript);
-  if (preset) return blank(preset, preset === "failed" ? `The call didn't connect (${endedReason}).` : `Ended: ${endedReason ?? "no answer"}.`);
+  // Busy / no answer / voicemail: the headline says it all (it used to add "Ended: customer-busy.").
+  if (preset) return blank(preset, preset === "failed" ? `The call didn't connect (${endedReason}).` : "");
   return extract(
     CallOutcomeSchema,
     OUTCOME_SYSTEM,

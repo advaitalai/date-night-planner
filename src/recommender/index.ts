@@ -214,16 +214,20 @@ export function optionFacts(k: Constraints, options: RecommendOption[]): string[
 export async function proposePlan(text: string, opts: { date?: string } = {}): Promise<{ plan?: Plan; message: string; facts: string }> {
   const r = await recommend(text, opts);
   const asked = [...r.constraints.cuisines, ...r.constraints.features.map((f) => FEATURE_INFO[f].label), ...r.constraints.vibe];
+  // Nothing at all: don't post yet. The agent widens once and then posts one answer
+  // (1 Nov: it posted "Nothing fits", then options from a wider search, then a note).
   if (r.options.length === 0) {
-    const message = [
+    await clearStatus();
+    const why = [
       `😕 *Nothing fits ${fmtDate(r.slot.date)}, ${r.slot.time} yet*`,
-      r.relaxed.length ? `Even after looking ${r.relaxed.join(" and ")}, here's what ruled places out:` : "Here's what ruled places out:",
+      r.relaxed.length ? `Even with ${r.relaxed.join(" and ")}, here's what ruled places out:` : "Here's what ruled places out:",
       explainRejections(r),
       "Want me to try another time or day, a different area, or a specific cuisine?",
     ].join("\n\n");
-    await say(message);
-    await clearStatus();
-    return { message, facts: `No options posted: nothing fit${asked.length ? ` (asked for: ${asked.join(", ")})` : ""}. The chat was told why.` };
+    return {
+      message: "",
+      facts: `NOT POSTED: nothing fit${asked.length ? ` (asked for: ${asked.join(", ")})` : ""}. Either call recommend_options once more with a wider search (a bigger area, more travel time, another time), or, if you already widened, post this to them as it is:\n${why}`,
+    };
   }
 
   // Nothing matches what they asked for: don't post filler (round 2 posted three non-music places

@@ -1,6 +1,6 @@
 # Product backlog
 
-Simplified and prioritised 22 Oct. Older triage tables (dialer and recommender QA, all but two items done) are in git history.
+Simplified and prioritised 22 Oct; updated 2 Nov from the first two weeks of live use. Older triage tables (dialer and recommender QA, all but two items done) are in git history.
 
 **Lean rule (16 Oct, Advait):** the product stays small so it doesn't need constant testing. Before adding anything, ask:
 - Is it worth testing for as long as it exists?
@@ -8,49 +8,40 @@ Simplified and prioritised 22 Oct. Older triage tables (dialer and recommender Q
 
 **How items move up:** real use. Each item says what would show it's needed.
 
-## P1: this week (decide from live use)
+## P1: next (evidence from 23 Oct–2 Nov)
 
-1. **Prove a TableCheck booking from the server.**
-   - Still unverified live; the Kimmy booking was a call.
-   - Needed for: everything below on TableCheck.
-2. **Decide TableCheck's newer booking pages** (due ~28 Oct).
-   - 6 of 15 TableCheck places on Advait's list use them (Kiito, Kimmy, Kuss, Picica Picica, BROWNSTONE, Peter Luger…). Today they fall back to a phone call.
-   - **A.** Script the newer flow (steps in REQUIREMENTS §7). Breaks when TableCheck changes the page.
-   - **B.** Keep calling them. Nothing to build.
-   - **C.** Claude computer use for those pages only. Adapts to changes; ~$0.20–1 a booking; needs guardrails (seats only, no card, stop before anything unexpected).
-   - **Recommendation: B**, unless calls to these places fail or annoy staff. Then **C**, not A.
-   - Signal: count how many bookings became calls because of it, and how those calls went.
+1. **Fresh opening hours, including special and holiday days.** Impact high, effort M.
+   - 1 Nov: Pulcino looked closed until Tuesday (regular weekly hours only); Google Maps showed it open until 8pm. Emily needed four messages to get a call.
+   - Use Google's current hours for today and the next few days, regular hours as the fallback; refresh only the picks or a named place; ask once "closed per Google, call anyway?".
+   - Risky (hours decide picks and calls): ship on its own, with Kimmy (must not call) and Pulcino (must call) as tests.
+2. **Calls can press phone-menu keys.** Impact high, effort S.
+   - 23 Oct: cado's line answered "press 1, 2 or 3"; the bot said 2番 aloud until it hung up.
+3. **Decide TableCheck's newer booking pages.** Impact high, effort M (C).
+   - 6 of 15 TableCheck places on Advait's list use them; they fall back to a call.
+   - First real case, cado: the call hit a phone menu; Muse booked it online. This points to **C, computer use**, after giving calls a fair try with 2.
+   - Options: **A.** script the flow (REQUIREMENTS §7), **B.** keep calling, **C.** computer use for those pages (~$0.20–1 a booking, guardrails: seats only, no card).
+4. **Prove a TableCheck booking from the server.** Impact high, effort S (a test, no code).
 
-## P2: next
+## P2: soon
 
-3. **👍 / 👎 after each date.**
-   - The morning-after visit log asks "How was X?" and stores the answer.
-   - 👎 places aren't suggested again; 👍 ones lift similar places.
-   - The only item that makes picks better over time. Small: one message, one column.
-4. **Fresh opening hours.**
-   - Hours come from Google once and are never refreshed; holidays are ignored.
-   - Refresh when older than 30 days; use Google's holiday hours.
-   - Signal: a booking or call at a place that turned out closed.
-5. **TableCheck "seating only, pay optional" items** (`postpay_optional`).
-   - The bot skips them as "needs a card". Check one by hand (The Public Place); allow them if no card is taken.
-   - Small. More places bookable online, fewer calls.
+5. **Google Maps share links.** Impact medium, effort S. 1 Nov: "I can't open that Maps link"; pasting a link is the natural way to name a place.
+6. **👍 / 👎 after each date.** Impact medium, effort S. The morning-after message asks "How was X?"; 👎 places aren't suggested again.
+7. **TableCheck "seating only, pay optional" items** (`postpay_optional`). Impact medium, effort S. Check one by hand; allow if no card is taken.
 
 ## P3: later, only if it comes up
 
-6. **Lunch, brunch, friends, family.** Out of scope since 22 Oct. Options and the 14-point sweep are below.
-   - Signal: they ask for it more than a couple of times.
-7. **Watch full places for cancellations,** and book when a table frees up.
-   - Signal: a place they both want keeps coming back full.
-8. **Book sought-after places weeks ahead.**
-   - Signal: same as 7.
-9. **Calendar invites** for both when a booking is confirmed, updated on change or cancel.
-   - Signal: they forget a booking despite the day-of reminder.
-10. **A "midway" starting point** (between home and the office, or two places they'll be that day).
+8. **Lunch, brunch, friends, family.** Impact medium, effort M–L. Out of scope since 22 Oct; sweep below.
+9. **Driving times** ("10 min drive"). Impact low, effort M. Travel is train or walk only; matters on trips outside Tokyo (Izu, 1 Nov).
+10. **Watch full places for cancellations.** Impact medium, effort M.
+11. **Book sought-after places weeks ahead.** Impact medium, effort S–M.
+12. **Calendar invites.** Impact low, effort S.
+13. **A "midway" starting point.** Impact low, effort S.
 
 ## Watch, don't build
 
-- **Places API cost.** Searches include atmosphere attributes (pricier tier). Check the Cloud console bill in early November.
-- **WhatsApp ban risk.** The bot uses an unofficial library on its own number. Move to Meta's official API if group support becomes generally available.
+- **Places API cost.** Check the Cloud console bill in early November.
+- **WhatsApp ban risk.** Unofficial library on its own number; move to Meta's official API if group support arrives.
+- **Call transcripts.** Deepgram nova-3 since 2 Nov; it sometimes drops a syllable (満 from 満席). Revisit only if it changes an outcome.
 
 ## Not doing (cut, with the reason)
 

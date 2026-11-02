@@ -169,7 +169,7 @@ export function outcomeMessage(call: PendingCall, place: Place, report: CallRepo
     busy: `${name}'s line was busy.`,
     no_answer: `Nobody picked up at ${name}.`,
     voicemail: `${name} went to voicemail. I didn't leave a message.`,
-    closed: `${name} is closed then.`,
+    closed: `${name} said they're closed.`,
     wrong_number: `That number isn't ${name}'s, so I've stopped using it.`,
     callback: `${name} will call back on ${domesticPhone(config.booking.contact.phone)}. Tell me what they say and I'll note it.`,
     failed: `I couldn't place the call to ${name}.`,
