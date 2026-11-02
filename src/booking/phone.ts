@@ -152,10 +152,11 @@ Say you are an AI assistant if asked. When done, thank them and end with "Goodby
   const who = kana || name;
   return {
     language,
+    // 席 in kana: the voice read 席のみ as mukashi nomi (Advait heard it, 2 Nov).
     // No 失礼いたします in the greeting: it's an end-call phrase, and Vapi hung up right after the greeting.
     firstMessage:
       task === "book"
-        ? `お忙しいところ恐れ入ります。${place.name_local ?? place.name}様でしょうか。${who}様の代理でお電話しております、AIアシスタントです。${spokenDateJa(slot.date)}、${spokenTimeJa(slot.time)}から${slot.partySize}名、席のみで予約をお願いしたいのですが、お席はございますでしょうか。`
+        ? `お忙しいところ恐れ入ります。${place.name_local ?? place.name}様でしょうか。${who}様の代理でお電話しております、AIアシスタントです。${spokenDateJa(slot.date)}、${spokenTimeJa(slot.time)}から${slot.partySize}名、せきのみで予約をお願いしたいのですが、おせきはございますでしょうか。`
         : `お忙しいところ恐れ入ります。${place.name_local ?? place.name}様でしょうか。${who}様の代理でお電話しております、AIアシスタントです。${existing ? spokenDateJa(existing.date) : ""}、${existing ? spokenTimeJa(existing.time) : ""}から${existing?.party_size}名、${who}名義の予約をキャンセルしたく、お電話いたしました。`,
     systemPrompt: `あなたは${who}様の代理でレストラン「${place.name_local ?? place.name}」に電話している、丁寧なAIアシスタントです。日本語の敬語で、短く自然に話してください。
 今日は${today.year}年${jaDay(today.toISODate()!)}です。
@@ -166,10 +167,11 @@ Say you are an AI assistant if asked. When done, thank them and end with "Goodby
     }
 同意してよいこと：
 - ${flexible ? `${spokenDateJa(slot.date)}の${spokenTimeJa(slot.time)}から${spokenTimeJa(latest)}の間ならどの時間でも可。${spokenTimeJa(slot.time)}が満席なら${spokenTimeJa(latest)}までに空きがないか伺い、あれば予約する。` : `${spokenDateJa(slot.date)}の${spokenTimeJa(slot.time)}のみ。`}
-- 席のみ。コースの話は相手から出た場合だけ「席のみでお願いします」と伝える。コース、事前決済、クレジットカードには同意しない。
+- 席のみ。コースの話は相手から出た場合だけ「せきのみでお願いします」と伝える。コース、事前決済、クレジットカードには同意しない。
 それ以外（別の日、範囲外の時間、条件付き）は、お礼を言ってメモし、「本人に確認して折り返しご連絡します」と伝える。予約はしない。
 相手が別の日付（過去の日付など）を言った場合は、「${spokenDateJa(slot.date)}でございます」と丁寧に言い直す。
 予約できたら、日時・人数・お名前（${who}）・電話番号（${spokenPhone(c.phone, "ja")}）を確認する。
+「席」は音声が「むかし」と読むので、話すときは必ずひらがなで「せき」「おせき」と書く。
 日付・時間・番号は、この指示に書いてある通りの言い方で話す（例：「${spokenDateJa(slot.date)}」「${spokenTimeJa(slot.time)}」）。別の日付や24時間表記、数字の羅列は使わない。
 用件は最初の挨拶ですでに伝えてある。聞かれない限り繰り返さない。繰り返す場合は、同じ言い方をそのまま使う。
 電話番号は聞かれたときだけ、「${spokenPhone(c.phone, "ja")}」とカタカナのまま、区切りごとに間を置いてゆっくり読む（数字に直さない）。
@@ -184,7 +186,28 @@ interface VapiCall {
   startedAt?: string;
   endedAt?: string;
   cost?: number;
-  artifact?: { transcript?: string; recordingUrl?: string };
+  artifact?: { transcript?: string; recordingUrl?: string; messages?: { role: string; message?: string; secondsFromStart?: number }[] };
+}
+
+/**
+ * The call turn by turn ("AI: …" / "User: …"), from Vapi's message list. Its
+ * plain transcript grouped all of one side's lines together (test call, 2 Nov),
+ * so the summary couldn't tell which question an answer was for.
+ */
+export function orderedTranscript(call: VapiCall): string {
+  const turns = (call.artifact?.messages ?? [])
+    .filter((m) => (m.role === "bot" || m.role === "user") && m.message?.trim())
+    .sort((a, b) => (a.secondsFromStart ?? 0) - (b.secondsFromStart ?? 0));
+  if (!turns.length) return call.artifact?.transcript ?? "";
+  const lines: string[] = [];
+  let last = "";
+  for (const t of turns) {
+    const who = t.role === "bot" ? "AI" : "User";
+    if (who === last) lines[lines.length - 1] += ` ${t.message!.trim()}`;
+    else lines.push(`${who}: ${t.message!.trim()}`);
+    last = who;
+  }
+  return lines.join("\n");
 }
 
 /** Start an outbound call. Uses Claude for the conversation and Japanese/English speech. */
@@ -409,7 +432,7 @@ async function placeCall(place: Place, to: string | null, script: CallScript, go
     const raw = (err as Error).message;
     return { outcome: blank("failed", raw), transcript: "", failure: await explainCallFailure(raw) };
   }
-  const transcript = done.artifact?.transcript ?? "";
+  const transcript = orderedTranscript(done);
   const outcome = await readOutcome(transcript, done.endedReason, goal, script.firstMessage);
   const failure = outcome.outcome === "failed" ? await explainCallFailure(done.endedReason ?? "") : undefined;
   return { outcome, transcript, endedReason: done.endedReason, failure, call: done };

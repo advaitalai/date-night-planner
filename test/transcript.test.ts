@@ -47,6 +47,34 @@ describe("call transcripts can mishear", () => {
     expect(bodies[1].assistant.transcriber.provider).toBe("deepgram");
   });
 
+  it("the transcript keeps the turns in order (Vapi's grouped one lost which answer was for which question)", async () => {
+    const { orderedTranscript } = await import("../src/booking/phone");
+    const call = {
+      id: "c", status: "ended",
+      artifact: {
+        transcript: "User: 満席です。 満席です。\nAI: …6時半… …7時まで…",
+        messages: [
+          { role: "system", message: "prompt", secondsFromStart: 0 },
+          { role: "bot", message: "…6時半…ございますでしょうか。", secondsFromStart: 1 },
+          { role: "user", message: "その日は満席です。", secondsFromStart: 9 },
+          { role: "bot", message: "かしこまりました。", secondsFromStart: 12 },
+          { role: "bot", message: "午後7時までの空きはございますでしょうか？", secondsFromStart: 13 },
+          { role: "user", message: "満席です。", secondsFromStart: 18 },
+        ],
+      },
+    };
+    expect(orderedTranscript(call)).toBe("AI: …6時半…ございますでしょうか。\nUser: その日は満席です。\nAI: かしこまりました。 午後7時までの空きはございますでしょうか？\nUser: 満席です。");
+    expect(orderedTranscript({ id: "c", status: "ended", artifact: { transcript: "AI: hi" } })).toBe("AI: hi");
+  });
+
+  it("writes 席 in kana so the voice doesn't say mukashi", async () => {
+    const { bookingScript } = await import("../src/booking/phone");
+    const s = bookingScript(place({ name: "Pulcino" }), slot, { name: "Advait", nameKana: "", phone: "090-1234-5678", email: "a@example.com" } as never, "ja");
+    expect(s.firstMessage).toContain("せきのみで予約");
+    expect(s.firstMessage).toContain("おせきはございますでしょうか");
+    expect(s.firstMessage).not.toContain("席");
+  });
+
   it("every call's log line links to its page in the Vapi dashboard", async () => {
     const lines: string[] = [];
     vi.spyOn(console, "log").mockImplementation((l: string) => void lines.push(l));

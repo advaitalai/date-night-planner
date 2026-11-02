@@ -157,7 +157,7 @@ describe("real-call fixes (21 Oct, Kimmy)", () => {
     const slot = { date: "2026-10-21", time: "19:00", partySize: 2 };
     const ja = bookingScript(kimmy, slot, c, "ja");
     expect(ja.firstMessage).toContain("キミー様でしょうか");
-    expect(ja.firstMessage).toContain("10月21日、水曜日、午後7時から2名、席のみで予約をお願いしたいのですが");
+    expect(ja.firstMessage).toContain("10月21日、水曜日、午後7時から2名、せきのみで予約をお願いしたいのですが");
     expect(ja.systemPrompt).toContain("ゼロナナゼロ、イチニーサンヨン、ゴーロクナナハチ");
     const en = bookingScript(kimmy, slot, c, "en");
     expect(en.firstMessage).toContain("I'd like to book seats for two people on Wednesday, October 21st at 7 p.m.");

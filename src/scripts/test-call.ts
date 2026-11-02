@@ -8,7 +8,7 @@
  * prints the transcript and the outcome the bot would act on. Needs
  * VAPI_API_KEY and VAPI_PHONE_NUMBER_ID.
  */
-import { bookingScript, readOutcome, startCall, vapiConfigured, waitForCall, type CallLanguage } from "../booking/phone";
+import { bookingScript, orderedTranscript, readOutcome, startCall, vapiConfigured, waitForCall, type CallLanguage } from "../booking/phone";
 import { flushCloudLogs, startCloudLogging } from "../cloudlog";
 import { config, testCallee } from "../config";
 import { getPrefs } from "../db/repo";
@@ -43,7 +43,7 @@ console.log(`[test-call] for ${slot.date} ${slot.time}, ${slot.partySize} people
 console.log(`Calling ${callee.label} (${callee.phone}) in ${language === "ja" ? "Japanese" : "English"}. They answer as the restaurant (try: accept, say it's full, or ask for a course).`);
 const call = await startCall(callee.phone, script);
 const done = await waitForCall(call.id, 8 * 60_000, (s) => console.log(`  call ${s}`));
-const transcript = done.artifact?.transcript ?? "";
+const transcript = orderedTranscript(done);
 console.log(`\nScript opening: ${script.firstMessage}\nEnded: ${done.endedReason}\n\nTranscript:\n${transcript || "(none)"}`);
 const outcome = await readOutcome(transcript, done.endedReason, `book ${slot.partySize} on ${slot.date} at ${slot.time}, seats only`, script.firstMessage);
 console.log("\nWhat the bot understood:", JSON.stringify(outcome, null, 2));
