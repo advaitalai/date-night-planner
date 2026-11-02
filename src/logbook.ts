@@ -27,9 +27,12 @@ export interface CallLog {
   dryRun: boolean;
 }
 
+/** The call's page in the Vapi dashboard (recording and transcript; needs Advait's login). */
+export const vapiCallLink = (id: string) => `https://dashboard.vapi.ai/calls/${id}`;
+
 export function logCall(c: CallLog): void {
   // Also in the log files (and Cloud Logging), so a call can be debugged from the logs alone.
-  console.log(`[call] ${c.kind} ${c.placeName}${c.dryRun ? " (dry run)" : ""}: ${c.outcome}${c.endedReason ? ` (${c.endedReason})` : ""}, ${c.durationSec ?? "?"}s. ${c.summary}${c.recordingUrl ? `\nRecording: ${c.recordingUrl}` : ""}${c.transcript ? `\nTranscript:\n${c.transcript.slice(0, 4000)}` : ""}`);
+  console.log(`[call] ${c.kind} ${c.placeName}${c.dryRun ? " (dry run)" : ""}: ${c.outcome}${c.endedReason ? ` (${c.endedReason})` : ""}, ${c.durationSec ?? "?"}s. ${c.summary}${c.vapiId ? `\nCall (audio): ${vapiCallLink(c.vapiId)}` : ""}${c.recordingUrl ? `\nRecording: ${c.recordingUrl}` : ""}${c.transcript ? `\nTranscript:\n${c.transcript.slice(0, 4000)}` : ""}`);
   try {
     db()
       .prepare(

@@ -12,7 +12,7 @@ import { bookingScript, readOutcome, startCall, vapiConfigured, waitForCall, typ
 import { flushCloudLogs, startCloudLogging } from "../cloudlog";
 import { config, testCallee } from "../config";
 import { getPrefs } from "../db/repo";
-import { logToFile } from "../logbook";
+import { logToFile, vapiCallLink } from "../logbook";
 import type { Place } from "../types";
 import { nextWeekday, now } from "../util/time";
 
@@ -44,8 +44,9 @@ console.log(`Calling ${callee.label} (${callee.phone}) in ${language === "ja" ? 
 const call = await startCall(callee.phone, script);
 const done = await waitForCall(call.id, 8 * 60_000, (s) => console.log(`  call ${s}`));
 const transcript = done.artifact?.transcript ?? "";
-console.log(`\nEnded: ${done.endedReason}\n\nTranscript:\n${transcript || "(none)"}`);
-const outcome = await readOutcome(transcript, done.endedReason, `book ${slot.partySize} on ${slot.date} at ${slot.time}, seats only`);
+console.log(`\nScript opening: ${script.firstMessage}\nEnded: ${done.endedReason}\n\nTranscript:\n${transcript || "(none)"}`);
+const outcome = await readOutcome(transcript, done.endedReason, `book ${slot.partySize} on ${slot.date} at ${slot.time}, seats only`, script.firstMessage);
 console.log("\nWhat the bot understood:", JSON.stringify(outcome, null, 2));
-if (done.artifact?.recordingUrl) console.log(`\nRecording: ${done.artifact.recordingUrl}`);
+console.log(`\nCall (audio): ${vapiCallLink(done.id)}`);
+if (done.artifact?.recordingUrl) console.log(`Recording: ${done.artifact.recordingUrl}`);
 await flushCloudLogs();

@@ -206,7 +206,12 @@ export async function startCall(to: string, script: CallScript): Promise<VapiCal
           temperature: 0.2, // stick to the script's dates and numbers
           messages: [{ role: "system", content: script.systemPrompt }],
         },
-        transcriber: { provider: "deepgram", model: "nova-2", language: script.language },
+        // Japanese: ElevenLabs Scribe. Deepgram nova-2 misheard both sides (11月1日 → 1月1日, 満席 → 専務; 1 Nov).
+        // VAPI_TRANSCRIBER=deepgram goes back to it.
+        transcriber:
+          script.language === "ja" && process.env.VAPI_TRANSCRIBER !== "deepgram"
+            ? { provider: "11labs", model: "scribe_v2_realtime", language: "ja" }
+            : { provider: "deepgram", model: "nova-2", language: script.language },
         // Japanese (real restaurant calls): the clearer multilingual voice; flash garbled numbers on the first
         // real call (21 Oct). English (dry-run tests): flash, for less delay. VAPI_VOICE_MODEL overrides both.
         voice: { provider: "11labs", voiceId: process.env.VAPI_VOICE_ID || "sarah", model: process.env.VAPI_VOICE_MODEL || (script.language === "ja" ? "eleven_multilingual_v2" : "eleven_flash_v2_5") },
@@ -273,13 +278,20 @@ export function outcomeFromEndedReason(endedReason: string | undefined, transcri
   return null;
 }
 
-export async function readOutcome(transcript: string, endedReason: string | undefined, goal: string): Promise<CallReport["outcome"]> {
+/** The summarizer's instructions: the transcript is speech recognition of both sides, so it can mishear. */
+export const OUTCOME_SYSTEM =
+  "You read the transcript of an AI assistant's phone call to a Japanese restaurant and report what happened. Only use what was said. " +
+  "The transcript is machine speech recognition of both sides and often mishears Japanese (席のみ as 昔のみ, お席 as 推し, dates, names). " +
+  "The assistant's opening line was the fixed text given, spoken correctly: never report that the assistant misspoke because its transcribed lines differ. " +
+  "Read the restaurant's lines by sound and context (e.g. 専務 after ごめん is likely 満席, full), and say in the summary when a reading is a guess.";
+
+export async function readOutcome(transcript: string, endedReason: string | undefined, goal: string, opening?: string): Promise<CallReport["outcome"]> {
   const preset = outcomeFromEndedReason(endedReason, transcript);
   if (preset) return blank(preset, preset === "failed" ? `The call didn't connect (${endedReason}).` : `Ended: ${endedReason ?? "no answer"}.`);
   return extract(
     CallOutcomeSchema,
-    "You read the transcript of an AI assistant's phone call to a Japanese restaurant and report what happened. Only use what was said.",
-    `Goal of the call: ${goal}\nCall ended: ${endedReason ?? "unknown"}\n\nTranscript:\n${transcript}`,
+    OUTCOME_SYSTEM,
+    `Today: ${now().toFormat("yyyy-MM-dd (ccc)")}\nGoal of the call: ${goal}\n${opening ? `Opening line, as actually spoken: ${opening}\n` : ""}Call ended: ${endedReason ?? "unknown"}\n\nTranscript:\n${transcript}`,
   );
 }
 
@@ -398,7 +410,7 @@ async function placeCall(place: Place, to: string | null, script: CallScript, go
     return { outcome: blank("failed", raw), transcript: "", failure: await explainCallFailure(raw) };
   }
   const transcript = done.artifact?.transcript ?? "";
-  const outcome = await readOutcome(transcript, done.endedReason, goal);
+  const outcome = await readOutcome(transcript, done.endedReason, goal, script.firstMessage);
   const failure = outcome.outcome === "failed" ? await explainCallFailure(done.endedReason ?? "") : undefined;
   return { outcome, transcript, endedReason: done.endedReason, failure, call: done };
 }
