@@ -42,7 +42,7 @@ Cut on 16 Oct, and why:
 
 Kept on purpose: changing a booking (one call to the restaurant beats cancel + rebook), the visit log, the cancellation policy lookup.
 
-**Scope (22 Oct):** date-night dinners for the two of them. Lunch, brunch and meals with friends or family are out of scope (the bot says so); the full change list is parked in BACKLOG.
+**Scope (22 Oct, widened 5 Nov):** dinners, for the two of them or with friends or family (any party size, "dinner for 4"). Lunch and brunch are out of scope (the bot says so); the full change list is parked in BACKLOG. Pitches and wording still assume a date.
 
 ### 4.1 Chat (WhatsApp)
 - R1. The bot lives in a WhatsApp group with Advait and Emily.

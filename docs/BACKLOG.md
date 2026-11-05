@@ -30,7 +30,7 @@ Simplified and prioritised 22 Oct; updated 2 Nov from the first two weeks of liv
 
 ## P3: later, only if it comes up
 
-8. **Lunch, brunch, friends, family.** Impact medium, effort M–L. Out of scope since 22 Oct; sweep below.
+8. **Lunch and brunch, and a full group mode** (group-friendly picks and wording). Impact medium, effort M–L. Since 5 Nov dinners for any party size are in scope (option B); lunch and brunch stay out. Sweep below.
 9. **Driving times** ("10 min drive"). Impact low, effort M. Travel is train or walk only; matters on trips outside Tokyo (Izu, 1 Nov).
 10. **Watch full places for cancellations.** Impact medium, effort M.
 11. **Book sought-after places weeks ahead.** Impact medium, effort S–M.

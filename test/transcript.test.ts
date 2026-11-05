@@ -93,3 +93,12 @@ describe("call transcripts can mishear", () => {
     expect(lines[0]).toContain("Call (audio): https://dashboard.vapi.ai/calls/abc-123");
   });
 });
+
+describe("party size", () => {
+  it("a call for four asks for 4名, not 2", async () => {
+    const { bookingScript } = await import("../src/booking/phone");
+    const s = bookingScript(place({ name: "Pulcino" }), { ...slot, partySize: 4 }, { name: "Advait", nameKana: "", phone: "090-1234-5678", email: "a@example.com" } as never, "ja");
+    expect(s.firstMessage).toContain("午後7時から4名、せきのみ");
+    expect(s.firstMessage).not.toContain("2名");
+  });
+});

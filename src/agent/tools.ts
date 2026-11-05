@@ -220,7 +220,7 @@ const rawTools = [
       if (config.google.mapsKey) {
         for (const g of await textSearch(query, anchor, 3000, 5)) found.push(upsertPlace({ ...toPlaceFields(g), name: g.displayName?.text ?? "?", source: "discovered" }));
       }
-      const slot = { date: now().toISODate()!, time: getPrefs().defaultTime, partySize: 2 };
+      const slot = { date: now().toISODate()!, time: getPrefs().defaultTime, partySize: getPrefs().partySize };
       const lines = await Promise.all(
         found.slice(0, 8).map(async (p) => {
           const e = await enrich(p);
