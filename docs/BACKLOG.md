@@ -32,15 +32,17 @@ Simplified and prioritised 22 Oct; updated 2 Nov from the first two weeks of liv
 6. **Google Maps share links.** Impact medium, effort S. 1 Nov: "I can't open that Maps link"; pasting a link is the natural way to name a place.
 7. **👍 / 👎 after each date.** Impact medium, effort S. The morning-after message asks "How was X?"; 👎 places aren't suggested again.
 8. **TableCheck "seating only, pay optional" items** (`postpay_optional`). Impact medium, effort S. Check one by hand; allow if no card is taken.
+9. **Stop retrying dead Google place IDs.** Impact low, effort S. 7 Nov: しんぱち食堂 目黒西口店's ID returns 404 ("no longer valid") and every search retries it and logs a warning. Mark it once (or re-find it by name) and skip it after.
+10. **Size the discovery search for the first round, not the widest.** Impact low (cost), effort S. 7 Nov: "near Omotesando" filters at 10 min but searched 4.6 km (sized for the 30 min fallback), ~120 Google lookups a request. Search the first round's area; search wider only when widening.
 
 ## P3: later, only if it comes up
 
-9. **Lunch and brunch, and a full group mode** (group-friendly picks and wording). Impact medium, effort M–L. Since 5 Nov dinners for any party size are in scope (option B); lunch and brunch stay out. Sweep below.
-10. **Driving times** ("10 min drive"). Impact low, effort M. Travel is train or walk only; matters on trips outside Tokyo (Izu, 1 Nov).
-11. **Watch full places for cancellations.** Impact medium, effort M.
-12. **Book sought-after places weeks ahead.** Impact medium, effort S–M.
-13. **Calendar invites.** Impact low, effort S.
-14. **A "midway" starting point.** Impact low, effort S.
+11. **Lunch and brunch, and a full group mode** (group-friendly picks and wording). Impact medium, effort M–L. Since 5 Nov dinners for any party size are in scope (option B); lunch and brunch stay out. Sweep below.
+12. **Driving times** ("10 min drive"). Impact low, effort M. Travel is train or walk only; matters on trips outside Tokyo (Izu, 1 Nov).
+13. **Watch full places for cancellations.** Impact medium, effort M.
+14. **Book sought-after places weeks ahead.** Impact medium, effort S–M.
+15. **Calendar invites.** Impact low, effort S.
+16. **A "midway" starting point.** Impact low, effort S.
 
 ## Watch, don't build
 
