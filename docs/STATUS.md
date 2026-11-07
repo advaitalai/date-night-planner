@@ -18,6 +18,8 @@ Last updated: 20 Oct 2026.
 
 ## Next steps
 
+**7 Nov, two bots live:** installed. Test bot linked to Concierge (device 2; first scan was by mistake with Advait's personal phone, unlinked), listening in "Test group" (`120363414390232222@g.us`), DRY_RUN on. Live bot (device 1) unaffected in Date planner 🍷. Advait tested "near Omotesando" in the test group: looks good. Both on `bc526cf`.
+
 **7 Nov, two bots:** a test bot (`~/date-night-planner-dev`, work branch, `DRY_RUN=1`, the test group, its own Cloud Logging log `date-night-planner-dev`) and the live bot (`prod` branch, moved only on "ship it"). Both auto-update; the test bot gets a nightly copy of live data minus chats, logs, reminders and the pending call (`src/db/snapshot.ts`). Advait runs `deploy/install-bots.sh` once (browser SSH, sudo), links the test bot's WhatsApp, then Claude reads the test group id from the logs. Supersedes the single-bot auto-update below.
 
 **7 Nov, auto-update:** the server can update itself within 5 min of a push (`deploy/install-autoupdate.sh`, a systemd timer running `deploy/auto-update.sh`); it skips while a call is on, and the startup line logs `version <commit>` so Claude confirms deploys from Cloud Logging. Needs Advait to run the install once. After that, Claude's loop is: test, push, check the startup line.
