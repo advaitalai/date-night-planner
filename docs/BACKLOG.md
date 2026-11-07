@@ -8,34 +8,39 @@ Simplified and prioritised 22 Oct; updated 2 Nov from the first two weeks of liv
 
 **How items move up:** real use. Each item says what would show it's needed.
 
-## P1: next (evidence from 23 Oct–2 Nov)
+## P1: next (evidence from 23 Oct–7 Nov)
 
-1. **Fresh opening hours, including special and holiday days.** Impact high, effort M.
+1. **Keys without a terminal: Google Secret Manager.** Impact high, effort S–M.
+   - 5–7 Nov: the bot's Anthropic key expired and the bot was down ~1.5 days; replacing it meant SSH and nano.
+   - Keys live in Secret Manager; updating one is a web form (Cloud console → Secret Manager → New version). The bot reads them at startup and again when a key is rejected, so no restart.
+   - With it: a startup key check (a clear warning in the logs at once), and a plain error in the chat ("My Claude API key isn't working; Advait needs to replace it") instead of raw JSON.
+   - One-time setup: turn on Secret Manager, let the VM read it. Start with the Anthropic key; Maps, Vapi and Twilio after.
+2. **Fresh opening hours, including special and holiday days.** Impact high, effort M.
    - 1 Nov: Pulcino looked closed until Tuesday (regular weekly hours only); Google Maps showed it open until 8pm. Emily needed four messages to get a call.
    - Use Google's current hours for today and the next few days, regular hours as the fallback; refresh only the picks or a named place; ask once "closed per Google, call anyway?".
    - Risky (hours decide picks and calls): ship on its own, with Kimmy (must not call) and Pulcino (must call) as tests.
-2. **Calls can press phone-menu keys.** Impact high, effort S.
+3. **Calls can press phone-menu keys.** Impact high, effort S.
    - 23 Oct: cado's line answered "press 1, 2 or 3"; the bot said 2番 aloud until it hung up.
-3. **Decide TableCheck's newer booking pages.** Impact high, effort M (C).
+4. **Decide TableCheck's newer booking pages.** Impact high, effort M (C).
    - 6 of 15 TableCheck places on Advait's list use them; they fall back to a call.
    - First real case, cado: the call hit a phone menu; Muse booked it online. This points to **C, computer use**, after giving calls a fair try with 2.
    - Options: **A.** script the flow (REQUIREMENTS §7), **B.** keep calling, **C.** computer use for those pages (~$0.20–1 a booking, guardrails: seats only, no card).
-4. **Prove a TableCheck booking from the server.** Impact high, effort S (a test, no code).
+5. **Prove a TableCheck booking from the server.** Impact high, effort S (a test, no code).
 
 ## P2: soon
 
-5. **Google Maps share links.** Impact medium, effort S. 1 Nov: "I can't open that Maps link"; pasting a link is the natural way to name a place.
-6. **👍 / 👎 after each date.** Impact medium, effort S. The morning-after message asks "How was X?"; 👎 places aren't suggested again.
-7. **TableCheck "seating only, pay optional" items** (`postpay_optional`). Impact medium, effort S. Check one by hand; allow if no card is taken.
+6. **Google Maps share links.** Impact medium, effort S. 1 Nov: "I can't open that Maps link"; pasting a link is the natural way to name a place.
+7. **👍 / 👎 after each date.** Impact medium, effort S. The morning-after message asks "How was X?"; 👎 places aren't suggested again.
+8. **TableCheck "seating only, pay optional" items** (`postpay_optional`). Impact medium, effort S. Check one by hand; allow if no card is taken.
 
 ## P3: later, only if it comes up
 
-8. **Lunch and brunch, and a full group mode** (group-friendly picks and wording). Impact medium, effort M–L. Since 5 Nov dinners for any party size are in scope (option B); lunch and brunch stay out. Sweep below.
-9. **Driving times** ("10 min drive"). Impact low, effort M. Travel is train or walk only; matters on trips outside Tokyo (Izu, 1 Nov).
-10. **Watch full places for cancellations.** Impact medium, effort M.
-11. **Book sought-after places weeks ahead.** Impact medium, effort S–M.
-12. **Calendar invites.** Impact low, effort S.
-13. **A "midway" starting point.** Impact low, effort S.
+9. **Lunch and brunch, and a full group mode** (group-friendly picks and wording). Impact medium, effort M–L. Since 5 Nov dinners for any party size are in scope (option B); lunch and brunch stay out. Sweep below.
+10. **Driving times** ("10 min drive"). Impact low, effort M. Travel is train or walk only; matters on trips outside Tokyo (Izu, 1 Nov).
+11. **Watch full places for cancellations.** Impact medium, effort M.
+12. **Book sought-after places weeks ahead.** Impact medium, effort S–M.
+13. **Calendar invites.** Impact low, effort S.
+14. **A "midway" starting point.** Impact low, effort S.
 
 ## Watch, don't build
 

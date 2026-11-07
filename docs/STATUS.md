@@ -18,6 +18,8 @@ Last updated: 20 Oct 2026.
 
 ## Next steps
 
+**7 Nov:** The bot's Anthropic key expired: from 6 Nov 07:31 JST every message failed (`401 invalid x-api-key`), shown in the chat as raw JSON. Advait replaced it in `.env` and restarted (7 Nov 13:22 JST). Backlog P1 #1: keys in Google Secret Manager (no terminal), a startup key check, a plain error message.
+
 **5 Nov:** Scope widened (option B): dinners for any party size, so "dinner for 4" works (the scope rule used to decline meals with friends). The party size already flowed through requests, TableCheck and the call script (4名); the one hardcoded 2 (availability note in search_places) now uses the default. Lunch and brunch stay out; wording still says "you two".
 
 **2 Nov, later:** Fourth JP test call passed on nova-3 (turns in order, date and 席 right, no reasoning aloud, summary "full"). Shipped: plain wording ("Ended: customer-busy." gone, "said they're closed", "Even with any budget"), and one answer per message (zero results now return NOT POSTED with the reasons, so the agent widens once and posts one answer). Opening hours, phone-menu keys, Maps links and the rest are in BACKLOG P1–P3.
