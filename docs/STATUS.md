@@ -18,6 +18,8 @@ Last updated: 20 Oct 2026.
 
 ## Next steps
 
+**8 Nov, shipped `cfa7ef3` to live** (first "ship it" through the gate; live restarted by itself 07:46 JST): "Dates" tag fix, date-spot log, datey spots, picks log line (`[plan] picks: name score (reasons)`), cards saying "Emily tagged it as a date spot", clean nightly test copy, log wording. Test run before shipping (Wed): cado + two datey places (CUJORL, WARAYAKI) replaced the izakaya. Advait to run the tags-only import once in `~/date-night-planner` (live); then the nightly copy carries tags to test.
+
 **7 Nov, datey spots:** first log on a fresh date (Thu): 14 date spots, 4 kept (over budget 4, too far 6), 2 picked (cado, Oil), others ranked 28 and 34. A supply problem, so (Advait) look for similar datey places nearby instead of loosening limits: vibe-first date likeness for untagged places (up to +2), reviews read for the top 10 for two people, extra date searches. Also: the nightly test copy now clears plans, so repeated "plan Wednesday" tests aren't skewed by "already shown". On dev; next: test in the test group, compare the date-spot log line.
 
 **7 Nov, date spots, first test:** tags-only import on the test bot: 16 rows tagged. "Plan Wednesday" picked 1 date spot of 3 (cado). Advait: log first, decide after (reserved slots "2 of 3" or a bigger boost were proposed). Each plan now logs `[plan] date spots: N saved, N within reach, N kept (reasons), N picked; best others ranked …`.
