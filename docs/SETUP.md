@@ -56,12 +56,21 @@ The bot has to run all the time, to stay connected to WhatsApp and send the remi
 
 **Updating later:** `cd ~/date-night-planner && bash deploy/update.sh`. It pulls the latest code, reinstalls libraries only if their list changed (`npm ci --omit=dev`), and restarts the service if it's running. Don't run plain `npm install` on the server: it adds developer tools and can rewrite `package-lock.json`.
 
-**Auto-update (7 Nov, recommended):** the server updates itself within 5 min of each push, so nobody runs the line above.
-- Turn it on once: `cd ~/date-night-planner && bash deploy/update.sh && sudo bash deploy/install-autoupdate.sh`
-- A timer checks GitHub every 5 min; with new commits it runs `deploy/update.sh`. It waits while a phone call is on (`data/call-in-progress`).
-- Which code is running: the startup log line says `version <commit>` (Claude reads it in Cloud Logging).
-- History: `journalctl -u date-night-autoupdate -n 20 --no-pager`. Off: `sudo systemctl disable --now date-night-autoupdate.timer`.
-- A bad push is undone by pushing a revert. `.env` is never touched.
+**Two bots, auto-update (7 Nov):** a live bot and a test bot on the same server; each updates itself within 5 min of a push to its branch.
+
+| | Live | Test |
+|---|---|---|
+| Folder | `~/date-night-planner` | `~/date-night-planner-dev` |
+| Branch | `prod` (moved only on Advait's "ship it") | the work branch (every push) |
+| Group | Date planner 🍷 | the test group (Advait + Concierge) |
+| Bookings, calls | real | `DRY_RUN=1`: nothing booked, calls to Advait |
+| Cloud Logging log | `date-night-planner` | `date-night-planner-dev` |
+
+- Install once, in the Cloud console's browser SSH (needs sudo): `cd ~/date-night-planner && bash deploy/update.sh && sudo bash deploy/install-bots.sh`. Then link the test bot to Concierge's WhatsApp (QR in `journalctl -u date-night-planner-dev -f -o cat`) and set the test group in `~/date-night-planner-dev/.env` (`WA_GROUP_JID`), then `sudo systemctl restart date-night-planner-dev`.
+- Data: live → test only, nightly at 04:00 (`date-night-dev-sync.timer`) or by hand: `bash ~/date-night-planner-dev/deploy/sync-test-data.sh`. Chats, logs, reminders and a pending call aren't copied.
+- Keys: the test `.env` starts as a copy of the live one. A changed key goes in both files.
+- Each deploy waits while a phone call is on. The startup line logs `version <commit>`.
+- History: `journalctl -u date-night-autoupdate -n 20 --no-pager` (live), `date-night-dev-autoupdate` (test). Off: `sudo systemctl disable --now <name>.timer`.
 
 **From your phone (Termius):**
 1. In Termius, generate an ed25519 key and copy its public key.

@@ -19,6 +19,7 @@ A WhatsApp agent that plans Advait and Emily's weekly date night and books it en
 ## Rules
 
 - Keep `DRY_RUN=1` unless Advait explicitly says to make a real booking or cancellation.
+- Two bots (SETUP §3): push work to the work branch; the test bot picks it up. Move `prod` (`git push origin HEAD:prod`, fast-forward only) only when Advait says "ship it", and say first exactly what is waiting. Confirm deploys from the `version` in the startup log (`date-night-planner` live, `date-night-planner-dev` test).
 - The repo is public. Never commit secrets or personal contact details; they go in `.env` or environment variables. Never ask for keys in the chat.
 - Never claim a booking was made, changed or cancelled unless a tool or site confirmed it.
 - Update `docs/STATUS.md` at the end of every session (state, next steps, new preferences, feedback), plus `docs/REQUIREMENTS.md` and `docs/BACKLOG.md` when requirements or plans change.

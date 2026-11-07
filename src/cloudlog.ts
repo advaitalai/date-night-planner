@@ -10,7 +10,8 @@
  */
 
 const METADATA = "http://metadata.google.internal/computeMetadata/v1";
-const LOG_NAME = "date-night-planner";
+// The test bot logs as "date-night-planner-dev" (CLOUD_LOG_NAME in its .env), so the two never mix.
+const LOG_NAME = process.env.CLOUD_LOG_NAME || "date-night-planner";
 const FLUSH_MS = 30_000;
 const MAX_BUFFER = 5000;
 
