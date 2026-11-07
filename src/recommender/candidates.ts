@@ -70,7 +70,7 @@ export async function enrich(place: Place, opts: { lite?: boolean } = {}): Promi
  * plus Google searches for the requested cuisine/vibe (or good restaurants in
  * general) within the travel radius.
  */
-export async function discover(k: Constraints, anchor: LatLng, slot: Slot, radiusM = 3000, limit = 20): Promise<Place[]> {
+export async function discover(k: Constraints, anchor: LatLng, slot: Slot, radiusM = 3000, limit = 20, extraQueries: string[] = []): Promise<Place[]> {
   const found: Place[] = [];
   try {
     const shops = await tcSearchNear(anchor.lat, anchor.lng, slot, { distance: `${Math.max(1, Math.round(radiusM / 1000))}km` });
@@ -97,6 +97,7 @@ export async function discover(k: Constraints, anchor: LatLng, slot: Slot, radiu
         ? k.cuisines.map((c) => [c, ...featureWords, ...k.vibe, "restaurant"].join(" "))
         : [[...k.vibe, "restaurant"].join(" "), "date night restaurant"];
       for (const f of k.features) queries.push(FEATURE_INFO[f].query);
+      if (!k.cuisines.length) queries.push(...extraQueries);
       for (const q of queries) {
         for (const g of await textSearch(q, anchor, radiusM, limit, true)) {
           found.push(upsertPlace({ ...toPlaceFields(g), name: g.displayName?.text ?? "?", source: "discovered" }));

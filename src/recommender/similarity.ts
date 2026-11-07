@@ -73,6 +73,33 @@ export function similarity(a: Place, b: Place): number {
   return 0.45 * cuisine + 0.3 * vibe + 0.25 * price;
 }
 
+/** Vibe words from review profiles that read as a date (7 Nov). */
+export const DATE_VIBES = ["romantic", "intimate", "cosy", "cozy", "quiet", "candlelit", "view", "counter seating", "wine", "hidden", "stylish", "elegant"];
+
+/**
+ * How "datey" a place is, 0..1, for a party of two: mostly its vibe (reviews saying
+ * romantic, intimate, quiet…), partly how close it is in cuisine and price to the
+ * nearest of Emily's date spots. Vibe first, so a candlelit yakitori counter counts
+ * and a loud wine bar doesn't just for being a wine bar. `like` names that date spot
+ * when the resemblance is clear.
+ */
+export function dateLikeness(p: Place, dateSpots: Place[]): { score: number; like: Place | null; vibes: string[] } {
+  const tags = (p.profile?.vibeTags ?? []).map((v) => v.toLowerCase());
+  const vibes = DATE_VIBES.filter((d) => tags.some((t) => t.includes(d)));
+  const vibe = Math.min(1, vibes.length / 2);
+  let best = 0;
+  let like: Place | null = null;
+  for (const s of dateSpots) {
+    if (s.id === p.id) continue;
+    const pa = priceLevelOf(p);
+    const pb = priceLevelOf(s);
+    const price = pa != null && pb != null ? 1 - Math.abs(pa - pb) / 3 : 0.5;
+    const sim = 0.6 * cuisineMatch(cuisineOf(p), cuisineOf(s)) + 0.4 * price;
+    if (sim > best) [best, like] = [sim, s];
+  }
+  return { score: 0.6 * vibe + 0.4 * best, like: best >= 0.8 ? like : null, vibes };
+}
+
 /** The saved place a candidate most resembles, for "similar to X on Emily's list". */
 export function mostSimilarSaved(candidate: Place, saved: Place[]): { place: Place; sim: number } | null {
   let best: { place: Place; sim: number } | null = null;

@@ -15,6 +15,7 @@ describe("test bot data copy", () => {
     live.prepare("INSERT INTO places (name, source) VALUES ('cado', 'saved')").run();
     live.prepare("INSERT INTO kv (key, value) VALUES ('prefs', '{}'), ('pending_call', '{}')").run();
     live.prepare("INSERT INTO messages (sender, text) VALUES ('Emily', 'babe which one')").run();
+    live.prepare("INSERT INTO plans (date, time, party_size, status, options) VALUES ('2026-11-11', '18:30', 2, 'proposed', '[]')").run();
     live.prepare("INSERT INTO jobs (type, run_at, payload, dedupe_key) VALUES ('dayof_reminder', '2026-11-11T02:00:00Z', '{}', 'd1')").run();
     const count = (d: Database.Database, t: string) => (d.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n;
 
@@ -24,10 +25,12 @@ describe("test bot data copy", () => {
     expect(copy.prepare("SELECT key FROM kv").all()).toEqual([{ key: "prefs" }]);
     expect(count(copy, "messages")).toBe(0);
     expect(count(copy, "jobs")).toBe(0);
+    expect(count(copy, "plans")).toBe(0);
     copy.close();
     // Live is untouched.
     expect(count(live, "messages")).toBe(1);
     expect(count(live, "jobs")).toBe(1);
+    expect(count(live, "plans")).toBe(1);
     live.close();
   });
 });

@@ -68,6 +68,17 @@ export async function resolveAnchor(k: Constraints): Promise<Anchor & { missed?:
   return k.anchor === "other" && k.anchorQuery ? { ...prefs.anchors.home, missed: k.anchorQuery } : prefs.anchors.home;
 }
 
+/** Extra searches for a date: datey places near the spot, plus the kinds of places Emily tagged. */
+export function dateQueries(dateSpots: Place[]): string[] {
+  const counts = new Map<string, number>();
+  for (const p of dateSpots) {
+    const c = cuisineOf(p);
+    if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([c]) => `${c} restaurant`);
+  return ["romantic restaurant", "intimate counter restaurant", ...top];
+}
+
 /**
  * How Emily's date spots fared in a plan, to tell a ranking problem from a supply problem (7 Nov):
  * "[plan] date spots: 16 saved, 5 within reach, 3 kept (closed 2), 1 picked (cado); best others ranked 4, 9".
@@ -122,8 +133,10 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   // 1. Candidates: both saved lists, plus new places found around the anchor.
   await status(`Looking through your saved places and new spots near ${anchor.label} for ${fmtDate(slot.date)} ${slot.time}…`);
   let pool = savedPool();
+  const date = slot.partySize <= 2;
+  const dateSpots = date ? pool.filter((p) => p.date_spot) : [];
   // Search only as far as the travel limit reaches (a "10 min walk" searched 2.7 km and found mostly places too far).
-  if (!k.onlySaved) pool = [...pool, ...(await discover(k, anchor, slot, searchRadiusM(widest)))];
+  if (!k.onlySaved) pool = [...pool, ...(await discover(k, anchor, slot, searchRadiusM(widest), 20, date ? dateQueries(dateSpots) : []))];
   const unique = new Map(pool.map((p) => [p.id, p]));
   const near = [...unique.values()].filter((p) => p.lat == null || estimateTravelMin(anchor, { lat: p.lat, lng: p.lng! }) <= widest + 10);
   takeLookupCount();
@@ -175,9 +188,15 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   const recentCuisines = recentVisits(prefs.cuisineCooldownDates)
     .map((v) => v.cuisine ?? cuisineOf(getPlace(v.place_id)!))
     .filter((c): c is string => !!c);
-  let scored = kept
-    .map((c) => scoreCandidate(c, { constraints: k, recentCuisines, cuisineCooldownDates: prefs.cuisineCooldownDates, similarTo, partySize: slot.partySize }))
-    .sort((a, b) => b.score - a.score);
+  const ctx = { constraints: k, recentCuisines, cuisineCooldownDates: prefs.cuisineCooldownDates, similarTo, partySize: slot.partySize, dateSpots };
+  let scored = kept.map((c) => scoreCandidate(c, ctx)).sort((a, b) => b.score - a.score);
+  if (date) {
+    // A date: read reviews for the top 10 before picking (not just the 3 picks), so "romantic",
+    // "intimate", "quiet" can count. Profiles are saved, so this costs only the first time.
+    await status("Reading reviews for the best matches…");
+    const top = await mapLimit(scored.slice(0, 10), 3, async (s) => scoreCandidate({ ...s, place: await enrich(s.place) }, ctx));
+    scored = [...top, ...scored.slice(10)].sort((a, b) => b.score - a.score);
+  }
 
   // Seats only: drop TableCheck places near the top whose menu is all courses.
   const courseOnly = new Set<number>();

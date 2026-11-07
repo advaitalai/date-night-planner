@@ -242,10 +242,25 @@ describe("date spots (Emily, 7 Nov)", () => {
     expect(scoreCandidate(tagged, ctx({ partySize: 4 })).score).toBe(scoreCandidate(plain, ctx({ partySize: 4 })).score);
   });
 
-  it("for two, a new place reviewers call romantic gets a smaller lift", () => {
-    const romantic = cand({ saved_by: [], profile: { cuisine: "french", priceBand: "mid", vibeTags: ["romantic"], signatureDishes: [], highlights: [], summary: "" } as never });
-    const plain = cand({ saved_by: [] });
-    expect(scoreCandidate(romantic, ctx({ partySize: 2 })).score - scoreCandidate(plain, ctx({ partySize: 2 })).score).toBeCloseTo(1);
+  it("for two, datey places that aren't tagged rise: vibe first, then likeness to her date spots", () => {
+    const prof = (cuisine: string, vibeTags: string[], priceBand = "mid") => ({ cuisine, priceBand, vibeTags, signatureDishes: [], highlights: [], summary: "" }) as never;
+    const oil = place({ id: 90, name: "Oil", saved_by: ["Emily"], date_spot: true, profile: prof("wine bar", ["intimate"]) } as never);
+    const two = (p: Parameters<typeof place>[0]) => scoreCandidate(cand({ saved_by: [], ...p }), ctx({ partySize: 2, dateSpots: [oil] }));
+    const plain = two({ profile: prof("ramen", ["lively"], "cheap") });
+    const candlelitYakitori = two({ profile: prof("yakitori", ["romantic", "intimate", "counter seating"]) });
+    const loudWineBar = two({ profile: prof("wine bar", ["lively", "loud"]) });
+    const quietWineBar = two({ profile: prof("wine bar", ["quiet", "romantic"]) });
+    // Vibe counts more than cuisine: the candlelit yakitori counter beats a loud wine bar.
+    expect(candlelitYakitori.score).toBeGreaterThan(loudWineBar.score);
+    expect(loudWineBar.score).toBeGreaterThan(plain.score);
+    // Both: the most datey, and it says which date spot it's like.
+    expect(quietWineBar.score).toBeGreaterThan(candlelitYakitori.score);
+    expect(quietWineBar.reasons).toContain("like Oil, a date spot Emily tagged");
+    expect(quietWineBar.score - plain.score).toBeLessThanOrEqual(2.01); // capped at +2
+    // Four people: none of this.
+    const quiet = cand({ saved_by: [], profile: prof("wine bar", ["quiet", "romantic"]) });
+    expect(scoreCandidate(quiet, ctx({ partySize: 4, dateSpots: [oil] })).score).toBe(scoreCandidate(quiet, ctx({ partySize: 4 })).score);
+    expect(scoreCandidate(quiet, ctx({ partySize: 4, dateSpots: [oil] })).reasons.join()).not.toMatch(/Emily tagged|romantic/);
   });
 });
 
@@ -267,5 +282,18 @@ describe("date spot log line (7 Nov)", () => {
     );
     expect(line).toBe("[plan] date spots: 4 saved, 3 within reach, 2 kept (closed 1), 1 picked (cado); best others ranked 3");
     expect(dateSpotLine([other], [], [], [], [], [])).toBeNull();
+  });
+});
+
+describe("date searches (7 Nov)", () => {
+  it("search for datey places plus the two kinds of places Emily tags most", async () => {
+    const { dateQueries } = await import("../src/recommender");
+    const spot = (cuisine: string) => place({ cuisine, date_spot: true } as never);
+    expect(dateQueries([spot("wine bar"), spot("wine bar"), spot("italian"), spot("italian"), spot("french")])).toEqual([
+      "romantic restaurant",
+      "intimate counter restaurant",
+      "wine bar restaurant",
+      "italian restaurant",
+    ]);
   });
 });

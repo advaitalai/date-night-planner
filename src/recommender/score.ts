@@ -1,7 +1,7 @@
 import type { Place } from "../types";
 import type { Candidate } from "./filters";
 import type { Constraints } from "./parseRequest";
-import { cuisineMatch, cuisineOf, similarity } from "./similarity";
+import { cuisineMatch, cuisineOf, dateLikeness, similarity } from "./similarity";
 
 export interface ScoreContext {
   constraints: Constraints;
@@ -12,6 +12,8 @@ export interface ScoreContext {
   similarTo: Place | null;
   /** Party size: for two it's a date, so date spots are favoured (Emily, 7 Nov). */
   partySize?: number;
+  /** Emily's tagged date spots, for "datey" places that aren't tagged. */
+  dateSpots?: Place[];
 }
 
 export interface Scored extends Candidate {
@@ -40,9 +42,12 @@ export function scoreCandidate(c: Candidate, ctx: ScoreContext): Scored {
     if (p.date_spot) {
       score += 2;
       reasons.push("tagged as a date spot");
-    } else if ((p.profile?.vibeTags ?? []).some((v) => /romantic|intimate/i.test(v))) {
-      score += 1;
-      reasons.push("romantic");
+    } else {
+      // Untagged: up to +2 for feeling like a date spot (vibe first, then her date spots' cuisine and price).
+      const d = dateLikeness(p, ctx.dateSpots ?? []);
+      score += 2 * d.score;
+      if (d.vibes.length) reasons.push(d.vibes.slice(0, 2).join(", "));
+      if (d.like) reasons.push(`like ${d.like.name}, a date spot Emily tagged`);
     }
   }
 
