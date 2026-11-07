@@ -68,6 +68,29 @@ export async function resolveAnchor(k: Constraints): Promise<Anchor & { missed?:
   return k.anchor === "other" && k.anchorQuery ? { ...prefs.anchors.home, missed: k.anchorQuery } : prefs.anchors.home;
 }
 
+/**
+ * How Emily's date spots fared in a plan, to tell a ranking problem from a supply problem (7 Nov):
+ * "[plan] date spots: 16 saved, 5 within reach, 3 kept (closed 2), 1 picked (cado); best others ranked 4, 9".
+ */
+export function dateSpotLine(pool: Place[], cands: Candidate[], kept: Candidate[], rejected: FilterResult["rejected"], scored: Scored[], picks: Scored[]): string | null {
+  const saved = new Set(pool.filter((p) => p.date_spot).map((p) => p.id));
+  if (!saved.size) return null;
+  const reach = cands.filter((c) => saved.has(c.place.id)).length;
+  const keptN = kept.filter((c) => saved.has(c.place.id)).length;
+  const why: Record<string, number> = {};
+  for (const r of rejected) if (saved.has(r.candidate.place.id)) why[r.reason] = (why[r.reason] ?? 0) + 1;
+  const picked = picks.filter((s) => s.place.date_spot).map((s) => s.place.name);
+  const pickedIds = new Set(picks.map((s) => s.place.id));
+  const ranks = scored.flatMap((s, i) => (s.place.date_spot && !pickedIds.has(s.place.id) ? [i + 1] : [])).slice(0, 3);
+  const reasons = Object.entries(why).map(([k, v]) => `${k} ${v}`).join(", ");
+  return `[plan] date spots: ${saved.size} saved, ${reach} within reach, ${keptN} kept${reasons ? ` (${reasons})` : ""}, ${picked.length} picked${picked.length ? ` (${picked.join(", ")})` : ""}${ranks.length ? `; best others ranked ${ranks.join(", ")}` : ""}`;
+}
+
+function logDateSpots(...args: Parameters<typeof dateSpotLine>): void {
+  const line = dateSpotLine(...args);
+  if (line) console.log(line);
+}
+
 export async function recommend(text: string, opts: { date?: string; n?: number } = {}): Promise<RecommendResult> {
   const prefs = getPrefs();
   const n = opts.n ?? 3;
@@ -168,6 +191,7 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
     rejectedCounts.courses_only = courseOnly.size;
   }
   const picks = pickDiverse(scored, n);
+  logDateSpots(pool, cands, kept, rejected, scored, picks);
 
   // 4. Read reviews only for the picks (profiles feed the pitch). No availability check here:
   //    you choose the place first, then the bot books it.

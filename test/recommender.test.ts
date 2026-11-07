@@ -248,3 +248,24 @@ describe("date spots (Emily, 7 Nov)", () => {
     expect(scoreCandidate(romantic, ctx({ partySize: 2 })).score - scoreCandidate(plain, ctx({ partySize: 2 })).score).toBeCloseTo(1);
   });
 });
+
+describe("date spot log line (7 Nov)", () => {
+  it("says how many date spots were saved, within reach, kept, why the rest left, and where they ranked", async () => {
+    const { dateSpotLine } = await import("../src/recommender");
+    const ds = (id: number, name: string) => place({ id, name, date_spot: true } as never);
+    const cado = ds(1, "cado"), etruschi = ds(2, "Etruschi"), o2 = ds(3, "O2"), kyoto = ds(4, "Kyoto place");
+    const other = place({ id: 5, name: "GyoroGyoro" } as never);
+    const c = (p: ReturnType<typeof place>) => cand({}, { place: p });
+    const s = (p: ReturnType<typeof place>) => ({ ...c(p), score: 1, reasons: [] });
+    const line = dateSpotLine(
+      [cado, etruschi, o2, kyoto, other],
+      [c(cado), c(etruschi), c(o2), c(other)],
+      [c(cado), c(etruschi), c(other)],
+      [{ candidate: c(o2), reason: "closed" }],
+      [s(cado), s(other), s(etruschi)],
+      [s(cado), s(other)],
+    );
+    expect(line).toBe("[plan] date spots: 4 saved, 3 within reach, 2 kept (closed 1), 1 picked (cado); best others ranked 3");
+    expect(dateSpotLine([other], [], [], [], [], [])).toBeNull();
+  });
+});
