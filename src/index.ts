@@ -11,6 +11,16 @@ import { geocode } from "./places/google";
 import { startWhatsApp } from "./wa/whatsapp";
 import { logToFile } from "./logbook";
 import { flushCloudLogs, startCloudLogging } from "./cloudlog";
+import { execSync } from "node:child_process";
+
+/** The deployed commit, so the logs show which code is running (auto-update, 7 Nov). */
+function codeVersion(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    return "unknown";
+  }
+}
 
 /** Replace the approximate anchor coordinates with geocoded ones, once. */
 async function geocodeAnchors(): Promise<void> {
@@ -54,7 +64,7 @@ async function main(): Promise<void> {
   logToFile();
   const cloudProject = await startCloudLogging();
   if (cloudProject) console.log(`Sending logs to Cloud Logging (project ${cloudProject}, log "date-night-planner")`);
-  console.log(`date-night-planner starting (DRY_RUN=${config.dryRun ? "on" : "off"}, model ${config.anthropicModel})`);
+  console.log(`date-night-planner starting (version ${codeVersion()}, DRY_RUN=${config.dryRun ? "on" : "off"}, model ${config.anthropicModel})`);
   const prefs = getPrefs();
   console.log(`Preferences: usual ${["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][prefs.defaultWeekday]} ${prefs.defaultTime}, max ${prefs.maxTravelMin} min travel (+10/+20 when widening), budget ¥${prefs.budgetPerPersonMaxJpy ?? "any"}/person`);
   registerReminderJobs();

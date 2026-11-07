@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import { config, domesticPhone, intlPhone, testCallee, type Contact } from "../config";
 import { extract } from "../llm";
@@ -436,7 +438,11 @@ async function placeCall(place: Place, to: string | null, script: CallScript, go
     return { outcome: blank("failed", "low balance"), transcript: "", failure: `Twilio balance is $${balance.toFixed(2)}, too low for a call. Calls to Japan cost ${TWILIO_JP_RATES}; top up at console.twilio.com → Billing.` };
   }
   let done: VapiCall;
+  // While this file exists the server's auto-update waits (deploy/auto-update.sh), so a restart can't cut a call.
+  const busy = path.join(config.dataDir, "call-in-progress");
   try {
+    fs.mkdirSync(config.dataDir, { recursive: true });
+    fs.writeFileSync(busy, place.name);
     const call = await startCall(to, script);
     done = await waitForCall(call.id, 8 * 60_000, (s) => {
       if (CALL_STATUS[s]) void status(`📞 ${place.name}: ${CALL_STATUS[s]}…`);
@@ -444,6 +450,8 @@ async function placeCall(place: Place, to: string | null, script: CallScript, go
   } catch (err) {
     const raw = (err as Error).message;
     return { outcome: blank("failed", raw), transcript: "", failure: await explainCallFailure(raw) };
+  } finally {
+    fs.rmSync(busy, { force: true });
   }
   const transcript = orderedTranscript(done);
   const outcome = await readOutcome(transcript, done.endedReason, goal, script.firstMessage);

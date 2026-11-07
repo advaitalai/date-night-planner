@@ -56,6 +56,13 @@ The bot has to run all the time, to stay connected to WhatsApp and send the remi
 
 **Updating later:** `cd ~/date-night-planner && bash deploy/update.sh`. It pulls the latest code, reinstalls libraries only if their list changed (`npm ci --omit=dev`), and restarts the service if it's running. Don't run plain `npm install` on the server: it adds developer tools and can rewrite `package-lock.json`.
 
+**Auto-update (7 Nov, recommended):** the server updates itself within 5 min of each push, so nobody runs the line above.
+- Turn it on once: `cd ~/date-night-planner && bash deploy/update.sh && sudo bash deploy/install-autoupdate.sh`
+- A timer checks GitHub every 5 min; with new commits it runs `deploy/update.sh`. It waits while a phone call is on (`data/call-in-progress`).
+- Which code is running: the startup log line says `version <commit>` (Claude reads it in Cloud Logging).
+- History: `journalctl -u date-night-autoupdate -n 20 --no-pager`. Off: `sudo systemctl disable --now date-night-autoupdate.timer`.
+- A bad push is undone by pushing a revert. `.env` is never touched.
+
 **From your phone (Termius):**
 1. In Termius, generate an ed25519 key and copy its public key.
 2. In the browser SSH window, add it to `authorized_keys2`, not `authorized_keys`. Google's guest agent rewrites `authorized_keys` and wipes keys it didn't add.

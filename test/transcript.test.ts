@@ -102,3 +102,24 @@ describe("party size", () => {
     expect(s.firstMessage).not.toContain("2名");
   });
 });
+
+describe("auto-update never cuts a call", () => {
+  it("marks a call in progress while it runs, and clears it after", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { config } = await import("../src/config");
+    const marker = path.join(config.dataDir, "call-in-progress");
+    const seen: boolean[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => (seen.push(fs.existsSync(marker)), new Response(JSON.stringify({ id: "c1", status: "ended", endedReason: "customer-busy" }))));
+    const { callToBook } = await import("../src/booking/phone");
+    const p = place({ name: "Pulcino", phone: "03-0000-0000" });
+    const prev = config.dryRun;
+    config.dryRun = false;
+    const out = await callToBook(p, slot, { name: "Advait", nameKana: "", phone: "090-1234-5678", email: "a@example.com" } as never);
+    config.dryRun = prev;
+    expect(out.outcome.outcome).toBe("busy");
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every(Boolean)).toBe(true);
+    expect(fs.existsSync(marker)).toBe(false);
+  });
+});
