@@ -56,7 +56,8 @@ export function scoreCandidate(c: Candidate, ctx: ScoreContext): Scored {
     if (sim >= 0.5) reasons.push(`similar to ${ctx.similarTo.name}`);
   }
 
-  score -= 0.06 * c.travelMin;
+  // "Near X": distance matters more (10 min farther = −2, as much as being on both lists).
+  score -= (k.near ? 0.2 : 0.06) * c.travelMin;
   if (c.lastVisitDaysAgo == null) score += 0.5;
 
   return { ...c, score: Math.round(score * 100) / 100, reasons };

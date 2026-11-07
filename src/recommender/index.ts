@@ -22,7 +22,7 @@ export interface RecommendOption {
 
 export interface RecommendResult {
   slot: Slot;
-  anchor: Anchor;
+  anchor: Anchor & { missed?: string };
   constraints: Constraints;
   options: RecommendOption[];
   rejectedCounts: Partial<Record<RejectReason | "fully_booked" | "unsupported_flow" | "courses_only", number>>;
@@ -52,7 +52,11 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
-export async function resolveAnchor(k: Constraints): Promise<Anchor> {
+/** "Near X" without a distance: about a 10 min walk (Advait, 7 Nov). Widens to 20, then 30, like any default. */
+export const NEAR_MIN = 10;
+
+/** Where to measure from. `missed` is set when an area couldn't be found and home was used instead. */
+export async function resolveAnchor(k: Constraints): Promise<Anchor & { missed?: string }> {
   const prefs = getPrefs();
   if (k.anchor === "office") return prefs.anchors.office;
   // "Anywhere in Tokyo" widens the search; travel is still measured from home (the cards said "from Tokyo").
@@ -61,7 +65,7 @@ export async function resolveAnchor(k: Constraints): Promise<Anchor> {
     const ll = await geocode(`${k.anchorQuery}, Tokyo`).catch(() => null);
     if (ll) return { label: k.anchorQuery, address: k.anchorQuery, ...ll };
   }
-  return prefs.anchors.home;
+  return k.anchor === "other" && k.anchorQuery ? { ...prefs.anchors.home, missed: k.anchorQuery } : prefs.anchors.home;
 }
 
 export async function recommend(text: string, opts: { date?: string; n?: number } = {}): Promise<RecommendResult> {
@@ -75,7 +79,7 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
     ...(k.latestTime ? { latest: k.latestTime } : {}),
   };
   const anchor = await resolveAnchor(k);
-  const maxTravel = k.maxTravelMin ?? prefs.maxTravelMin;
+  const maxTravel = k.maxTravelMin ?? (k.near ? NEAR_MIN : prefs.maxTravelMin);
   // Asking again for the same date means "show me something else", unless they say otherwise.
   const excludeIds = k.keepPrevious ? new Set<number>() : shownForDate(slot.date);
   const settings = { maxTravelMin: maxTravel, revisitCooldownWeeks: prefs.revisitCooldownWeeks, budgetPerPersonMaxJpy: prefs.budgetPerPersonMaxJpy, excludeIds };
@@ -270,6 +274,7 @@ export async function proposePlan(text: string, opts: { date?: string } = {}): P
       r.unmet.length ? `I couldn't find anything ${r.unmet.join(" or ")} that fits, so these are the closest matches.` : "",
       r.options.length < 3 ? `Only ${r.options.length} ${r.options.length === 1 ? "place fits" : "places fit"} everything you asked for.` : "",
       r.relaxed.length ? `Few places fit your usual limits, so I widened the search: ${r.relaxed.join(", ")}.` : "",
+      r.anchor.missed ? `I couldn't find "${r.anchor.missed}" on the map, so these are near home. Tell me a station or area nearby and I'll look there.` : "",
     ],
     solo: voters().length === 1,
   });

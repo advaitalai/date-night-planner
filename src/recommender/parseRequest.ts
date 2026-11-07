@@ -17,7 +17,11 @@ export const ConstraintsSchema = z.object({
   avoidCuisines: z.array(z.string()),
   anchor: z.enum(["home", "office", "other"]).describe("Where they travel from: 'office'/'work' → office"),
   anchorQuery: z.string().nullable().describe("Place/area name when anchor is 'other', e.g. 'Shibuya'"),
-  maxTravelMin: z.number().nullable().describe("'not too far' ≈ 15, 'close' ≈ 10, 'don't mind travelling' ≈ 40"),
+  maxTravelMin: z
+    .number()
+    .nullable()
+    .describe("Only for an explicit time or distance: '10 min walk' → 10, 'within 20 min' → 20, 'not too far' ≈ 15, 'don't mind travelling' ≈ 40. 'Near/around/close to X' alone is `near`, not this."),
+  near: z.boolean().describe("True when they ask for somewhere near, around or close to a place (home, work, Gotanda) without saying how far"),
   budgetPerPersonMaxJpy: z.number().nullable(),
   vibe: z.array(z.string()).describe("Lowercase vibe words: 'romantic', 'live music', 'quiet', 'lively', 'counter', 'view'"),
   similarTo: z.string().nullable().describe("A restaurant they want something like"),
@@ -43,6 +47,7 @@ export const EMPTY_CONSTRAINTS: Constraints = {
   anchor: "home",
   anchorQuery: null,
   maxTravelMin: null,
+  near: false,
   budgetPerPersonMaxJpy: null,
   vibe: [],
   similarTo: null,

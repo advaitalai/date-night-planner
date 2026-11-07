@@ -208,3 +208,27 @@ describe("area from Japan-first addresses", () => {
     expect(areaOf("1 Chome-2-3 Ebisu, Shibuya City, Tokyo 150-0013, Japan")).toBe("Ebisu");
   });
 });
+
+describe("\"near X\" (7 Nov)", () => {
+  it("a place 5 min away beats one on both lists 25 min away; without 'near', the lists win", () => {
+    const close = cand({ saved_by: [] }, { travelMin: 5 });
+    const listed = cand({ saved_by: ["Advait", "Emily"] }, { travelMin: 25 });
+    const near = ctx({ constraints: { ...EMPTY_CONSTRAINTS, near: true } });
+    expect(scoreCandidate(close, near).score).toBeGreaterThan(scoreCandidate(listed, near).score);
+    expect(scoreCandidate(listed, ctx()).score).toBeGreaterThan(scoreCandidate(close, ctx()).score);
+  });
+
+  it("an area that can't be found falls back to home and says so", async () => {
+    const { freshDb } = await import("./helpers");
+    freshDb();
+    const { vi } = await import("vitest");
+    const spy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline")); // Google finds nothing
+    const { resolveAnchor, NEAR_MIN } = await import("../src/recommender");
+    const a = await resolveAnchor({ ...EMPTY_CONSTRAINTS, anchor: "other", anchorQuery: "Gotannda" });
+    expect(a.label).toBe("home");
+    expect(a.missed).toBe("Gotannda");
+    expect((await resolveAnchor({ ...EMPTY_CONSTRAINTS, anchor: "home" })).missed).toBeUndefined();
+    expect(NEAR_MIN).toBe(10);
+    spy.mockRestore();
+  });
+});

@@ -18,6 +18,8 @@ Last updated: 20 Oct 2026.
 
 ## Next steps
 
+**7 Nov, recommender "near X":** "near home / work / Gotanda" used to move only the starting point; the limit stayed 35 min and distance barely counted (−0.06/min vs +2 for both lists). Now (Advait): "near X" without a distance = **10 min** (widens to 20, then 30 like any default; explicit wording wins), distance weighs −0.2/min for those requests, and an area Google can't find says "couldn't find X, these are near home" instead of silently using home.
+
 **7 Nov:** The bot's Anthropic key expired: from 6 Nov 07:31 JST every message failed (`401 invalid x-api-key`), shown in the chat as raw JSON. Advait replaced it in `.env` and restarted (7 Nov 13:22 JST). Backlog P1 #1: keys in Google Secret Manager (no terminal), a startup key check, a plain error message.
 
 **5 Nov:** Scope widened (option B): dinners for any party size, so "dinner for 4" works (the scope rule used to decline meals with friends). The party size already flowed through requests, TableCheck and the call script (4名); the one hardcoded 2 (availability note in search_places) now uses the default. Lunch and brunch stay out; wording still says "you two".
