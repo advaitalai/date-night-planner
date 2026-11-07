@@ -20,6 +20,8 @@ export function factsFor(input: PitchInput, saved: Place[]): Record<string, unkn
     name: p.name,
     cuisine: p.profile?.cuisine ?? p.cuisine,
     onLists: p.saved_by,
+    // Date spot tags come from Emily's saved list ("Dates 🌹🥀").
+    dateSpotTaggedBy: p.date_spot ? (p.saved_by.includes("Emily") ? "Emily" : (p.saved_by[0] ?? "you")) : null,
     similarToSaved: similar ? { name: similar.place.name, savedBy: similar.place.saved_by } : null,
     matchesTheirRequest: input.matches ?? [],
     googleRating: p.rating,
@@ -54,7 +56,7 @@ export async function writePitches(inputs: PitchInput[], saved: Place[]): Promis
       `You write date-night options for a couple's WhatsApp chat (Advait and Emily).
 For each option return:
 - what: one short line (max ~12 words) on the food and the feel, e.g. "Handmade pasta and charcoal-grilled wagyu in a cosy counter bar".
-- why: one short line (max ~14 words) on why it suits *them*, from the strongest of: it matches what they asked for (matchesTheirRequest); it's on their list (onLists); it's like a place they saved (similarToSaved); a cuisine they haven't had lately (whyRanked); the standout dish or vibe reviewers rave about.
+- why: one short line (max ~14 words) on why it suits *them*, from the strongest of: it matches what they asked for (matchesTheirRequest); it's a date spot they tagged (dateSpotTaggedBy: say so first, e.g. "Emily tagged it as a date spot; …"); it's on their list (onLists); it's like a place they saved (similarToSaved); a cuisine they haven't had lately (whyRanked); the standout dish or vibe reviewers rave about.
   Good: "Saved by Emily; reviewers rave about the duck confit." / "Live jazz most nights, like the Blue Note you saved."
   Bad: "29 min from home." / "Book ahead for weekends." / "Highly rated." (Distance, booking tips and bare ratings are never a why; distance is shown separately.)
 Use ONLY the given facts. If a fact is missing, leave it out. No emojis, no em dashes. One entry per option, in order.`,

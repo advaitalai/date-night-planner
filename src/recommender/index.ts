@@ -211,6 +211,8 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
   }
   const picks = pickDiverse(scored, n);
   logDateSpots(pool, cands, kept, rejected, scored, picks);
+  // Why each pick won, so a plan can be judged from the logs (7 Nov).
+  console.log(`[plan] picks: ${picks.map((s) => `${s.place.name} ${s.score.toFixed(1)}${s.reasons.length ? ` (${s.reasons.join(", ")})` : ""}`).join(" · ")}`);
 
   // 4. Read reviews only for the picks (profiles feed the pitch). No availability check here:
   //    you choose the place first, then the bot books it.

@@ -297,3 +297,15 @@ describe("date searches (7 Nov)", () => {
     ]);
   });
 });
+
+describe("cards say a date spot was tagged (7 Nov)", () => {
+  it("passes who tagged it to the card writer, and the fallback card keeps the reason", async () => {
+    const { factsFor, fallbackPitch } = await import("../src/recommender/pitch");
+    const p = place({ name: "cado", saved_by: ["Emily"], date_spot: true } as never);
+    const option = { ...cand({}, { place: p }), score: 3, reasons: ["tagged as a date spot"] };
+    const f = factsFor({ option } as never, []);
+    expect(f.dateSpotTaggedBy).toBe("Emily");
+    expect(fallbackPitch(f).why).toContain("tagged as a date spot");
+    expect(factsFor({ option: { ...option, place: place({ name: "x" }) } } as never, []).dateSpotTaggedBy).toBeNull();
+  });
+});
