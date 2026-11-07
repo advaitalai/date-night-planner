@@ -10,6 +10,8 @@ export interface ScoreContext {
   cuisineCooldownDates: number;
   /** Resolved place for constraints.similarTo, if any. */
   similarTo: Place | null;
+  /** Party size: for two it's a date, so date spots are favoured (Emily, 7 Nov). */
+  partySize?: number;
 }
 
 export interface Scored extends Candidate {
@@ -31,6 +33,17 @@ export function scoreCandidate(c: Candidate, ctx: ScoreContext): Scored {
   } else if (p.saved_by.length === 1) {
     score += 1;
     reasons.push(`on ${p.saved_by[0]}'s list`);
+  }
+
+  // A date for two: places tagged as date spots, or that reviews call romantic, come first.
+  if ((ctx.partySize ?? 2) <= 2) {
+    if (p.date_spot) {
+      score += 2;
+      reasons.push("tagged as a date spot");
+    } else if ((p.profile?.vibeTags ?? []).some((v) => /romantic|intimate/i.test(v))) {
+      score += 1;
+      reasons.push("romantic");
+    }
   }
 
   // Cuisine rotation: a cuisine from the last few dates is pushed down, most recent hardest.

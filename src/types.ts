@@ -73,6 +73,8 @@ export interface Place {
   source: string;
   saved_by: string[];
   note: string | null;
+  /** Tagged as a date spot in a saved list (Emily's "date" tags). Boosted for a party of two. */
+  date_spot: boolean;
   details_fetched_at: string | null;
   features: PlaceFeatures | null;
 }

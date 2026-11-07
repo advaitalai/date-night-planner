@@ -70,6 +70,7 @@ Kept on purpose: changing a booking (one call to the restaurant beats cancel + r
 - R12a. **Honesty about misses.** If no option has an asked-for cuisine or vibe, the options message says so. The agent only describes what the recommender returned.
 - R13. If too few places pass the filters, widen automatically (travel +10 then +20 min, budget ×1.5 then any) and say so. For a cuisine request ("anything Indian?") search beyond the saved lists before ever saying there's nothing. Explain what ruled places out only as a last resort.
 - R13b. **"Near X"** (home, work, an area) without a distance means about a 10 min walk from X, widening to 20 then 30 min like any default; explicit wording ("within 20 min") wins. Distance counts for more in scoring. An area that can't be found is said, not silently replaced by home (7 Nov).
+- R13c. **Date spots.** For a party of two it's a date: places tagged with a "date" tag in a saved list (Emily's tags, Takeout's Tags column) get +2, as much as being on both lists, whoever saved them; new places reviewers call romantic or intimate get +1. Three or more: no boost. A boost, not a filter (7 Nov).
 
 ### 4.4 Reservations
 - R13a. **Seat-only bookings.** Never book courses or anything needing prepayment or a card. Pick TableCheck's seat-only item (e.g. "Reservation for seats only"), or skip the place. The ¥ amounts shown to users are average spend per person, not prices.

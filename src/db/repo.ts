@@ -35,6 +35,7 @@ function rowToPlace(row: Record<string, unknown>): Place {
   const p = { ...row } as Record<string, unknown>;
   for (const f of JSON_PLACE_FIELDS) p[f] = p[f] == null ? (f === "types" || f === "saved_by" ? [] : null) : JSON.parse(p[f] as string);
   p.reservable = p.reservable == null ? null : Boolean(p.reservable);
+  p.date_spot = Boolean(p.date_spot);
   return p as unknown as Place;
 }
 
@@ -42,6 +43,7 @@ function placeToRow(p: Partial<Place>): Record<string, unknown> {
   const row: Record<string, unknown> = { ...p };
   for (const f of JSON_PLACE_FIELDS) if (f in row) row[f] = row[f] == null ? null : JSON.stringify(row[f]);
   if ("reservable" in row) row.reservable = row.reservable == null ? null : row.reservable ? 1 : 0;
+  if ("date_spot" in row) row.date_spot = row.date_spot ? 1 : 0;
   delete row.id;
   return row;
 }

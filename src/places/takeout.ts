@@ -12,6 +12,8 @@ export interface SavedRow {
   url: string;
   /** Decimal CID from the URL's feature id (0x...:0x<cid>), the stable Maps id. */
   cid: string | null;
+  /** Tagged with a "date" tag (e.g. "date night") in Google Maps. */
+  dateSpot: boolean;
 }
 
 /** Parse one Google Takeout "Saved" list CSV (Title, Note, URL, Tags, Comment). */
@@ -22,7 +24,8 @@ export function parseSavedCsv(csv: string): SavedRow[] {
     const title = (r.Title ?? "").trim();
     const url = (r.URL ?? "").trim();
     if (!title || !url) continue;
-    rows.push({ title, note: (r.Note ?? "").trim() || null, url, cid: cidFromSavedUrl(url) });
+    const tags = (r.Tags ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+    rows.push({ title, note: (r.Note ?? "").trim() || null, url, cid: cidFromSavedUrl(url), dateSpot: tags.some((t) => /\bdate\b/i.test(t)) });
   }
   return rows;
 }
@@ -70,7 +73,15 @@ export interface ImportResult {
  * places within reach of home or work are kept. Their full details are fetched
  * when they first come up as candidates. Without `resolve` rows are stored by CID.
  */
-export async function importSavedList(csv: string, listName: string, person: string, resolve: boolean, onProgress?: (done: number, total: number) => void): Promise<ImportResult> {
+export async function importSavedList(
+  csv: string,
+  listName: string,
+  person: string,
+  resolve: boolean,
+  onProgress?: (done: number, total: number) => void,
+  /** Only update places already known (e.g. to pick up tags): no Google lookups, nothing new added. */
+  knownOnly = false,
+): Promise<ImportResult> {
   const rows = parseSavedCsv(csv);
   const result: ImportResult = { rows: rows.length, imported: 0, alreadyKnown: 0, skipped: { notDinner: [], tooFar: [], closed: [] }, unresolved: [] };
   const prefs = getPrefs();
@@ -81,12 +92,13 @@ export async function importSavedList(csv: string, listName: string, person: str
     onProgress?.(++done, rows.length);
     const known = row.cid ? (db().prepare("SELECT id FROM places WHERE cid = ?").get(row.cid) as { id: number } | undefined) : undefined;
     if (known) {
-      upsertPlace({ cid: row.cid, name: row.title, source: `takeout:${listName}`, saved_by: [person] });
+      upsertPlace({ cid: row.cid, name: row.title, source: `takeout:${listName}`, saved_by: [person], ...(row.dateSpot ? { date_spot: true } : {}) });
       result.alreadyKnown++;
       continue;
     }
+    if (knownOnly) continue;
     if (!resolve) {
-      upsertPlace({ cid: row.cid, name: row.title, maps_url: row.url, note: row.note, source: `takeout:${listName}`, saved_by: [person] });
+      upsertPlace({ cid: row.cid, name: row.title, maps_url: row.url, note: row.note, source: `takeout:${listName}`, saved_by: [person], date_spot: row.dateSpot });
       result.imported++;
       continue;
     }
@@ -132,6 +144,7 @@ export async function importSavedList(csv: string, listName: string, person: str
       cuisine: cuisineFromTypes(hit.primaryType, hit.types),
       maps_url: hit.googleMapsUri ?? row.url,
       note: row.note,
+      date_spot: row.dateSpot,
       source: `takeout:${listName}`,
       saved_by: [person],
     });

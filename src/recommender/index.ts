@@ -153,7 +153,7 @@ export async function recommend(text: string, opts: { date?: string; n?: number 
     .map((v) => v.cuisine ?? cuisineOf(getPlace(v.place_id)!))
     .filter((c): c is string => !!c);
   let scored = kept
-    .map((c) => scoreCandidate(c, { constraints: k, recentCuisines, cuisineCooldownDates: prefs.cuisineCooldownDates, similarTo }))
+    .map((c) => scoreCandidate(c, { constraints: k, recentCuisines, cuisineCooldownDates: prefs.cuisineCooldownDates, similarTo, partySize: slot.partySize }))
     .sort((a, b) => b.score - a.score);
 
   // Seats only: drop TableCheck places near the top whose menu is all courses.

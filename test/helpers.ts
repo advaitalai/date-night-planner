@@ -14,6 +14,7 @@ export function place(overrides: Partial<Place> = {}): Place {
     cid: null,
     name: "Test Place",
     name_local: null,
+    date_spot: false,
     address: null,
     lat: 35.625,
     lng: 139.72,

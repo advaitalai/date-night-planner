@@ -73,3 +73,35 @@ describe("cheap import of a big saved list", () => {
     expect(izakaya).toMatchObject({ lat: 35.626, saved_by: ["Emily"], google_place_id: null }); // full details later, only if it's near a date
   });
 });
+
+describe("date spot tags (Emily, 7 Nov)", () => {
+  const csv = [
+    "Title,Note,URL,Tags,Comment",
+    'cado,,https://www.google.com/maps/place/cado/data=!4m2!3m1!1s0x60188b1b2b2b2b2b:0x8bc8a7f1a2b3c4d5,"date night",',
+    'Ramen Taro,,https://www.google.com/maps/place/x/data=!4m2!3m1!1s0x60188b1b2b2b2b2c:0x1111111111111111,"quick, cheap",',
+    'New Bistro,,https://www.google.com/maps/place/y/data=!4m2!3m1!1s0x60188b1b2b2b2b2d:0x2222222222222222,Date,',
+  ].join("\n");
+
+  it("reads a date tag from the Tags column", async () => {
+    const { parseSavedCsv } = await import("../src/places/takeout");
+    expect(parseSavedCsv(csv).map((r) => [r.title, r.dateSpot])).toEqual([["cado", true], ["Ramen Taro", false], ["New Bistro", true]]);
+  });
+
+  it("--tags-only marks known places and adds nothing, with no Google lookups", async () => {
+    const { freshDb } = await import("./helpers");
+    freshDb();
+    const { vi } = await import("vitest");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { importSavedList, parseSavedCsv } = await import("../src/places/takeout");
+    const { upsertPlace, listPlaces } = await import("../src/db/repo");
+    const [cado, ramen] = parseSavedCsv(csv);
+    upsertPlace({ cid: cado.cid, name: "cado", source: "takeout:Want to go", saved_by: ["Emily"] });
+    upsertPlace({ cid: ramen.cid, name: "Ramen Taro", source: "takeout:Want to go", saved_by: ["Emily"] });
+    const r = await importSavedList(csv, "Want to go", "Emily", true, undefined, true);
+    expect(r.alreadyKnown).toBe(2);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const byName = Object.fromEntries(listPlaces().map((p) => [p.name, p.date_spot]));
+    expect(byName).toEqual({ cado: true, "Ramen Taro": false });
+    fetchSpy.mockRestore();
+  });
+});

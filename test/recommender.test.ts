@@ -232,3 +232,19 @@ describe("\"near X\" (7 Nov)", () => {
     spy.mockRestore();
   });
 });
+
+describe("date spots (Emily, 7 Nov)", () => {
+  it("for two, a tagged date spot gets +2 (as much as being on both lists); for four, no boost", () => {
+    const tagged = cand({ saved_by: ["Emily"], date_spot: true });
+    const plain = cand({ saved_by: ["Emily"] });
+    expect(scoreCandidate(tagged, ctx({ partySize: 2 })).score - scoreCandidate(plain, ctx({ partySize: 2 })).score).toBeCloseTo(2);
+    expect(scoreCandidate(tagged, ctx({ partySize: 2 })).reasons).toContain("tagged as a date spot");
+    expect(scoreCandidate(tagged, ctx({ partySize: 4 })).score).toBe(scoreCandidate(plain, ctx({ partySize: 4 })).score);
+  });
+
+  it("for two, a new place reviewers call romantic gets a smaller lift", () => {
+    const romantic = cand({ saved_by: [], profile: { cuisine: "french", priceBand: "mid", vibeTags: ["romantic"], signatureDishes: [], highlights: [], summary: "" } as never });
+    const plain = cand({ saved_by: [] });
+    expect(scoreCandidate(romantic, ctx({ partySize: 2 })).score - scoreCandidate(plain, ctx({ partySize: 2 })).score).toBeCloseTo(1);
+  });
+});

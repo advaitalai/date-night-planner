@@ -18,6 +18,8 @@ Last updated: 20 Oct 2026.
 
 ## Next steps
 
+**7 Nov, date spots (Emily):** for two people, places Emily tagged "date…" in Google Maps get +2 (as much as both lists, even on one list); reviews saying romantic/intimate +1 for new places; 3+ people no boost (R13c). The import used to drop the Tags column; now kept as `places.date_spot`. `import-csv … --tags-only` re-reads her CSV without lookups. On dev; needs her CSV on the server, tags-only run on the test bot, then ship and run on live. Until live has it, the nightly copy resets test tags.
+
 **7 Nov, two bots live:** installed. Test bot linked to Concierge (device 2; first scan was by mistake with Advait's personal phone, unlinked), listening in "Test group" (`120363414390232222@g.us`), DRY_RUN on. Live bot (device 1) unaffected in Date planner 🍷. Advait tested "near Omotesando" in the test group: looks good. Both on `bc526cf`.
 
 **7 Nov, two bots:** a test bot (`~/date-night-planner-dev`, work branch, `DRY_RUN=1`, the test group, its own Cloud Logging log `date-night-planner-dev`) and the live bot (`prod` branch, moved only on "ship it"). Both auto-update; the test bot gets a nightly copy of live data minus chats, logs, reminders and the pending call (`src/db/snapshot.ts`). Advait runs `deploy/install-bots.sh` once (browser SSH, sudo), links the test bot's WhatsApp, then Claude reads the test group id from the logs. Supersedes the single-bot auto-update below.

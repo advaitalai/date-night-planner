@@ -151,6 +151,7 @@ const ADDED_COLUMNS: [table: string, column: string, type: string][] = [
   ["places", "features", "TEXT"],
   ["plans", "time_latest", "TEXT"],
   ["places", "name_local", "TEXT"],
+  ["places", "date_spot", "INTEGER NOT NULL DEFAULT 0"],
 ];
 
 function migrate(db: Database.Database): void {
