@@ -80,11 +80,22 @@ describe("date spot tags (Emily, 7 Nov)", () => {
     'cado,,https://www.google.com/maps/place/cado/data=!4m2!3m1!1s0x60188b1b2b2b2b2b:0x8bc8a7f1a2b3c4d5,"date night",',
     'Ramen Taro,,https://www.google.com/maps/place/x/data=!4m2!3m1!1s0x60188b1b2b2b2b2c:0x1111111111111111,"quick, cheap",',
     'New Bistro,,https://www.google.com/maps/place/y/data=!4m2!3m1!1s0x60188b1b2b2b2b2d:0x2222222222222222,Date,',
+    // Emily's real export (7 Nov): "Dates 🌹🥀", and several tags joined with ";".
+    'Etruschi,Pretty looking ,https://www.google.com/maps/place/Etruschi/data=!4m2!3m1!1s0x60188b61c32d1793:0x22905fdeedc2c147, Dates 🌹🥀,',
+    'Up To Date Cafe,,https://www.google.com/maps/place/z/data=!4m2!3m1!1s0x60188b1b2b2b2b2e:0x3333333333333333,"Brunch; Dates 🌹🥀",',
+    'Updated Bar,,https://www.google.com/maps/place/w/data=!4m2!3m1!1s0x60188b1b2b2b2b2f:0x4444444444444444,Updates,',
   ].join("\n");
 
   it("reads a date tag from the Tags column", async () => {
     const { parseSavedCsv } = await import("../src/places/takeout");
-    expect(parseSavedCsv(csv).map((r) => [r.title, r.dateSpot])).toEqual([["cado", true], ["Ramen Taro", false], ["New Bistro", true]]);
+    expect(parseSavedCsv(csv).map((r) => [r.title, r.dateSpot])).toEqual([
+      ["cado", true],
+      ["Ramen Taro", false],
+      ["New Bistro", true],
+      ["Etruschi", true],
+      ["Up To Date Cafe", true],
+      ["Updated Bar", false],
+    ]);
   });
 
   it("--tags-only marks known places and adds nothing, with no Google lookups", async () => {

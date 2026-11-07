@@ -24,8 +24,9 @@ export function parseSavedCsv(csv: string): SavedRow[] {
     const title = (r.Title ?? "").trim();
     const url = (r.URL ?? "").trim();
     if (!title || !url) continue;
-    const tags = (r.Tags ?? "").split(",").map((t) => t.trim()).filter(Boolean);
-    rows.push({ title, note: (r.Note ?? "").trim() || null, url, cid: cidFromSavedUrl(url), dateSpot: tags.some((t) => /\bdate\b/i.test(t)) });
+    // Emily's tag is "Dates 🌹🥀"; Takeout separates several tags with ";".
+    const tags = (r.Tags ?? "").split(/[;,]/).map((t) => t.trim()).filter(Boolean);
+    rows.push({ title, note: (r.Note ?? "").trim() || null, url, cid: cidFromSavedUrl(url), dateSpot: tags.some((t) => /\bdates?\b/i.test(t)) });
   }
   return rows;
 }

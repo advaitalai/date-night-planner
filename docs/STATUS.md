@@ -18,7 +18,7 @@ Last updated: 20 Oct 2026.
 
 ## Next steps
 
-**7 Nov, date spots (Emily):** for two people, places Emily tagged "date…" in Google Maps get +2 (as much as both lists, even on one list); reviews saying romantic/intimate +1 for new places; 3+ people no boost (R13c). The import used to drop the Tags column; now kept as `places.date_spot`. `import-csv … --tags-only` re-reads her CSV without lookups. On dev; needs her CSV on the server, tags-only run on the test bot, then ship and run on live. Until live has it, the nightly copy resets test tags.
+**7 Nov, date spots (Emily):** for two people, places Emily tagged "Dates 🌹🥀" in Google Maps (~20 in her Japan list) get +2 (as much as both lists, even on one list); reviews saying romantic/intimate +1 for new places; 3+ people no boost (R13c). The import used to drop the Tags column; now kept as `places.date_spot`. `import-csv … --tags-only` re-reads her CSV without lookups. On dev; needs her CSV on the server, tags-only run on the test bot, then ship and run on live. Until live has it, the nightly copy resets test tags.
 
 **7 Nov, two bots live:** installed. Test bot linked to Concierge (device 2; first scan was by mistake with Advait's personal phone, unlinked), listening in "Test group" (`120363414390232222@g.us`), DRY_RUN on. Live bot (device 1) unaffected in Date planner 🍷. Advait tested "near Omotesando" in the test group: looks good. Both on `bc526cf`.
 
